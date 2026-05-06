@@ -12,7 +12,7 @@ const InviteSchema = z.object({
 
 export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   if (!hasRole(ctx.role, "legal")) {
     return new Response("Forbidden", { status: 403 })

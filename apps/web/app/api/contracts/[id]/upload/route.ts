@@ -20,7 +20,7 @@ const MAX_SIZE = 50 * 1024 * 1024 // 50MB
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   return requestContext.run(ctx, async () => {
     const existing = await prisma.contract.findUnique({

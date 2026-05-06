@@ -10,7 +10,7 @@ const UpdateOrgSchema = z.object({
 
 export async function GET(req: Request) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   return requestContext.run(ctx, async () => {
     const org = await prisma.organization.findUnique({
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   const roleErr = requireRole(ctx.role, "admin")
   if (roleErr) return roleErr

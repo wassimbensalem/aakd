@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/client"
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   return requestContext.run(ctx, async () => {
     const url = new URL(req.url)

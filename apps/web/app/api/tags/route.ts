@@ -13,7 +13,7 @@ const CreateTagSchema = z.object({
 
 export async function GET(req: Request) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   return requestContext.run(ctx, async () => {
     const tags = await prisma.tag.findMany({
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   return requestContext.run(ctx, async () => {
     let body: unknown

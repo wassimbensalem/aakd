@@ -8,20 +8,32 @@ export async function resolveAuth(req: Request): Promise<RequestContext | null> 
   // Path 1: Better Auth session (browser)
   try {
     const session = await auth.api.getSession({ headers: req.headers })
-    if (session?.user && session.session.activeOrganizationId) {
-      const member = await prisma.member.findUnique({
-        where: {
-          userId_organizationId: {
-            userId: session.user.id,
-            organizationId: session.session.activeOrganizationId,
-          },
-        },
-      })
-      return {
-        userId: session.user.id,
-        organizationId: session.session.activeOrganizationId,
-        role: member?.role ?? "viewer",
-        source: "session",
+    if (session?.user) {
+      // Prefer the session's activeOrganizationId; fall back to the user's
+      // first membership if it was never set (e.g. setActive() race on signup).
+      const orgId = session.session.activeOrganizationId ?? null
+
+      const member = orgId
+        ? await prisma.member.findUnique({
+            where: {
+              userId_organizationId: {
+                userId: session.user.id,
+                organizationId: orgId,
+              },
+            },
+          })
+        : await prisma.member.findFirst({
+            where: { userId: session.user.id },
+            orderBy: { createdAt: "asc" },
+          })
+
+      if (member) {
+        return {
+          userId: session.user.id,
+          organizationId: member.organizationId,
+          role: member.role,
+          source: "session",
+        }
       }
     }
   } catch {}

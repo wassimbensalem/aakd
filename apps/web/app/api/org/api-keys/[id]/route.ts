@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth/roles"
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   const roleErr = requireRole(ctx.role, "admin")
   if (roleErr) return roleErr

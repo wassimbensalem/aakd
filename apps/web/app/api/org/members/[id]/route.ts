@@ -10,7 +10,7 @@ const UpdateMemberSchema = z.object({
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   const roleErr = requireRole(ctx.role, "admin")
   if (roleErr) return roleErr
@@ -48,7 +48,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
-  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   const roleErr = requireRole(ctx.role, "admin")
   if (roleErr) return roleErr

@@ -1,28 +1,4 @@
-version: '3.8'
-
 services:
-  app:
-    build:
-      context: ./apps/web
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgresql://postgres:password@db:5432/clauseflow
-      STORAGE_ENDPOINT: http://minio:9000
-      STORAGE_BUCKET: clauseflow
-      STORAGE_ACCESS_KEY: minioadmin
-      STORAGE_SECRET_KEY: minioadmin
-      BETTER_AUTH_SECRET: changeme-use-openssl-rand-base64-32
-      BETTER_AUTH_URL: http://localhost:3000
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
-    depends_on:
-      db:
-        condition: service_healthy
-      minio:
-        condition: service_started
-    restart: unless-stopped
-
   db:
     image: postgres:16-alpine
     environment:
@@ -38,6 +14,10 @@ services:
       retries: 10
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
@@ -51,8 +31,92 @@ services:
       - "9001:9001"
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
+  # Creates the storage bucket on first boot — exits immediately after.
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin; do
+        echo 'waiting for MinIO...'; sleep 1;
+      done;
+      /usr/bin/mc mb local/clauseflow --ignore-existing;
+      exit 0;
+      "
+    restart: "no"
+
+  app:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/clauseflow
+      REDIS_URL: redis://redis:6379
+      BETTER_AUTH_SECRET: changeme-use-openssl-rand-base64-32
+      BETTER_AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET: clauseflow
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin
+      STORAGE_REGION: us-east-1
+      # AI provider — set one of the keys below (all optional, AI features degrade gracefully)
+      # AI_PROVIDER: anthropic
+      # ANTHROPIC_API_KEY: ""
+      # ANTHROPIC_MODEL: claude-haiku-4-5
+      # AI_PROVIDER: openai
+      # OPENAI_API_KEY: ""
+      # OPENAI_MODEL: gpt-4o-mini
+      # Email alerts (optional)
+      # SMTP_HOST: ""
+      # SMTP_PORT: "587"
+      # SMTP_USER: ""
+      # SMTP_PASS: ""
+      # SMTP_FROM: "noreply@clauseflow.io"
+      # ALERT_EMAIL_TO: ""
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/clauseflow
+      REDIS_URL: redis://redis:6379
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET: clauseflow
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin
+      STORAGE_REGION: us-east-1
+      # AI provider — set one of the keys below
+      # AI_PROVIDER: anthropic
+      # ANTHROPIC_API_KEY: ""
+      # ANTHROPIC_MODEL: claude-haiku-4-5
+      # AI_PROVIDER: openai
+      # OPENAI_API_KEY: ""
+      # OPENAI_MODEL: gpt-4o-mini
+      # Email alerts (optional)
+      # SMTP_HOST: ""
+      # SMTP_PORT: "587"
+      # SMTP_USER: ""
+      # SMTP_PASS: ""
+      # SMTP_FROM: "noreply@clauseflow.io"
+      # ALERT_EMAIL_TO: ""
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

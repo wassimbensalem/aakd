@@ -1,0 +1,22 @@
+FROM node:20-alpine AS deps
+RUN npm install -g pnpm
+WORKDIR /app
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
+
+FROM node:20-alpine AS runner
+RUN npm install -g pnpm
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
+COPY worker.ts ./
+COPY lib ./lib
+COPY tsconfig.json ./
+COPY tsconfig.worker.json ./
+
+# Generate Prisma client for the worker
+RUN pnpm run db:generate
+
+CMD ["node_modules/.bin/tsx", "--tsconfig", "tsconfig.worker.json", "worker.ts"]

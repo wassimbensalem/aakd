@@ -14,6 +14,7 @@ dotenv.config({ path: path.resolve(__dirname, ".env.local") })
 
 import { Worker, Job } from "bullmq"
 import { PDFParse } from "pdf-parse"
+import mammoth from "mammoth"
 import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
@@ -93,10 +94,14 @@ const extractWorker = new Worker<ContractExtractJobData>(
       contractFile.mimeType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
-      console.warn(
-        `[extract] DOCX extraction not yet implemented for file ${fileId} (${contractFile.filename}) — skipping text extraction`,
-      )
-      // Best-effort: leave extractedText null for now; will be added in a later milestone.
+      try {
+        const result = await mammoth.extractRawText({ buffer })
+        extractedText = result.value?.trim() || null
+        console.log(`[extract] DOCX text extracted: ${extractedText?.length ?? 0} chars`)
+      } catch (err) {
+        console.error(`[extract] mammoth failed for file ${fileId}:`, err)
+        throw err
+      }
     } else {
       console.warn(`[extract] Unsupported mime type ${contractFile.mimeType} for file ${fileId}`)
     }

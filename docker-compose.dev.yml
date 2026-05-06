@@ -33,6 +33,21 @@ services:
       - "6379:6379"
     restart: unless-stopped
 
+  # Dev MinIO uses port 9010 (mapped 9010→9000 inside container)
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin; do
+        echo 'waiting for MinIO...'; sleep 1;
+      done;
+      /usr/bin/mc mb local/clauseflow --ignore-existing;
+      exit 0;
+      "
+    restart: "no"
+
 volumes:
   pgdata_dev:
   miniodata_dev:

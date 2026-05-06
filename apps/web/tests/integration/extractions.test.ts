@@ -250,4 +250,96 @@ describe("PATCH /api/contracts/[id]/extractions", () => {
     expect(res.status).toBe(404)
     expect(prisma.aIExtraction.update).not.toHaveBeenCalled()
   })
+
+  it("accept_all marks all pending extractions accepted and updates contract", async () => {
+    const pending = [
+      { id: "ex-1", field: "counterpartyName", rawValue: "Acme Corp" },
+      { id: "ex-2", field: "startDate",         rawValue: "2024-01-01" },
+      { id: "ex-3", field: "value",             rawValue: "50000" },
+    ]
+
+    vi.mocked(prisma.contract.findUnique).mockResolvedValueOnce(mockContract as any)
+    vi.mocked(prisma.aIExtraction.findMany).mockResolvedValueOnce(pending as any)
+    vi.mocked(prisma.$transaction).mockResolvedValueOnce([undefined, undefined] as any)
+
+    const { PATCH } = await import("@/app/api/contracts/[id]/extractions/route")
+
+    const req = new Request("http://localhost/api/contracts/contract-1/extractions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "accept_all" }),
+    })
+    const res = await requestContext.run(mockCtx, () =>
+      PATCH(req, { params: { id: "contract-1" } }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.accepted).toBe(3)
+    expect(prisma.$transaction).toHaveBeenCalled()
+  })
+
+  it("accept_all returns { accepted: 0 } when no pending extractions exist", async () => {
+    vi.mocked(prisma.contract.findUnique).mockResolvedValueOnce(mockContract as any)
+    vi.mocked(prisma.aIExtraction.findMany).mockResolvedValueOnce([] as any)
+
+    const { PATCH } = await import("@/app/api/contracts/[id]/extractions/route")
+
+    const req = new Request("http://localhost/api/contracts/contract-1/extractions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "accept_all" }),
+    })
+    const res = await requestContext.run(mockCtx, () =>
+      PATCH(req, { params: { id: "contract-1" } }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.accepted).toBe(0)
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it("edit updates rawValue then accepts and writes to contract", async () => {
+    vi.mocked(prisma.contract.findUnique).mockResolvedValueOnce(mockContract as any)
+    vi.mocked(prisma.aIExtraction.findUnique).mockResolvedValueOnce(mockExtraction as any)
+    vi.mocked(prisma.aIExtraction.update).mockResolvedValue({
+      ...mockExtraction,
+      rawValue: "2025-06-01",
+      status: "accepted",
+    } as any)
+    vi.mocked(prisma.contract.update).mockResolvedValueOnce({} as any)
+    vi.mocked(prisma.aIExtraction.findUnique).mockResolvedValueOnce({
+      ...mockExtraction,
+      rawValue: "2025-06-01",
+      status: "accepted",
+    } as any)
+
+    const { PATCH } = await import("@/app/api/contracts/[id]/extractions/route")
+
+    const req = new Request("http://localhost/api/contracts/contract-1/extractions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "edit", extractionId: "extraction-1", newValue: "2025-06-01" }),
+    })
+    const res = await requestContext.run(mockCtx, () =>
+      PATCH(req, { params: { id: "contract-1" } }),
+    )
+
+    expect(res.status).toBe(200)
+    // First update call: set rawValue
+    expect(prisma.aIExtraction.update).toHaveBeenNthCalledWith(1,
+      expect.objectContaining({ data: { rawValue: "2025-06-01" } }),
+    )
+    // Second update call: set status accepted
+    expect(prisma.aIExtraction.update).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ data: { status: "accepted" } }),
+    )
+    // Contract field written with coerced value
+    expect(prisma.contract.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ startDate: expect.any(Date) }),
+      }),
+    )
+  })
 })

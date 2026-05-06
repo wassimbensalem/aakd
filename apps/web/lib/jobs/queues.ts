@@ -17,6 +17,10 @@ export interface ContractAiExtractJobData {
   extractedText: string
 }
 
+export interface AlertsCheckJobData {
+  triggeredAt: string
+}
+
 // ─── Queue instances ──────────────────────────────────────────────────────────
 
 export const contractExtractQueue = new Queue<ContractExtractJobData>(
@@ -26,5 +30,10 @@ export const contractExtractQueue = new Queue<ContractExtractJobData>(
 
 export const contractAiExtractQueue = new Queue<ContractAiExtractJobData>(
   "contract.ai_extract",
+  { connection },
+)
+
+export const alertsCheckQueue = new Queue<AlertsCheckJobData>(
+  "alerts.check",
   { connection },
 )

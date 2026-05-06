@@ -19,8 +19,9 @@ import OpenAI from "openai"
 
 import { getWorkerPrisma } from "@/lib/db/worker-client"
 import { storage } from "@/lib/storage"
-import type { ContractExtractJobData, ContractAiExtractJobData } from "@/lib/jobs/queues"
-import { contractAiExtractQueue } from "@/lib/jobs/queues"
+import { checkAndFireAlerts } from "@/lib/alerts/check"
+import type { ContractExtractJobData, ContractAiExtractJobData, AlertsCheckJobData } from "@/lib/jobs/queues"
+import { contractAiExtractQueue, alertsCheckQueue } from "@/lib/jobs/queues"
 
 // ─── Redis connection ─────────────────────────────────────────────────────────
 
@@ -295,13 +296,43 @@ aiExtractWorker.on("failed", (job, err) =>
   console.error(`[ai_extract] Job ${job?.id} failed:`, err),
 )
 
+// ─── Worker: alerts.check ─────────────────────────────────────────────────────
+
+const alertsWorker = new Worker<AlertsCheckJobData>(
+  "alerts.check",
+  async (job: Job<AlertsCheckJobData>) => {
+    console.log(`[alerts] Running check job ${job.id} (triggered: ${job.data.triggeredAt})`)
+    const { fired, errors } = await checkAndFireAlerts()
+    console.log(`[alerts] Fired ${fired} alerts, ${errors} errors`)
+  },
+  { connection },
+)
+
+alertsWorker.on("completed", (job) =>
+  console.log(`[alerts] Job ${job.id} completed`),
+)
+alertsWorker.on("failed", (job, err) =>
+  console.error(`[alerts] Job ${job?.id} failed:`, err),
+)
+
+// Register the daily cron (9 AM UTC). BullMQ deduplicates by name + pattern,
+// so restarting the worker is safe — no stacking of duplicate schedules.
+alertsCheckQueue.add(
+  "daily-check",
+  { triggeredAt: new Date().toISOString() },
+  { repeat: { pattern: "0 9 * * *" } },
+).then(() => console.log("[alerts] Daily cron registered (0 9 * * *)"))
+  .catch((err) => console.error("[alerts] Failed to register cron:", err))
+
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 
 async function shutdown() {
   console.log("[worker] Shutting down gracefully…")
   await extractWorker.close()
   await aiExtractWorker.close()
+  await alertsWorker.close()
   await contractAiExtractQueue.close()
+  await alertsCheckQueue.close()
   await getWorkerPrisma().$disconnect()
   process.exit(0)
 }

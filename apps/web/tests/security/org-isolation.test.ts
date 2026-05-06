@@ -159,6 +159,42 @@ describe("Org isolation — cross-org access must return 404", () => {
     expect(res.status).toBe(404)
   })
 
+  it("org B user cannot delete a tag belonging to org A — returns 404", async () => {
+    const { resolveAuth } = await import("@/lib/auth/middleware")
+    vi.mocked(resolveAuth).mockResolvedValue({
+      userId: "user-b",
+      organizationId: "org-b",
+      role: "admin",
+      source: "session",
+    })
+    // Middleware injects org-b scope — tag from org-a returns null
+    vi.mocked(prisma.tag.findUnique).mockResolvedValue(null)
+
+    const { DELETE } = await import("@/app/api/tags/[id]/route")
+    const req = new Request("http://localhost/api/tags/org-a-tag-id", { method: "DELETE" })
+    const res = await DELETE(req, { params: { id: "org-a-tag-id" } })
+
+    expect(res.status).toBe(404)
+  })
+
+  it("org B user cannot delete a folder belonging to org A — returns 404", async () => {
+    const { resolveAuth } = await import("@/lib/auth/middleware")
+    vi.mocked(resolveAuth).mockResolvedValue({
+      userId: "user-b",
+      organizationId: "org-b",
+      role: "admin",
+      source: "session",
+    })
+    // Middleware injects org-b scope — folder from org-a returns null
+    vi.mocked(prisma.folder.findUnique).mockResolvedValue(null)
+
+    const { DELETE } = await import("@/app/api/folders/[id]/route")
+    const req = new Request("http://localhost/api/folders/org-a-folder-id", { method: "DELETE" })
+    const res = await DELETE(req, { params: { id: "org-a-folder-id" } })
+
+    expect(res.status).toBe(404)
+  })
+
   it("unauthenticated request returns 401 — does not leak resource existence", async () => {
     const { resolveAuth } = await import("@/lib/auth/middleware")
     vi.mocked(resolveAuth).mockResolvedValue(null)

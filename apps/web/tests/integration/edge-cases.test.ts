@@ -129,7 +129,7 @@ describe("Contract lifecycle edge cases", () => {
   })
 
   it("deleting a tag disconnects it from all contracts (set=[]) before deleting", async () => {
-    vi.mocked(prisma.tag.findUnique).mockResolvedValue({ id: "tag-1" } as any)
+    vi.mocked(prisma.tag.findUnique).mockResolvedValue({ id: "tag-1", organizationId: "org-1" } as any)
     vi.mocked(prisma.tag.update).mockResolvedValue({} as any)
     vi.mocked(prisma.tag.delete).mockResolvedValue({} as any)
 

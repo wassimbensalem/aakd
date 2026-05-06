@@ -9,9 +9,12 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   return requestContext.run(ctx, async () => {
     const existing = await prisma.tag.findUnique({
       where: { id: params.id },
-      select: { id: true },
+      select: { id: true, organizationId: true },
     })
-    if (!existing) return new Response("Not Found", { status: 404 })
+    // Middleware injects org scope into WHERE, so cross-org tags return null.
+    // Explicit check here for defense-in-depth and code clarity.
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return Response.json({ error: "Not Found" }, { status: 404 })
 
     await prisma.tag.update({
       where: { id: params.id },

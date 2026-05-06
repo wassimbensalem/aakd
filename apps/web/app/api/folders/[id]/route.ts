@@ -26,9 +26,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const existing = await prisma.folder.findUnique({
       where: { id: params.id },
-      select: { id: true },
+      select: { id: true, organizationId: true },
     })
-    if (!existing) return new Response("Not Found", { status: 404 })
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return Response.json({ error: "Not Found" }, { status: 404 })
 
     const folder = await prisma.folder.update({
       where: { id: params.id },
@@ -46,9 +47,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   return requestContext.run(ctx, async () => {
     const existing = await prisma.folder.findUnique({
       where: { id: params.id },
-      select: { id: true },
+      select: { id: true, organizationId: true },
     })
-    if (!existing) return new Response("Not Found", { status: 404 })
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return Response.json({ error: "Not Found" }, { status: 404 })
 
     // Move contracts to root
     await prisma.contract.updateMany({

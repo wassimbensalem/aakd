@@ -27,7 +27,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       where: { id: params.id },
       select: { id: true, organizationId: true },
     })
-    if (!existing) return new Response("Not Found", { status: 404 })
+    // Middleware injects org scope; explicit check for defense-in-depth.
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return Response.json({ error: "Not Found" }, { status: 404 })
 
     let formData: FormData
     try {

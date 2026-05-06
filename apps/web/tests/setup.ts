@@ -1,6 +1,11 @@
 import "@testing-library/jest-dom"
 import { vi } from "vitest"
 
+vi.mock("@/lib/jobs/queues", () => ({
+  contractExtractQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
+  contractAiExtractQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
+}))
+
 vi.mock("@/lib/db/client", () => ({
   prisma: {
     contract: { create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn(), count: vi.fn() },

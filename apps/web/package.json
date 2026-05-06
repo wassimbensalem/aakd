@@ -17,7 +17,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:isolation": "vitest run --reporter=verbose tests/security/org-isolation.test.ts",
-    "worker:dev": "tsx --tsconfig tsconfig.worker.json watch worker.ts"
+    "worker:dev": "tsx watch --tsconfig tsconfig.worker.json worker.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",

@@ -51,6 +51,10 @@ services:
       - "9001:9001"
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
 volumes:
   pgdata:
   miniodata:

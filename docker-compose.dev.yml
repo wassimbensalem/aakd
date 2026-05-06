@@ -27,6 +27,12 @@ services:
       - "9010:9000"
       - "9011:9011"
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
 volumes:
   pgdata_dev:
   miniodata_dev:

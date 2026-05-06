@@ -15,31 +15,18 @@ dotenv.config({ path: path.resolve(__dirname, ".env.local") })
 import { Worker, Job } from "bullmq"
 import { PDFParse } from "pdf-parse"
 import Anthropic from "@anthropic-ai/sdk"
+import OpenAI from "openai"
 
-// Import prisma from the shared client — the org-scope middleware is a no-op
-// when there is no AsyncLocalStorage context (worker runs as System).
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
 import type { ContractExtractJobData, ContractAiExtractJobData } from "@/lib/jobs/queues"
-
-// Lazy-init the queue instances inside the worker process (avoids double-connect).
-// We re-use the same connection config but import Queue only to .add() on the
-// ai_extract queue after text extraction completes.
 import { contractAiExtractQueue } from "@/lib/jobs/queues"
 
 // ─── Redis connection ─────────────────────────────────────────────────────────
 
 const connection = {
   url: process.env.REDIS_URL ?? "redis://localhost:6379",
-}
-
-// ─── Anthropic client (lazy — only instantiated when key is present) ──────────
-
-function getAnthropicClient(): Anthropic | null {
-  const key = process.env.ANTHROPIC_API_KEY
-  if (!key) return null
-  return new Anthropic({ apiKey: key })
 }
 
 // ─── Extraction prompt ────────────────────────────────────────────────────────
@@ -143,6 +130,75 @@ extractWorker.on("failed", (job, err) =>
   console.error(`[extract] Job ${job?.id} failed:`, err),
 )
 
+// ─── Provider abstraction ─────────────────────────────────────────────────────
+// Set AI_PROVIDER=anthropic|openai|ollama in .env.local
+// Defaults to anthropic if ANTHROPIC_API_KEY is set, then openai, then ollama.
+
+async function callExtractionLLM(text: string): Promise<string | null> {
+  const provider = process.env.AI_PROVIDER?.toLowerCase()
+    ?? (process.env.ANTHROPIC_API_KEY ? "anthropic"
+      : process.env.OPENAI_API_KEY     ? "openai"
+      : process.env.OLLAMA_BASE_URL    ? "ollama"
+      : null)
+
+  if (!provider) {
+    console.warn("[ai_extract] No AI provider configured — set AI_PROVIDER or one of ANTHROPIC_API_KEY / OPENAI_API_KEY / OLLAMA_BASE_URL")
+    return null
+  }
+
+  if (provider === "anthropic") {
+    const key = process.env.ANTHROPIC_API_KEY
+    if (!key) { console.warn("[ai_extract] AI_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set"); return null }
+    const anthropic = new Anthropic({ apiKey: key })
+    const msg = await anthropic.messages.create({
+      model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
+      max_tokens: 1024,
+      system: EXTRACTION_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: `Here is the contract text to analyze:\n\n${text}` }],
+    })
+    const block = msg.content.find((b) => b.type === "text")
+    return block?.type === "text" ? block.text.trim() : ""
+  }
+
+  if (provider === "openai") {
+    const key = process.env.OPENAI_API_KEY
+    if (!key) { console.warn("[ai_extract] AI_PROVIDER=openai but OPENAI_API_KEY is not set"); return null }
+    const openai = new OpenAI({ apiKey: key })
+    const res = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+      max_tokens: 1024,
+      messages: [
+        { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+        { role: "user", content: `Here is the contract text to analyze:\n\n${text}` },
+      ],
+    })
+    return res.choices[0]?.message.content?.trim() ?? ""
+  }
+
+  if (provider === "ollama") {
+    const base = (process.env.OLLAMA_BASE_URL ?? "http://localhost:11434").replace(/\/$/, "")
+    const model = process.env.OLLAMA_MODEL ?? "llama3"
+    const res = await fetch(`${base}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        messages: [
+          { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+          { role: "user", content: `Here is the contract text to analyze:\n\n${text}` },
+        ],
+      }),
+    })
+    if (!res.ok) throw new Error(`Ollama returned ${res.status}`)
+    const data = await res.json() as { message?: { content?: string } }
+    return data.message?.content?.trim() ?? ""
+  }
+
+  console.warn(`[ai_extract] Unknown AI_PROVIDER="${provider}"`)
+  return null
+}
+
 // ─── Worker: contract.ai_extract ─────────────────────────────────────────────
 
 const aiExtractWorker = new Worker<ContractAiExtractJobData>(
@@ -152,37 +208,17 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
 
     console.log(`[ai_extract] Processing job ${job.id} for contract ${contractId}`)
 
-    const anthropic = getAnthropicClient()
-    if (!anthropic) {
-      console.warn(
-        `[ai_extract] ANTHROPIC_API_KEY is not set — skipping AI extraction for contract ${contractId}`,
-      )
-      return
-    }
-
-    // Truncate text to avoid token limits (~100k chars ≈ ~25k tokens)
+    // Truncate to ~25k tokens
     const textToAnalyze =
       extractedText.length > 100_000 ? extractedText.slice(0, 100_000) : extractedText
 
     let rawJson: string
     try {
-      const message = await anthropic.messages.create({
-        model: "claude-haiku-4-5",
-        max_tokens: 1024,
-        system: EXTRACTION_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: `Here is the contract text to analyze:\n\n${textToAnalyze}`,
-          },
-        ],
-      })
-
-      const textBlock = message.content.find((b) => b.type === "text")
-      rawJson = textBlock?.type === "text" ? textBlock.text.trim() : ""
+      const result = await callExtractionLLM(textToAnalyze)
+      if (result === null) return
+      rawJson = result
     } catch (err) {
-      console.error(`[ai_extract] Anthropic API call failed for contract ${contractId}:`, err)
-      // Don't crash the worker — log and skip gracefully
+      console.error(`[ai_extract] LLM call failed for contract ${contractId}:`, err)
       return
     }
 
@@ -192,7 +228,7 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
       extracted = JSON.parse(rawJson)
     } catch {
       console.error(
-        `[ai_extract] Failed to parse Anthropic response as JSON for contract ${contractId}:`,
+        `[ai_extract] Failed to parse LLM response as JSON for contract ${contractId}:`,
         rawJson,
       )
       return
@@ -280,4 +316,9 @@ process.on("SIGINT", shutdown)
 
 console.log("[worker] ClauseFlow BullMQ worker started")
 console.log(`[worker] Redis: ${process.env.REDIS_URL ?? "redis://localhost:6379"}`)
-console.log(`[worker] Anthropic AI: ${process.env.ANTHROPIC_API_KEY ? "enabled" : "disabled (no key)"}`)
+const _provider = process.env.AI_PROVIDER
+  ?? (process.env.ANTHROPIC_API_KEY ? "anthropic"
+    : process.env.OPENAI_API_KEY     ? "openai"
+    : process.env.OLLAMA_BASE_URL    ? "ollama"
+    : "none")
+console.log(`[worker] AI provider: ${_provider}`)

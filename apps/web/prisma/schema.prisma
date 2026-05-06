@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Better Auth tables ───────────────────────────────────────────────────────
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime
+  updatedAt     DateTime
+
+  sessions      Session[]
+  accounts      Account[]
+  memberships   Member[]
+  ownedContracts Contract[]    @relation("ContractOwner")
+  uploadedFiles  ContractFile[]
+  versions       ContractVersion[]
+  activities     Activity[]
+  apiKeys        ApiKey[]
+}
+
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String   @unique
+  createdAt            DateTime
+  updatedAt            DateTime
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+}
+
+model Organization {
+  id          String   @id
+  name        String
+  slug        String   @unique
+  logo        String?
+  createdAt   DateTime
+  metadata    String?
+
+  members     Member[]
+  invitations Invitation[]
+  contracts   Contract[]
+  folders     Folder[]
+  tags        Tag[]
+  apiKeys     ApiKey[]
+}
+
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       // "admin" | "legal" | "member" | "viewer"
+  createdAt      DateTime
+
+  @@unique([userId, organizationId])
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String
+  expiresAt      DateTime
+  inviterId      String
+}
+
+// ─── API Keys ─────────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  name           String
+  keyHash        String       @unique   // bcrypt hash — never store plaintext
+  lookupHash     String       @unique   // SHA-256 for fast DB lookup
+  prefix         String                 // "cf_live_sk_abc1..." shown in UI list
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  scopes         String[]     @default(["read"])
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+}
+
+// ─── Contracts ────────────────────────────────────────────────────────────────
+
+model Contract {
+  id                  String         @id @default(cuid())
+  title               String
+  contractType        ContractType
+  status              ContractStatus @default(DRAFT)
+  ownerId             String
+  owner               User           @relation("ContractOwner", fields: [ownerId], references: [id])
+  counterpartyName    String?
+  counterpartyContact String?
+  value               Float?
+  currency            String?        @default("USD")
+  governingLaw        String?
+  startDate           DateTime?
+  endDate             DateTime?
+  renewalDate         DateTime?
+  noticePeriodDays    Int?
+  autoRenewal         Boolean        @default(false)
+  notes               String?
+  organizationId      String
+  organization        Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  folderId            String?
+  folder              Folder?        @relation(fields: [folderId], references: [id])
+  files               ContractFile[]
+  versions            ContractVersion[]
+  activities          Activity[]
+  tags                Tag[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+}
+
+enum ContractType {
+  NDA
+  MSA
+  SOW
+  EMPLOYMENT
+  VENDOR
+  CUSTOMER
+  OTHER
+}
+
+enum ContractStatus {
+  DRAFT
+  INTERNAL_REVIEW
+  PENDING_APPROVAL
+  AWAITING_SIGNATURE
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  ARCHIVED
+}
+
+model ContractFile {
+  id           String   @id @default(cuid())
+  contractId   String
+  contract     Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  filename     String
+  storageKey   String
+  mimeType     String
+  sizeBytes    Int
+  isSigned     Boolean  @default(false)
+  isLatest     Boolean  @default(true)
+  version      Int      @default(1)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model ContractVersion {
+  id          String   @id @default(cuid())
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  version     Int
+  changeNote  String?
+  fileId      String?
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Activity {
+  id          String         @id @default(cuid())
+  contractId  String
+  contract    Contract       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?          @relation(fields: [userId], references: [id])
+  actorLabel  String         @default("System")
+  action      ActivityAction
+  detail      String?
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+}
+
+enum ActivityAction {
+  CREATED
+  UPLOADED
+  UPDATED
+  STATUS_CHANGED
+  COMMENTED
+  APPROVAL_REQUESTED
+  APPROVED
+  REJECTED
+  SENT_FOR_SIGNATURE
+  SIGNED
+  ALERT_FIRED
+  METADATA_EXTRACTED
+  METADATA_UPDATED
+  DOWNLOADED
+  DELETED
+  ARCHIVED
+  TAGGED
+}
+
+model Folder {
+  id             String       @id @default(cuid())
+  name           String
+  parentId       String?
+  parent         Folder?      @relation("subfolders", fields: [parentId], references: [id])
+  children       Folder[]     @relation("subfolders")
+  contracts      Contract[]
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+}
+
+model Tag {
+  id             String       @id @default(cuid())
+  name           String
+  color          String?      @default("#6366f1")
+  contracts      Contract[]
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([name, organizationId])
+}

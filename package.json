@@ -1,0 +1,10 @@
+{
+  "name": "clauseflow",
+  "private": true,
+  "engines": { "node": ">=20", "pnpm": ">=9" },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "typecheck": "pnpm --filter web typecheck"
+  }
+}

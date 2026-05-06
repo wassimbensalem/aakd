@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web db:generate
+      - run: pnpm --filter web typecheck
+
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: clauseflow_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/clauseflow_test
+      BETTER_AUTH_SECRET: test-secret-do-not-use-in-production
+      BETTER_AUTH_URL: http://localhost:3000
+      STORAGE_ENDPOINT: ""
+      STORAGE_BUCKET: clauseflow-test
+      STORAGE_ACCESS_KEY: test
+      STORAGE_SECRET_KEY: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web db:generate
+      - run: pnpm --filter web db:migrate:prod
+        working-directory: apps/web
+      - name: Run tests
+        run: pnpm --filter web test
+      - name: Org isolation test (must pass)
+        run: pnpm --filter web test:isolation
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web db:generate
+      - run: pnpm --filter web build
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          BETTER_AUTH_SECRET: placeholder
+          BETTER_AUTH_URL: http://localhost:3000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          STORAGE_BUCKET: clauseflow
+          STORAGE_ACCESS_KEY: placeholder
+          STORAGE_SECRET_KEY: placeholder

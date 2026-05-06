@@ -20,18 +20,18 @@ async function fetchContracts(params: string): Promise<Contract[]> {
   }
 }
 
-function StatCard({ title, value, Icon, color }: {
+function StatCard({ title, value, Icon, gradient }: {
   title: string
   value: number
   Icon: React.ComponentType<{ className?: string }>
-  color: string
+  gradient: string
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <div className={`flex h-8 w-8 items-center justify-center rounded-md ${color}`}>
-          <Icon className="h-4 w-4" />
+        <div className={`flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br ${gradient}`}>
+          <Icon className="h-4 w-4 text-white" />
         </div>
       </CardHeader>
       <CardContent>
@@ -66,19 +66,24 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Contracts" value={activeCount} Icon={FileText} color="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" />
-        <StatCard title="Expiring in 30 days" value={0} Icon={Clock} color="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" />
-        <StatCard title="Pending Approval" value={pendingCount} Icon={CheckSquare} color="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" />
-        <StatCard title="Awaiting Signature" value={awaitingCount} Icon={PenSquare} color="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400" />
+        <StatCard title="Active Contracts" value={activeCount} Icon={FileText} gradient="from-emerald-400 to-emerald-600" />
+        <StatCard title="Expiring in 30 days" value={0} Icon={Clock} gradient="from-amber-400 to-orange-500" />
+        <StatCard title="Pending Approval" value={pendingCount} Icon={CheckSquare} gradient="from-blue-400 to-blue-600" />
+        <StatCard title="Awaiting Signature" value={awaitingCount} Icon={PenSquare} gradient="from-violet-400 to-violet-600" />
       </div>
 
       <div>
         <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Contracts</h2>
         {recentContracts.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 py-16 gap-3">
-            <FileText className="h-10 w-10 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">No contracts yet</p>
-            <Link href="/contracts/new" className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[0.8rem] font-medium rounded-[min(var(--radius-md),12px)] border border-border bg-background hover:bg-muted transition-colors">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
+              <FileText className="h-6 w-6 text-primary" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium">No contracts yet</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Upload your first contract to get started</p>
+            </div>
+            <Link href="/contracts/new" className="inline-flex items-center gap-1.5 h-8 px-3 text-[0.8rem] font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
               <Plus className="h-3.5 w-3.5" />
               Upload your first contract
             </Link>

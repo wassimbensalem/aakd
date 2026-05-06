@@ -24,6 +24,7 @@ export default function CreateOrgPage() {
       if (result.error) {
         toast.error(result.error.message ?? "Failed to create organization")
       } else {
+        await organization.setActive({ organizationId: result.data.id })
         router.push("/dashboard")
       }
     } catch {

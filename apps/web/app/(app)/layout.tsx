@@ -51,7 +51,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const { data: session, isPending } = useSession()
-  const { data: activeOrg } = useActiveOrganization()
+  // Task 1 fix: guard on orgPending so the redirect doesn't fire while the org
+  // cookie is still being read on the initial hydration frame.
+  const { data: activeOrg, isPending: orgPending } = useActiveOrganization()
   const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
@@ -61,12 +63,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [isPending, session, router])
 
   useEffect(() => {
-    if (!isPending && session?.user && !activeOrg) {
+    // Only redirect once both the session AND org checks have settled.
+    if (!isPending && !orgPending && session?.user && !activeOrg) {
       router.replace("/create-org")
     }
-  }, [isPending, session, activeOrg, router])
+  }, [isPending, orgPending, session, activeOrg, router])
 
-  if (isPending) {
+  // Show skeleton while either check is in-flight.
+  if (isPending || orgPending) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="space-y-3 w-64">
@@ -82,20 +86,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
+      {/* Sidebar — Task 2: use transition-[width] instead of transition-all.
+          transition-all forces a CSS stacking context (via transform or will-change)
+          which clips Base UI Select portals even though they use document.body.
+          transition-[width] animates only the width, so no stacking context is created. */}
       <aside
         className={cn(
-          "flex flex-col border-r border-border bg-card transition-all duration-200 shrink-0",
+          "flex flex-col border-r border-slate-800 bg-slate-900 transition-[width] duration-200 shrink-0",
           collapsed ? "w-14" : "w-56"
         )}
       >
         {/* Logo */}
-        <div className={cn("flex items-center gap-2.5 h-14 px-3 border-b border-border", collapsed && "justify-center px-2")}>
+        <div className={cn("flex items-center gap-2.5 h-14 px-3 border-b border-slate-800", collapsed && "justify-center px-2")}>
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary shrink-0">
             <LogoIcon className="h-3.5 w-3.5 text-primary-foreground" />
           </div>
           {!collapsed && (
-            <span className="font-semibold text-sm tracking-tight">ClauseFlow</span>
+            <span className="font-semibold text-sm tracking-tight text-white">ClauseFlow</span>
           )}
         </div>
 
@@ -112,8 +119,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
                   isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "bg-white/10 text-white font-medium"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white",
                   collapsed && "justify-center px-2"
                 )}
                 title={collapsed ? label : undefined}
@@ -126,29 +133,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Org + User */}
-        <div className="border-t border-border p-2 space-y-2">
+        <div className="border-t border-slate-800 p-2 space-y-2">
           {!collapsed && activeOrg && (
-            <div className="px-2 py-1.5 rounded-md bg-muted">
-              <p className="text-xs font-medium truncate">{activeOrg.name}</p>
-              <p className="text-xs text-muted-foreground">Organization</p>
+            <div className="px-2 py-1.5 rounded-md bg-white/5">
+              <p className="text-xs font-medium truncate text-slate-300">{activeOrg.name}</p>
+              <p className="text-xs text-slate-400">Organization</p>
             </div>
           )}
           <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
             <Avatar className="h-7 w-7 shrink-0">
               {session.user.image && <AvatarImage src={session.user.image} />}
-              <AvatarFallback className="text-xs">{getInitials(session.user.name ?? session.user.email)}</AvatarFallback>
+              <AvatarFallback className="text-xs bg-slate-700 text-slate-200">{getInitials(session.user.name ?? session.user.email)}</AvatarFallback>
             </Avatar>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{session.user.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
+                <p className="text-xs font-medium truncate text-slate-200">{session.user.name}</p>
+                <p className="text-xs truncate text-slate-400">{session.user.email}</p>
               </div>
             )}
             {!collapsed && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 shrink-0"
+                className="h-7 w-7 shrink-0 text-slate-400 hover:text-white hover:bg-white/5"
                 onClick={() => signOut({ fetchOptions: { onSuccess: () => router.push("/login") } })}
                 title="Sign out"
               >
@@ -161,8 +168,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-card px-4 shrink-0">
+        {/* Top bar — bg-background (white) for contrast against dark sidebar */}
+        <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-background px-4 shrink-0">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"

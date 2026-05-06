@@ -212,7 +212,9 @@ describe("Input validation — file upload", () => {
   function makeUploadRequest(fileBytes: Uint8Array, filename: string): Request {
     // jsdom doesn't support multipart FormData parsing — inject a real File
     // and mock formData() with Object.defineProperty to bypass readonly
-    const fileObj = new File([fileBytes], filename)
+    // Slice the underlying ArrayBuffer to avoid shared-pool offset bugs and satisfy BlobPart typing
+    const copy = fileBytes.buffer.slice(fileBytes.byteOffset, fileBytes.byteOffset + fileBytes.byteLength) as ArrayBuffer
+    const fileObj = new File([copy], filename)
     const fd = new FormData()
     fd.append("file", fileObj)
 

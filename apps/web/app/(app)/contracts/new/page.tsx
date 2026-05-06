@@ -3,27 +3,35 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FileUploadZone } from "@/components/file-upload-zone"
-import { Folder, Tag } from "@/lib/types"
+import { Folder } from "@/lib/types"
 
 const CONTRACT_TYPES = ["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"] as const
 const CURRENCIES = ["USD", "EUR", "GBP", "OTHER"] as const
+
+function titleCaseFromFilename(filename: string): string {
+  return filename
+    .replace(/\.[^.]+$/, "")       // strip extension
+    .replace(/[-_]+/g, " ")        // hyphens/underscores → spaces
+    .replace(/\b\w/g, (c) => c.toUpperCase()) // title-case each word
+    .trim()
+}
 
 export default function NewContractPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [file, setFile] = useState<File | null>(null)
+  const [title, setTitle] = useState("")
+  const [showDetails, setShowDetails] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([])
-  const [tags, setTags] = useState<Tag[]>([])
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
 
-  const [form, setForm] = useState({
-    title: "",
+  const [details, setDetails] = useState({
     contractType: "",
     counterpartyName: "",
     counterpartyContact: "",
@@ -31,52 +39,41 @@ export default function NewContractPage() {
     currency: "USD",
     startDate: "",
     endDate: "",
-    renewalDate: "",
-    noticePeriodDays: "",
-    autoRenewal: false,
-    folderId: "",
-    governingLaw: "",
     notes: "",
   })
 
   useEffect(() => {
     fetch("/api/folders").then(r => r.json()).then(setFolders).catch(() => {})
-    fetch("/api/tags").then(r => r.json()).then(setTags).catch(() => {})
   }, [])
 
-  function update(key: string, value: string | boolean | null) {
-    setForm((prev) => ({ ...prev, [key]: value ?? "" }))
+  function handleFileSelect(f: File) {
+    setFile(f)
+    // Auto-fill title from filename only if the user hasn't typed one yet.
+    if (!title) {
+      setTitle(titleCaseFromFilename(f.name))
+    }
   }
 
-  function toggleTag(id: string) {
-    setSelectedTags((prev) =>
-      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
-    )
+  function updateDetail(key: string, value: string) {
+    setDetails((prev) => ({ ...prev, [key]: value }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.title.trim()) { toast.error("Title is required"); return }
-    if (!form.contractType) { toast.error("Contract type is required"); return }
+    if (!title.trim()) { toast.error("Title is required"); return }
 
     setLoading(true)
     try {
       const body: Record<string, unknown> = {
-        title: form.title,
-        contractType: form.contractType,
-        counterpartyName: form.counterpartyName || undefined,
-        counterpartyContact: form.counterpartyContact || undefined,
-        value: form.value ? Number(form.value) : undefined,
-        currency: form.currency,
-        startDate: form.startDate || undefined,
-        endDate: form.endDate || undefined,
-        renewalDate: form.renewalDate || undefined,
-        noticePeriodDays: form.noticePeriodDays ? Number(form.noticePeriodDays) : undefined,
-        autoRenewal: form.autoRenewal,
-        folderId: form.folderId || undefined,
-        governingLaw: form.governingLaw || undefined,
-        notes: form.notes || undefined,
-        tagIds: selectedTags.length > 0 ? selectedTags : undefined,
+        title: title.trim(),
+        contractType: details.contractType || undefined,
+        counterpartyName: details.counterpartyName || undefined,
+        counterpartyContact: details.counterpartyContact || undefined,
+        value: details.value ? Number(details.value) : undefined,
+        currency: details.currency,
+        startDate: details.startDate || undefined,
+        endDate: details.endDate || undefined,
+        notes: details.notes || undefined,
       }
 
       const res = await fetch("/api/contracts", {
@@ -111,158 +108,152 @@ export default function NewContractPage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6 max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-semibold">New Contract</h1>
-        <p className="text-sm text-muted-foreground">Fill in the details below</p>
+        <p className="text-sm text-muted-foreground">Upload a file to get started — details can be added later</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Basic Info */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Basic Info</h2>
-          <div className="grid gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="title">Title <span className="text-destructive">*</span></Label>
-              <Input id="title" value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="Service Agreement Q1 2025" required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="contractType">Contract Type <span className="text-destructive">*</span></Label>
-              <Select value={form.contractType} onValueChange={(v) => update("contractType", v)} required>
-                <SelectTrigger id="contractType">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONTRACT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="counterpartyName">Counterparty Name</Label>
-                <Input id="counterpartyName" value={form.counterpartyName} onChange={(e) => update("counterpartyName", e.target.value)} placeholder="Acme Corp" />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Step 1: File upload — primary action */}
+        <FileUploadZone
+          onFileSelect={handleFileSelect}
+          className="py-14"
+        />
+
+        {/* Title — auto-filled from filename, always editable */}
+        <div className="space-y-1.5">
+          <Label htmlFor="title">
+            Title <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Service Agreement Q1 2025"
+            required
+          />
+        </div>
+
+        {/* Step 2: Optional details panel */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowDetails((v) => !v)}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showDetails
+              ? <ChevronUp className="h-3.5 w-3.5" />
+              : <ChevronDown className="h-3.5 w-3.5" />
+            }
+            {showDetails ? "Hide details" : "Add details (optional)"}
+          </button>
+
+          {showDetails && (
+            <div className="mt-4 space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="contractType">Contract Type</Label>
+                  <Select value={details.contractType} onValueChange={(v) => updateDetail("contractType", v ?? "")}>
+                    <SelectTrigger id="contractType" className="w-full">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONTRACT_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select value={details.currency} onValueChange={(v) => updateDetail("currency", v ?? "USD")}>
+                    <SelectTrigger id="currency" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="counterpartyContact">Counterparty Email</Label>
-                <Input id="counterpartyContact" type="email" value={form.counterpartyContact} onChange={(e) => update("counterpartyContact", e.target.value)} placeholder="legal@acme.com" />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="counterpartyName">Counterparty Name</Label>
+                  <Input
+                    id="counterpartyName"
+                    value={details.counterpartyName}
+                    onChange={(e) => updateDetail("counterpartyName", e.target.value)}
+                    placeholder="Acme Corp"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="counterpartyContact">Counterparty Email</Label>
+                  <Input
+                    id="counterpartyContact"
+                    type="email"
+                    value={details.counterpartyContact}
+                    onChange={(e) => updateDetail("counterpartyContact", e.target.value)}
+                    placeholder="legal@acme.com"
+                  />
+                </div>
               </div>
-            </div>
-          </div>
-        </section>
 
-        {/* Financials */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Financials</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="value">Value</Label>
-              <Input id="value" type="number" min="0" step="0.01" value={form.value} onChange={(e) => update("value", e.target.value)} placeholder="50000" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="currency">Currency</Label>
-              <Select value={form.currency} onValueChange={(v) => update("currency", v)}>
-                <SelectTrigger id="currency">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </section>
+              <div className="space-y-1.5">
+                <Label htmlFor="value">Contract Value</Label>
+                <Input
+                  id="value"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={details.value}
+                  onChange={(e) => updateDetail("value", e.target.value)}
+                  placeholder="50000"
+                />
+              </div>
 
-        {/* Dates */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Dates</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="startDate">Start Date</Label>
-              <Input id="startDate" type="date" value={form.startDate} onChange={(e) => update("startDate", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="endDate">End Date</Label>
-              <Input id="endDate" type="date" value={form.endDate} onChange={(e) => update("endDate", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="renewalDate">Renewal Date</Label>
-              <Input id="renewalDate" type="date" value={form.renewalDate} onChange={(e) => update("renewalDate", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="noticePeriodDays">Notice Period (days)</Label>
-              <Input id="noticePeriodDays" type="number" min="0" value={form.noticePeriodDays} onChange={(e) => update("noticePeriodDays", e.target.value)} placeholder="30" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              id="autoRenewal"
-              type="checkbox"
-              checked={form.autoRenewal}
-              onChange={(e) => update("autoRenewal", e.target.checked)}
-              className="h-4 w-4 rounded border-border accent-primary"
-            />
-            <Label htmlFor="autoRenewal" className="cursor-pointer">Auto-renewal</Label>
-          </div>
-        </section>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="startDate">Start Date</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={details.startDate}
+                    onChange={(e) => updateDetail("startDate", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="endDate">End Date</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={details.endDate}
+                    onChange={(e) => updateDetail("endDate", e.target.value)}
+                  />
+                </div>
+              </div>
 
-        {/* Organization */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Organization</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="folderId">Folder</Label>
-              <Select value={form.folderId || "none"} onValueChange={(v) => update("folderId", v === "none" ? "" : v)}>
-                <SelectTrigger id="folderId">
-                  <SelectValue placeholder="No folder" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No folder</SelectItem>
-                  {folders.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="governingLaw">Governing Law</Label>
-              <Input id="governingLaw" value={form.governingLaw} onChange={(e) => update("governingLaw", e.target.value)} placeholder="New York" />
-            </div>
-          </div>
-          {tags.length > 0 && (
-            <div className="space-y-2">
-              <Label>Tags</Label>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => toggleTag(tag.id)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      selectedTags.includes(tag.id)
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border text-muted-foreground hover:border-primary/50"
-                    }`}
-                    style={tag.color && selectedTags.includes(tag.id) ? { borderColor: tag.color, backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
-                  >
-                    {tag.name}
-                  </button>
-                ))}
+              <div className="space-y-1.5">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={details.notes}
+                  onChange={(e) => updateDetail("notes", e.target.value)}
+                  placeholder="Additional notes..."
+                  rows={3}
+                />
               </div>
             </div>
           )}
-          <div className="space-y-1.5">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" value={form.notes} onChange={(e) => update("notes", e.target.value)} placeholder="Additional notes..." rows={3} />
-          </div>
-        </section>
+        </div>
 
-        {/* File Upload */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">File</h2>
-          <FileUploadZone onFileSelect={setFile} />
-        </section>
-
-        <div className="flex gap-3">
+        <div className="flex gap-3 pt-2">
           <Button type="submit" disabled={loading}>
-            {loading ? "Creating..." : "Create Contract"}
+            {loading ? "Creating..." : "Upload & Create"}
           </Button>
           <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel

@@ -6,7 +6,7 @@ import { z } from "zod"
 
 const CreateContractSchema = z.object({
   title: z.string().min(1).max(500),
-  contractType: z.enum(["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"]),
+  contractType: z.enum(["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"]).optional(),
   counterpartyName: z.string().optional(),
   counterpartyContact: z.string().email().optional().or(z.literal("")),
   value: z.number().positive().optional(),

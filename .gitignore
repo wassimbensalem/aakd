@@ -6,3 +6,15 @@ dist/
 *.log
 .DS_Store
 prisma/migrations/*/migration.sql
+
+# Agent memory — personal, machine-local, never commit
+.claude/agent-memory/
+
+# Python artifacts
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Lock files (project uses pnpm only)
+package-lock.json
+yarn.lock

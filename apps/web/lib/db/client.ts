@@ -3,9 +3,12 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
 import { getRequestContext } from "@/lib/context"
 
+// Only models that have a direct organizationId column should be in this set.
+// ContractFile, ContractVersion, and Activity are org-scoped *indirectly*
+// through their contractId FK — injecting organizationId into those queries
+// causes a Prisma validation error (unknown field).
 const ORG_SCOPED_MODELS = new Set([
-  "Contract", "ContractFile", "ContractVersion",
-  "Activity", "Folder", "Tag", "ApiKey",
+  "Contract", "Folder", "Tag", "ApiKey",
 ])
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }

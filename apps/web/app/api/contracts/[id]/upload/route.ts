@@ -4,6 +4,35 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
 
+// GET /api/contracts/[id]/upload?fileId=... — generate a signed download URL
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  const ctx = await resolveAuth(req)
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+  return requestContext.run(ctx, async () => {
+    const contract = await prisma.contract.findUnique({
+      where: { id: params.id },
+      select: { id: true, organizationId: true },
+    })
+    if (!contract || contract.organizationId !== ctx.organizationId)
+      return Response.json({ error: "Not Found" }, { status: 404 })
+
+    const url = new URL(req.url)
+    const fileId = url.searchParams.get("fileId")
+    if (!fileId) return Response.json({ error: "fileId required" }, { status: 400 })
+
+    const file = await prisma.contractFile.findUnique({
+      where: { id: fileId },
+      select: { id: true, contractId: true, storageKey: true },
+    })
+    if (!file || file.contractId !== params.id)
+      return Response.json({ error: "Not Found" }, { status: 404 })
+
+    const signedUrl = await storage.getSignedDownloadUrl(file.storageKey)
+    return Response.json({ url: signedUrl })
+  })
+}
+
 function validateFileType(
   buffer: Buffer,
 ): "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | null {

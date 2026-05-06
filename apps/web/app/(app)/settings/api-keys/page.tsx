@@ -1,0 +1,221 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { toast } from "sonner"
+import { format } from "date-fns"
+import { Trash2, Copy, Check, Key } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ApiKey } from "@/lib/types"
+
+const SCOPES = ["read", "write"] as const
+
+export default function ApiKeysPage() {
+  const [keys, setKeys] = useState<ApiKey[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [keyName, setKeyName] = useState("")
+  const [scopes, setScopes] = useState<string[]>(["read"])
+  const [newKey, setNewKey] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  async function fetchKeys() {
+    try {
+      const res = await fetch("/api/org/api-keys")
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setKeys(data.apiKeys ?? data ?? [])
+    } catch {
+      toast.error("Failed to load API keys")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchKeys() }, [])
+
+  async function createKey(e: React.FormEvent) {
+    e.preventDefault()
+    if (!keyName.trim()) return
+    setCreating(true)
+    try {
+      const res = await fetch("/api/org/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: keyName, scopes }),
+      })
+      if (!res.ok) throw new Error("Failed to create")
+      const data = await res.json()
+      setNewKey(data.rawKey ?? data.key)
+      setKeyName("")
+      setScopes(["read"])
+      fetchKeys()
+    } catch {
+      toast.error("Failed to create API key")
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function revokeKey(id: string) {
+    if (!confirm("Revoke this API key? This cannot be undone.")) return
+    try {
+      const res = await fetch(`/api/org/api-keys/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      toast.success("API key revoked")
+      fetchKeys()
+    } catch {
+      toast.error("Failed to revoke key")
+    }
+  }
+
+  async function copyKey(key: string) {
+    await navigator.clipboard.writeText(key)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  function toggleScope(scope: string) {
+    setScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]
+    )
+  }
+
+  return (
+    <div className="p-6 space-y-6 max-w-2xl">
+      <div>
+        <h1 className="text-lg font-semibold">API Keys</h1>
+        <p className="text-sm text-muted-foreground">Manage API keys for external integrations</p>
+      </div>
+
+      {/* Callout */}
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 flex gap-3">
+        <Key className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-medium text-primary">MCP Server Access</p>
+          <p className="text-sm text-muted-foreground">
+            API keys let AI agents (Claude, n8n, etc.) access your contracts via the MCP server.
+          </p>
+        </div>
+      </div>
+
+      {/* Create form */}
+      <div className="rounded-xl border border-border p-4 space-y-4">
+        <h2 className="text-sm font-medium">Create API Key</h2>
+        <form onSubmit={createKey} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="keyName">Name</Label>
+            <Input id="keyName" placeholder="Production agent" value={keyName} onChange={(e) => setKeyName(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Scopes</Label>
+            <div className="flex gap-3">
+              {SCOPES.map((scope) => (
+                <label key={scope} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scopes.includes(scope)}
+                    onChange={() => toggleScope(scope)}
+                    className="h-4 w-4 rounded accent-primary"
+                  />
+                  <span className="text-sm">{scope}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <Button type="submit" size="sm" disabled={creating || scopes.length === 0}>
+            {creating ? "Creating..." : "Create Key"}
+          </Button>
+        </form>
+      </div>
+
+      {/* Keys table */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/40">
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Prefix</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Scopes</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Last Used</th>
+              <th className="px-4 py-2.5" />
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              Array.from({ length: 2 }).map((_, i) => (
+                <tr key={i} className="border-b border-border last:border-0">
+                  {Array.from({ length: 5 }).map((_, j) => (
+                    <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                  ))}
+                </tr>
+              ))
+            ) : keys.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                  No API keys yet
+                </td>
+              </tr>
+            ) : (
+              keys.map((k) => (
+                <tr key={k.id} className={`border-b border-border last:border-0 ${k.revokedAt ? "opacity-50" : ""}`}>
+                  <td className="px-4 py-3 font-medium">{k.name}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{k.prefix}...</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      {k.scopes.map((s) => (
+                        <Badge key={s} variant="outline" className="text-xs">{s}</Badge>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {k.lastUsedAt ? format(new Date(k.lastUsedAt), "MMM d, yyyy") : "Never"}
+                  </td>
+                  <td className="px-4 py-3">
+                    {!k.revokedAt && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => revokeKey(k.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* New key reveal modal */}
+      <Dialog open={!!newKey} onOpenChange={() => setNewKey(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>API Key Created</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+              <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">
+                This key will only be shown once. Copy it now.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input value={newKey ?? ""} readOnly className="font-mono text-sm" />
+              <Button variant="outline" size="icon" className="shrink-0" onClick={() => newKey && copyKey(newKey)}>
+                {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <Button className="w-full" onClick={() => setNewKey(null)}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

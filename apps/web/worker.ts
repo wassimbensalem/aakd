@@ -12,6 +12,7 @@ import path from "path"
 // Load env before any other imports that read process.env
 dotenv.config({ path: path.resolve(__dirname, ".env.local") })
 
+import crypto from "node:crypto"
 import { Worker, Job } from "bullmq"
 import { PDFParse } from "pdf-parse"
 import mammoth from "mammoth"
@@ -31,11 +32,32 @@ const connection = {
   url: process.env.REDIS_URL ?? "redis://localhost:6379",
 }
 
+function maskRedisUrl(url: string): string {
+  return url.replace(/\/\/:([^@]+)@/, "//:***@")
+}
+
+// ─── SDK singletons ───────────────────────────────────────────────────────────
+// Constructed lazily so dotenv has loaded before we read API keys.
+
+let _anthropic: Anthropic | null = null
+function getAnthropic(): Anthropic {
+  return (_anthropic ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }))
+}
+
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  return (_openai ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY }))
+}
+
 // ─── Extraction prompt ────────────────────────────────────────────────────────
 
-const EXTRACTION_SYSTEM_PROMPT = `You are a contract analysis assistant. Extract the following fields from the contract text provided. Return ONLY a valid JSON object with exactly these keys. Use null for any field you cannot determine with confidence.
+const EXTRACTION_SYSTEM_PROMPT = `You are a contract analysis assistant. Extract the following fields from the contract text provided. Return ONLY a valid JSON object where each key maps to an object with this exact shape:
 
-Fields to extract:
+{ "value": <field value or null>, "confidence": <number between 0 and 1>, "sourceText": <exact quote from the contract supporting the value, or null>, "sourcePage": <1-indexed page number where the quote appears, or null> }
+
+Use null for the "value" of any field you cannot determine. When "value" is null, set "confidence" to 0 and "sourceText"/"sourcePage" to null. "sourceText" must be a verbatim substring of the contract — do not paraphrase. "confidence" must reflect how certain you are that the extracted value is correct: 1 = explicit and unambiguous, 0.5 = inferred, 0 = unknown.
+
+Fields to extract (each with the shape above):
 - contractType: one of "NDA" | "MSA" | "SOW" | "EMPLOYMENT" | "VENDOR" | "CUSTOMER" | "OTHER" or null
 - startDate: ISO 8601 date string (YYYY-MM-DD) or null
 - endDate: ISO 8601 date string (YYYY-MM-DD) or null
@@ -47,7 +69,28 @@ Fields to extract:
 - noticePeriodDays: notice period in days (integer) or null
 - autoRenewal: whether the contract auto-renews (boolean) or null
 
+Example output:
+{
+  "contractType": { "value": "NDA", "confidence": 0.95, "sourceText": "This Mutual Non-Disclosure Agreement", "sourcePage": 1 },
+  "startDate": { "value": "2025-01-15", "confidence": 0.9, "sourceText": "Effective Date: January 15, 2025", "sourcePage": 1 },
+  "value": { "value": null, "confidence": 0, "sourceText": null, "sourcePage": null }
+}
+
 Return ONLY the JSON object, no explanation, no markdown fences.`
+
+// Per-provider character budget for the contract text we feed to the LLM.
+// Roughly 4 chars per token; we leave headroom for prompt + JSON response.
+function getTextLimitForProvider(): number {
+  const provider = (process.env.AI_PROVIDER?.toLowerCase() || "").trim()
+  if (provider === "ollama") return 32_000
+  if (provider === "openai") return 400_000
+  if (provider === "anthropic") return 600_000
+  // Auto-detect when AI_PROVIDER is unset.
+  if (process.env.ANTHROPIC_API_KEY) return 600_000
+  if (process.env.OPENAI_API_KEY) return 400_000
+  if (process.env.OLLAMA_BASE_URL) return 32_000
+  return 100_000
+}
 
 // ─── Worker: contract.extract ─────────────────────────────────────────────────
 
@@ -151,12 +194,10 @@ async function callExtractionLLM(text: string): Promise<string | null> {
   }
 
   if (provider === "anthropic") {
-    const key = process.env.ANTHROPIC_API_KEY
-    if (!key) { console.warn("[ai_extract] AI_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set"); return null }
-    const anthropic = new Anthropic({ apiKey: key })
-    const msg = await anthropic.messages.create({
+    if (!process.env.ANTHROPIC_API_KEY) { console.warn("[ai_extract] AI_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set"); return null }
+    const msg = await getAnthropic().messages.create({
       model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: EXTRACTION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: `Here is the contract text to analyze:\n\n${text}` }],
     })
@@ -165,12 +206,10 @@ async function callExtractionLLM(text: string): Promise<string | null> {
   }
 
   if (provider === "openai") {
-    const key = process.env.OPENAI_API_KEY
-    if (!key) { console.warn("[ai_extract] AI_PROVIDER=openai but OPENAI_API_KEY is not set"); return null }
-    const openai = new OpenAI({ apiKey: key })
-    const res = await openai.chat.completions.create({
+    if (!process.env.OPENAI_API_KEY) { console.warn("[ai_extract] AI_PROVIDER=openai but OPENAI_API_KEY is not set"); return null }
+    const res = await getOpenAI().chat.completions.create({
       model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [
         { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
         { role: "user", content: `Here is the contract text to analyze:\n\n${text}` },
@@ -212,33 +251,105 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
 
     console.log(`[ai_extract] Processing job ${job.id} for contract ${contractId}`)
 
-    // Truncate to ~25k tokens
+    const limit = getTextLimitForProvider()
     const textToAnalyze =
-      extractedText.length > 100_000 ? extractedText.slice(0, 100_000) : extractedText
+      extractedText.length > limit ? extractedText.slice(0, limit) : extractedText
+    if (extractedText.length > limit) {
+      console.log(
+        `[ai_extract] Truncated contract text from ${extractedText.length} to ${limit} chars for provider ${process.env.AI_PROVIDER ?? "(auto)"}`,
+      )
+    }
 
     let rawJson: string
     try {
       const result = await callExtractionLLM(textToAnalyze)
-      if (result === null) return
+      if (result === null) {
+        console.warn(
+          `[ai_extract] AI extraction skipped for contract ${contractId}: no AI provider configured`,
+        )
+        await getWorkerPrisma().activity.create({
+          data: {
+            contractId,
+            userId: null,
+            actorLabel: "System",
+            action: "METADATA_EXTRACTED",
+            detail: "AI extraction skipped — no AI provider configured",
+            metadata: { skipped: true, reason: "no_provider" },
+          },
+        })
+        // Still enqueue embedding so semantic search works without an extractor.
+        await contractEmbedQueue.add("embed", { contractId, extractedText: textToAnalyze })
+        return
+      }
       rawJson = result
     } catch (err) {
       console.error(`[ai_extract] LLM call failed for contract ${contractId}:`, err)
+      await getWorkerPrisma().activity.create({
+        data: {
+          contractId,
+          userId: null,
+          actorLabel: "System",
+          action: "METADATA_EXTRACTED",
+          detail: `AI extraction failed: ${(err as Error)?.message ?? String(err)}`,
+          metadata: { skipped: true, reason: "llm_error" },
+        },
+      })
       return
     }
 
-    // Parse the JSON response
+    // Strip markdown fences if the model emitted them despite instructions.
+    const cleaned = rawJson
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim()
+
     let extracted: Record<string, unknown>
     try {
-      extracted = JSON.parse(rawJson)
+      extracted = JSON.parse(cleaned)
     } catch {
       console.error(
         `[ai_extract] Failed to parse LLM response as JSON for contract ${contractId}:`,
         rawJson,
       )
+      await getWorkerPrisma().activity.create({
+        data: {
+          contractId,
+          userId: null,
+          actorLabel: "System",
+          action: "METADATA_EXTRACTED",
+          detail: "AI extraction failed: invalid JSON response",
+          metadata: { skipped: true, reason: "parse_error" },
+        },
+      })
       return
     }
 
-    // Fields we want to upsert into AIExtraction
+    type FieldExtraction = {
+      value: unknown
+      confidence: number
+      sourceText: string | null
+      sourcePage: number | null
+    }
+
+    function normalizeField(raw: unknown): FieldExtraction | null {
+      // Legacy / lenient shape: bare scalar -> wrap with confidence 0
+      if (raw === null || raw === undefined) return null
+      if (typeof raw !== "object" || Array.isArray(raw)) {
+        return { value: raw, confidence: 0, sourceText: null, sourcePage: null }
+      }
+      const obj = raw as Record<string, unknown>
+      if (obj.value === null || obj.value === undefined) return null
+      const conf = typeof obj.confidence === "number" ? obj.confidence : 0
+      const clampedConf = Math.max(0, Math.min(1, conf))
+      const src = typeof obj.sourceText === "string" && obj.sourceText.length > 0
+        ? obj.sourceText
+        : null
+      const page = typeof obj.sourcePage === "number" && Number.isFinite(obj.sourcePage)
+        ? Math.trunc(obj.sourcePage)
+        : null
+      return { value: obj.value, confidence: clampedConf, sourceText: src, sourcePage: page }
+    }
+
     const EXTRACTABLE_FIELDS = [
       "contractType",
       "startDate",
@@ -252,32 +363,36 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
       "autoRenewal",
     ]
 
-    const nonNullFields = EXTRACTABLE_FIELDS.filter(
-      (field) => extracted[field] !== null && extracted[field] !== undefined,
-    )
+    const fieldData = EXTRACTABLE_FIELDS
+      .map((field) => ({ field, data: normalizeField(extracted[field]) }))
+      .filter((entry): entry is { field: string; data: FieldExtraction } => entry.data !== null)
 
-    if (nonNullFields.length === 0) {
+    if (fieldData.length === 0) {
       console.log(`[ai_extract] No fields extracted for contract ${contractId}`)
+      await contractEmbedQueue.add("embed", { contractId, extractedText: textToAnalyze })
       return
     }
 
-    // Upsert AIExtraction records in a transaction
     const db = getWorkerPrisma()
     await db.$transaction(
-      nonNullFields.map((field) =>
+      fieldData.map(({ field, data }) =>
         db.aIExtraction.upsert({
           where: { contractId_field: { contractId, field } },
           create: {
             contractId,
             field,
-            rawValue: String(extracted[field]),
-            confidence: 0.85,
+            rawValue: String(data.value),
+            confidence: data.confidence,
+            sourceText: data.sourceText,
+            sourcePage: data.sourcePage,
             extractedBy: "ai",
             status: "pending",
           },
           update: {
-            rawValue: String(extracted[field]),
-            confidence: 0.85,
+            rawValue: String(data.value),
+            confidence: data.confidence,
+            sourceText: data.sourceText,
+            sourcePage: data.sourcePage,
             status: "pending",
           },
         }),
@@ -285,11 +400,11 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
     )
 
     await getWorkerPrisma().activity.create({
-      data: { contractId, userId: null, actorLabel: "System", action: "METADATA_EXTRACTED", detail: `AI extracted ${nonNullFields.length} fields` },
+      data: { contractId, userId: null, actorLabel: "System", action: "METADATA_EXTRACTED", detail: `AI extracted ${fieldData.length} fields` },
     })
 
     console.log(
-      `[ai_extract] Upserted ${nonNullFields.length} extraction records for contract ${contractId}: ${nonNullFields.join(", ")}`,
+      `[ai_extract] Upserted ${fieldData.length} extraction records for contract ${contractId}: ${fieldData.map((f) => f.field).join(", ")}`,
     )
 
     // Enqueue embedding generation after AI extraction
@@ -322,7 +437,7 @@ const embedWorker = new Worker<ContractEmbedJobData>(
     }
 
     const db = getWorkerPrisma()
-    const id = `emb_${Date.now()}`
+    const id = crypto.randomUUID()
 
     // Upsert using raw SQL (pgvector — Prisma does not support vector type natively)
     await db.$executeRaw`
@@ -393,7 +508,7 @@ process.on("SIGTERM", shutdown)
 process.on("SIGINT", shutdown)
 
 console.log("[worker] ClauseFlow BullMQ worker started")
-console.log(`[worker] Redis: ${process.env.REDIS_URL ?? "redis://localhost:6379"}`)
+console.log(`[worker] Redis: ${maskRedisUrl(process.env.REDIS_URL ?? "redis://localhost:6379")}`)
 const _provider = process.env.AI_PROVIDER?.toLowerCase() || (
   process.env.ANTHROPIC_API_KEY ? "anthropic"
     : process.env.OPENAI_API_KEY     ? "openai"

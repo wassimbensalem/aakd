@@ -3,6 +3,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { generateEmbedding } from "@/lib/embedding"
+import { QA_SYSTEM_PROMPT } from "@/lib/ai/prompts"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -430,8 +431,6 @@ async function toolListContracts(
 
   return toolSuccess(id, { contracts, total, page, limit })
 }
-
-const QA_SYSTEM_PROMPT = `You are a contract analysis assistant. Answer the user's question based ONLY on the contract text provided. Be concise and cite specific clauses when relevant. If the answer cannot be found in the contract, say so clearly.`
 
 async function toolSemanticSearch(
   args: unknown,

@@ -287,6 +287,7 @@ export default function NewContractPage() {
   const pollTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollStartRef      = useRef<number>(0)
   const pollActiveRef     = useRef(false)
+  const pollAbortRef      = useRef<AbortController | null>(null)
   // Track the last file that was successfully uploaded so we don't re-upload on Back → Continue
   const lastUploadedFileRef = useRef<File | null>(null)
 
@@ -301,6 +302,7 @@ export default function NewContractPage() {
     return () => {
       pollActiveRef.current = false
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+      pollAbortRef.current?.abort()
     }
   }, [])
 
@@ -308,9 +310,14 @@ export default function NewContractPage() {
   const startPolling = useCallback((id: string) => {
     pollActiveRef.current = true
     pollStartRef.current = Date.now()
+    // Fresh AbortController for this polling session — aborted on unmount
+    // or when polling stops.
+    pollAbortRef.current?.abort()
+    pollAbortRef.current = new AbortController()
+    const signal = pollAbortRef.current.signal
 
     function tick() {
-      if (!pollActiveRef.current) return
+      if (!pollActiveRef.current || signal.aborted) return
 
       const elapsed = Date.now() - pollStartRef.current
       if (elapsed >= POLL_TIMEOUT_MS) {
@@ -319,13 +326,13 @@ export default function NewContractPage() {
         return
       }
 
-      fetch(`/api/contracts/${id}/extractions`)
+      fetch(`/api/contracts/${id}/extractions`, { signal })
         .then((r) => {
           if (!r.ok) throw new Error("fetch failed")
           return r.json()
         })
         .then((data: { extractions: AIExtraction[] }) => {
-          if (!pollActiveRef.current) return
+          if (!pollActiveRef.current || signal.aborted) return
           const found = Array.isArray(data.extractions) ? data.extractions : []
           if (found.length > 0) {
             pollActiveRef.current = false
@@ -342,8 +349,9 @@ export default function NewContractPage() {
             pollTimerRef.current = setTimeout(tick, POLL_INTERVAL_MS)
           }
         })
-        .catch(() => {
-          if (!pollActiveRef.current) return
+        .catch((err) => {
+          if (signal.aborted || !pollActiveRef.current) return
+          if (err instanceof Error && err.name === "AbortError") return
           pollTimerRef.current = setTimeout(tick, POLL_INTERVAL_MS)
         })
     }
@@ -472,32 +480,31 @@ export default function NewContractPage() {
     if (!contractId) return
     setLoading(true)
     try {
-      // Process AI extraction records
+      // Build per-extraction PATCH payloads, then fire them in parallel.
+      // Sequential awaits here meant Step 2 took N * RTT for N fields — with
+      // ~10 extractions that's painfully slow. Promise.all collapses it to
+      // a single round-trip wall-clock.
+      const extractionPatches: Array<Promise<unknown>> = []
       for (const ex of extractions) {
+        let payload: Record<string, unknown> | null = null
         if (fieldCleared.has(ex.field)) {
-          // User cleared it — reject
-          await fetch(`/api/contracts/${contractId}/extractions`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "reject", extractionId: ex.id }),
-          }).catch(() => {})
+          payload = { action: "reject", extractionId: ex.id }
         } else {
           const currentVal = fieldValues[ex.field]
           if (currentVal !== undefined && currentVal !== ex.rawValue) {
-            // User edited the value
-            await fetch(`/api/contracts/${contractId}/extractions`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "edit", extractionId: ex.id, newValue: currentVal }),
-            }).catch(() => {})
+            payload = { action: "edit", extractionId: ex.id, newValue: currentVal }
           } else if (currentVal !== undefined) {
-            // Unchanged AI value — accept
-            await fetch(`/api/contracts/${contractId}/extractions`, {
+            payload = { action: "accept", extractionId: ex.id }
+          }
+        }
+        if (payload) {
+          extractionPatches.push(
+            fetch(`/api/contracts/${contractId}/extractions`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "accept", extractionId: ex.id }),
+              body: JSON.stringify(payload),
             }).catch(() => {})
-          }
+          )
         }
       }
 
@@ -522,13 +529,18 @@ export default function NewContractPage() {
         }
       }
 
+      const allRequests: Array<Promise<unknown>> = [...extractionPatches]
       if (Object.keys(manualPatch).length > 0) {
-        await fetch(`/api/contracts/${contractId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(manualPatch),
-        }).catch(() => {})
+        allRequests.push(
+          fetch(`/api/contracts/${contractId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(manualPatch),
+          }).catch(() => {})
+        )
       }
+
+      await Promise.all(allRequests)
 
       setStep(3)
     } catch (err) {
@@ -634,6 +646,7 @@ export default function NewContractPage() {
               // Stop any active polling and wipe extraction state so step 2 re-enters fresh
               pollActiveRef.current = false
               if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+              pollAbortRef.current?.abort()
               setExtractions([])
               setFieldValues({})
               setFieldCleared(new Set())

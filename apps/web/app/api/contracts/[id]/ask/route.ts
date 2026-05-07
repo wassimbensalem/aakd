@@ -2,13 +2,12 @@ import { resolveAuth } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { QA_SYSTEM_PROMPT } from "@/lib/ai/prompts"
 import { z } from "zod"
 
 const AskSchema = z.object({
   question: z.string().min(1).max(2000),
 })
-
-const QA_SYSTEM_PROMPT = `You are a contract analysis assistant. Answer the user's question based ONLY on the contract text provided. Be concise and cite specific clauses when relevant. If the answer cannot be found in the contract, say so clearly.`
 
 async function callQaLLM(
   contractTitle: string,

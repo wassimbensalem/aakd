@@ -8,8 +8,26 @@
  * Uses fetch only — no openai SDK imported here.
  */
 
+let _ollamaDimWarned = false
+
+function warnOllamaDimensionMismatch() {
+  if (_ollamaDimWarned) return
+  _ollamaDimWarned = true
+  const model = process.env.OLLAMA_EMBEDDING_MODEL
+  if (!model) {
+    console.error(
+      "[embedding] OLLAMA_EMBEDDING_MODEL is not set. The default Ollama embedding " +
+        "models (e.g. nomic-embed-text) produce 768-dim vectors, but the ContractEmbedding " +
+        "column is vector(1536). Inserts will fail. Set OLLAMA_EMBEDDING_MODEL to a " +
+        "1536-dim model such as 'mxbai-embed-large'.",
+    )
+  }
+}
+
 export async function generateEmbedding(text: string): Promise<number[] | null> {
-  const input = text.slice(0, 8000)
+  // text-embedding-3-small supports ~8191 tokens. Roughly 4 chars per token,
+  // so ~32K chars fits comfortably; cap at 30K for headroom.
+  const input = text.slice(0, 30000)
 
   if (process.env.OPENAI_API_KEY) {
     const res = await fetch("https://api.openai.com/v1/embeddings", {
@@ -36,6 +54,9 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
   }
 
   if (process.env.OLLAMA_BASE_URL) {
+    if ((process.env.AI_PROVIDER?.toLowerCase() === "ollama") || !process.env.OLLAMA_EMBEDDING_MODEL) {
+      warnOllamaDimensionMismatch()
+    }
     const base = process.env.OLLAMA_BASE_URL.replace(/\/$/, "")
     const model = process.env.OLLAMA_EMBEDDING_MODEL ?? "nomic-embed-text:v1.5"
 

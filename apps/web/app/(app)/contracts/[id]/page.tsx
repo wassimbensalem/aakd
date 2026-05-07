@@ -2,38 +2,76 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
+import Link from "next/link"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import {
-  Edit, Archive, Upload, Download, Bell
+  ChevronRight,
+  Download,
+  Archive,
+  Upload,
+  FileText,
+  Check,
+  X,
+  Plus,
+  AlertTriangle,
+  Bell,
 } from "lucide-react"
-import { differenceInDays, format as fmtDate } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ContractStatusBadge } from "@/components/contract-status-badge"
-import { ContractTypeBadge } from "@/components/contract-type-badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Progress } from "@/components/ui/progress"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { StatusBadge, TypeBadge } from "@/components/contract-badges"
 import { ActivityTimeline } from "@/components/activity-timeline"
 import { FileUploadZone } from "@/components/file-upload-zone"
 import { RelativeTime } from "@/components/relative-time"
-import { Contract, ContractFile, Activity, ContractStatus, ContractAlert } from "@/lib/types"
+import { Contract, ContractFile, Activity, ContractStatus, ContractAlert, Tag } from "@/lib/types"
+import { cn } from "@/lib/utils"
+
+interface AIExtraction {
+  id: string
+  field: string
+  rawValue: string
+  confidence: number
+  sourceText: string
+  sourcePage: number | null
+  status: "PENDING" | "ACCEPTED" | "REJECTED"
+}
 
 const STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
-  DRAFT: ["INTERNAL_REVIEW", "ARCHIVED"],
-  INTERNAL_REVIEW: ["PENDING_APPROVAL", "DRAFT", "ARCHIVED"],
-  PENDING_APPROVAL: ["AWAITING_SIGNATURE", "INTERNAL_REVIEW", "ARCHIVED"],
-  AWAITING_SIGNATURE: ["ACTIVE", "ARCHIVED"],
-  ACTIVE: ["EXPIRED", "TERMINATED", "ARCHIVED"],
-  EXPIRED: ["ARCHIVED"],
-  TERMINATED: ["ARCHIVED"],
-  ARCHIVED: [],
+  DRAFT:               ["INTERNAL_REVIEW", "ARCHIVED"],
+  INTERNAL_REVIEW:     ["PENDING_APPROVAL", "DRAFT", "ARCHIVED"],
+  PENDING_APPROVAL:    ["AWAITING_SIGNATURE", "INTERNAL_REVIEW", "ARCHIVED"],
+  AWAITING_SIGNATURE:  ["ACTIVE", "ARCHIVED"],
+  ACTIVE:              ["EXPIRED", "TERMINATED", "ARCHIVED"],
+  EXPIRED:             ["ARCHIVED"],
+  TERMINATED:          ["ARCHIVED"],
+  ARCHIVED:            [],
 }
 
 const CONTRACT_TYPES = ["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"] as const
@@ -49,8 +87,8 @@ function MetaField({ label, value }: { label: string; value?: string | number | 
   if (value == null || value === "") return null
   return (
     <div>
-      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-      <p className="text-sm font-medium">{String(value)}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-sm text-foreground">{String(value)}</p>
     </div>
   )
 }
@@ -64,6 +102,7 @@ export default function ContractDetailPage() {
   const [files, setFiles] = useState<ContractFile[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [alerts, setAlerts] = useState<ContractAlert[]>([])
+  const [extractions, setExtractions] = useState<AIExtraction[]>([])
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(searchParams.get("edit") === "true")
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -71,14 +110,22 @@ export default function ContractDetailPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  const [tagInput, setTagInput] = useState("")
+  const [addingTag, setAddingTag] = useState(false)
 
   const fetchContract = useCallback(async () => {
     try {
-      const [contractRes, alertsRes] = await Promise.all([
+      const [contractRes, alertsRes, extractionsRes] = await Promise.all([
         fetch(`/api/contracts/${id}`),
         fetch(`/api/alerts?contractId=${id}`),
+        fetch(`/api/contracts/${id}/extractions`),
       ])
-      if (!contractRes.ok) { toast.error("Contract not found"); router.push("/contracts"); return }
+      if (!contractRes.ok) {
+        toast.error("Contract not found")
+        router.push("/contracts")
+        return
+      }
       const data = await contractRes.json()
       setContract(data.contract ?? data)
       setFiles(data.files ?? [])
@@ -88,6 +135,10 @@ export default function ContractDetailPage() {
         const alertData = await alertsRes.json()
         setAlerts(alertData.alerts ?? [])
       }
+      if (extractionsRes.ok) {
+        const extData = await extractionsRes.json()
+        setExtractions(extData.extractions ?? [])
+      }
     } catch {
       toast.error("Failed to load contract")
     } finally {
@@ -95,7 +146,10 @@ export default function ContractDetailPage() {
     }
   }, [id, router])
 
-  useEffect(() => { fetchContract() }, [fetchContract])
+  useEffect(() => {
+    fetchContract()
+    fetch("/api/tags").then(r => r.json()).then(d => setAllTags(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [fetchContract])
 
   async function changeStatus(newStatus: ContractStatus) {
     try {
@@ -125,7 +179,7 @@ export default function ContractDetailPage() {
       setEditOpen(false)
       fetchContract()
     } catch {
-      toast.error("Failed to update contract")
+      toast.error("Failed to update")
     } finally {
       setSaving(false)
     }
@@ -164,13 +218,110 @@ export default function ContractDetailPage() {
     }
   }
 
+  async function handleExtraction(extractionId: string, action: "accept" | "reject") {
+    try {
+      await fetch(`/api/contracts/${id}/extractions`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, extractionId }),
+      })
+      setExtractions((prev) =>
+        prev.map((e) =>
+          e.id === extractionId
+            ? { ...e, status: action === "accept" ? "ACCEPTED" : "REJECTED" }
+            : e,
+        ),
+      )
+    } catch {
+      toast.error("Failed to update extraction")
+    }
+  }
+
+  async function handleAcceptAll() {
+    try {
+      await fetch(`/api/contracts/${id}/extractions`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "accept_all" }),
+      })
+      setExtractions((prev) => prev.map((e) => ({ ...e, status: "ACCEPTED" as const })))
+      toast.success("All extractions accepted")
+    } catch {
+      toast.error("Failed to accept all")
+    }
+  }
+
+  async function removeTag(tagId: string) {
+    if (!contract) return
+    const newTagIds = (contract.tags ?? []).filter(t => t.id !== tagId).map(t => t.id)
+    setContract(c => c ? { ...c, tags: (c.tags ?? []).filter(t => t.id !== tagId) } : c)
+    try {
+      await fetch(`/api/contracts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tagIds: newTagIds }),
+      })
+    } catch {
+      fetchContract()
+    }
+  }
+
+  async function addTag(tagId: string) {
+    if (!contract) return
+    const existing = contract.tags ?? []
+    if (existing.some(t => t.id === tagId)) return
+    const tag = allTags.find(t => t.id === tagId)
+    if (!tag) return
+    const newTagIds = [...existing.map(t => t.id), tagId]
+    setContract(c => c ? { ...c, tags: [...(c.tags ?? []), tag] } : c)
+    setTagInput("")
+    setAddingTag(false)
+    try {
+      await fetch(`/api/contracts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tagIds: newTagIds }),
+      })
+    } catch {
+      fetchContract()
+    }
+  }
+
+  async function createAndAddTag(name: string) {
+    if (!name.trim() || !contract) return
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      })
+      if (!res.ok) return
+      const newTag = await res.json()
+      setAllTags(prev => [...prev, newTag])
+      const existing = contract.tags ?? []
+      const newTagIds = [...existing.map(t => t.id), newTag.id]
+      setContract(c => c ? { ...c, tags: [...(c.tags ?? []), newTag] } : c)
+      setTagInput("")
+      setAddingTag(false)
+      await fetch(`/api/contracts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tagIds: newTagIds }),
+      })
+    } catch {
+      fetchContract()
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-6 space-y-4">
-        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-6 w-64" />
         <Skeleton className="h-4 w-32" />
-        <div className="grid grid-cols-3 gap-4 mt-6">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
+        <div className="mt-6 grid grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-16" />
+          ))}
         </div>
       </div>
     )
@@ -179,212 +330,547 @@ export default function ContractDetailPage() {
   if (!contract) return null
 
   const transitions = STATUS_TRANSITIONS[contract.status] ?? []
+  const latestFile = files.find((f) => f.isLatest) ?? files[0]
+  const pendingExtractions = extractions.filter((e) => e.status === "PENDING")
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+        <Link href="/contracts" className="hover:text-foreground">
+          Contracts
+        </Link>
+        <ChevronRight className="size-3.5" />
+        <span className="text-foreground">{contract.title}</span>
+      </nav>
+
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="mt-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-xl font-semibold">{contract.title}</h1>
-          <ContractStatusBadge status={contract.status} />
-          <ContractTypeBadge type={contract.contractType} />
+          <h1 className="text-xl font-semibold text-foreground">{contract.title}</h1>
+          <StatusBadge status={contract.status} />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           {transitions.length > 0 && (
             <Select onValueChange={(v) => changeStatus(v as ContractStatus)}>
-              <SelectTrigger className="w-44 h-8 text-sm">
+              <SelectTrigger className="h-8 w-44 text-sm">
                 <SelectValue placeholder="Change status" />
               </SelectTrigger>
               <SelectContent>
                 {transitions.map((s) => (
-                  <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>
+                  <SelectItem key={s} value={s}>
+                    {s.replace(/_/g, " ")}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            <Edit className="mr-1.5 h-3.5 w-3.5" />
-            Edit
-          </Button>
+          {latestFile && (
+            <Button variant="outline" size="sm" onClick={() => downloadFile(latestFile.id, latestFile.filename)}>
+              <Download className="size-4" />
+              Download
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
-            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            <Upload className="size-4" />
             Upload
           </Button>
-          <Button variant="outline" size="sm" onClick={() => changeStatus("ARCHIVED")} className="text-destructive border-destructive/30 hover:bg-destructive/10">
-            <Archive className="mr-1.5 h-3.5 w-3.5" />
-            Archive
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            Edit
           </Button>
+          {contract.status !== "ARCHIVED" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-destructive/30 text-destructive hover:bg-destructive/10"
+              onClick={() => changeStatus("ARCHIVED")}
+            >
+              <Archive className="size-4" />
+              Archive
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="files">Files {files.length > 0 && `(${files.length})`}</TabsTrigger>
-          <TabsTrigger value="activity">Activity {activities.length > 0 && `(${activities.length})`}</TabsTrigger>
-        </TabsList>
-
-        {/* Overview */}
-        <TabsContent value="overview" className="mt-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <MetaField label="Counterparty" value={contract.counterpartyName} />
-            <MetaField label="Counterparty Email" value={contract.counterpartyContact} />
-            <MetaField label="Value" value={contract.value != null ? `${contract.currency ?? "USD"} ${contract.value.toLocaleString()}` : null} />
-            <MetaField label="Governing Law" value={contract.governingLaw} />
-            <MetaField label="Start Date" value={contract.startDate ? format(new Date(contract.startDate), "MMM d, yyyy") : null} />
-            <MetaField label="End Date" value={contract.endDate ? format(new Date(contract.endDate), "MMM d, yyyy") : null} />
-            <MetaField label="Renewal Date" value={contract.renewalDate ? format(new Date(contract.renewalDate), "MMM d, yyyy") : null} />
-            <MetaField label="Notice Period" value={contract.noticePeriodDays != null ? `${contract.noticePeriodDays} days` : null} />
-            <MetaField label="Auto-renewal" value={contract.autoRenewal ? "Yes" : "No"} />
-            <MetaField label="Owner" value={contract.owner?.name} />
-            <MetaField label="Folder" value={contract.folder?.name} />
-            <MetaField label="Created" value={format(new Date(contract.createdAt), "MMM d, yyyy")} />
-          </div>
-          {contract.notes && (
-            <div className="mt-4">
-              <p className="text-xs text-muted-foreground mb-1">Notes</p>
-              <p className="text-sm whitespace-pre-wrap rounded-lg bg-muted/40 p-3">{contract.notes}</p>
-            </div>
-          )}
-          {contract.tags && contract.tags.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs text-muted-foreground mb-2">Tags</p>
-              <div className="flex flex-wrap gap-1.5">
-                {contract.tags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="px-2 py-0.5 rounded-full text-xs font-medium"
-                    style={{ backgroundColor: `${tag.color ?? "#6366f1"}20`, color: tag.color ?? "#6366f1", border: `1px solid ${tag.color ?? "#6366f1"}40` }}
-                  >
-                    {tag.name}
+      {/* Two Column Layout */}
+      <div className="mt-6 grid grid-cols-12 gap-6">
+        {/* Left Column — Tabs */}
+        <div className="col-span-12 lg:col-span-8">
+          <Tabs defaultValue="overview">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="documents">
+                Documents{files.length > 0 && ` (${files.length})`}
+              </TabsTrigger>
+              <TabsTrigger value="ai-extractions">
+                AI Extractions
+                {pendingExtractions.length > 0 && (
+                  <span className="ml-1.5 rounded bg-foreground px-1.5 py-0.5 text-xs font-medium text-background">
+                    {pendingExtractions.length}
                   </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {alerts.length > 0 && (
-            <div className="mt-6">
-              <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                <Bell className="h-3 w-3" />
-                Renewal Alerts
-              </p>
-              <div className="space-y-2">
-                {alerts.map((alert) => {
-                  const daysUntil = differenceInDays(new Date(alert.triggerDate), new Date())
-                  const borderColor =
-                    daysUntil <= 30 ? "#ef4444" : daysUntil <= 60 ? "#f59e0b" : "#10b981"
-                  const label = {
-                    EXPIRY_90: "Expiry Warning (90 days)",
-                    EXPIRY_30: "Expiry Warning (30 days)",
-                    EXPIRY_7:  "Expiry Warning (7 days)",
-                    RENEWAL_DUE:   "Renewal Due",
-                    NOTICE_PERIOD: "Notice Period",
-                  }[alert.alertType] ?? alert.alertType
-                  return (
-                    <div
-                      key={alert.id}
-                      className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2 text-sm"
-                      style={{ borderLeftWidth: 3, borderLeftColor: borderColor }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Bell className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="font-medium">{label}</span>
-                        <span className="text-muted-foreground">
-                          — {fmtDate(new Date(alert.triggerDate), "MMM d, yyyy")}
-                        </span>
-                      </div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${alert.firedAt ? "bg-muted text-muted-foreground" : "bg-amber-100 text-amber-700"}`}>
-                        {alert.firedAt ? "Fired" : "Pending"}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </TabsContent>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="activity">
+                Activity{activities.length > 0 && ` (${activities.length})`}
+              </TabsTrigger>
+            </TabsList>
 
-        {/* Files */}
-        <TabsContent value="files" className="mt-4">
-          {files.length === 0 ? (
-            <div className="flex w-full flex-col items-center py-12 gap-3">
-              <p className="text-sm text-muted-foreground">No files uploaded yet</p>
-              <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
-                <Upload className="mr-1.5 h-4 w-4" />
-                Upload File
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {files.map((f) => (
-                <div key={f.id} className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{f.filename}</p>
-                      {f.isLatest && <Badge className="text-xs bg-primary/10 text-primary border-0">v{f.version}</Badge>}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {formatBytes(f.sizeBytes)} · Uploaded <RelativeTime date={f.createdAt} />
-                      {f.uploadedBy && ` by ${f.uploadedBy.name}`}
-                    </p>
+            {/* Overview */}
+            <TabsContent value="overview" className="mt-4">
+              <div className="rounded-lg border border-border bg-card p-5">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                  <MetaField label="Counterparty" value={contract.counterpartyName} />
+                  <MetaField label="Contract Type" value={contract.contractType} />
+                  <MetaField
+                    label="Start Date"
+                    value={contract.startDate ? format(new Date(contract.startDate), "MMM d, yyyy") : null}
+                  />
+                  <MetaField
+                    label="End Date"
+                    value={contract.endDate ? format(new Date(contract.endDate), "MMM d, yyyy") : null}
+                  />
+                  <MetaField
+                    label="Value"
+                    value={
+                      contract.value != null
+                        ? `${contract.currency ?? "USD"} ${contract.value.toLocaleString()}`
+                        : null
+                    }
+                  />
+                  <MetaField label="Governing Law" value={contract.governingLaw} />
+                  <MetaField
+                    label="Notice Period"
+                    value={contract.noticePeriodDays != null ? `${contract.noticePeriodDays} days` : null}
+                  />
+                  <MetaField label="Auto-renewal" value={contract.autoRenewal ? "Yes" : "No"} />
+                  <MetaField label="Owner" value={contract.owner?.name} />
+                  <MetaField label="Folder" value={contract.folder?.name} />
+                </div>
+                {contract.notes && (
+                  <div className="mt-4">
+                    <p className="text-xs text-muted-foreground">Notes</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{contract.notes}</p>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => downloadFile(f.id, f.filename)}>
-                    <Download className="h-4 w-4" />
+                )}
+                {alerts.length > 0 && (
+                  <div className="mt-5">
+                    <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                      <Bell className="size-3" />
+                      Renewal Alerts
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {alerts.map((alert) => (
+                        <div
+                          key={alert.id}
+                          className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+                        >
+                          <span className="text-foreground">
+                            {alert.alertType.replace(/_/g, " ")}
+                          </span>
+                          <span className={cn(
+                            "text-xs",
+                            alert.firedAt ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
+                          )}>
+                            {alert.firedAt ? "Fired" : format(new Date(alert.triggerDate), "MMM d, yyyy")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Documents */}
+            <TabsContent value="documents" className="mt-4">
+              <div className="rounded-lg border border-border bg-card p-5">
+                {files.length === 0 ? (
+                  <div className="flex flex-col items-center py-8 gap-3">
+                    <p className="text-sm text-muted-foreground">No files uploaded yet</p>
+                    <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
+                      <Upload className="size-4" />
+                      Upload File
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {files.map((f) => (
+                      <div
+                        key={f.id}
+                        className="flex items-center gap-3 rounded-lg border border-border p-3"
+                      >
+                        <div className="flex size-10 items-center justify-center rounded bg-muted">
+                          <FileText className="size-5 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">{f.filename}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatBytes(f.sizeBytes)} · <RelativeTime date={f.createdAt} />
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadFile(f.id, f.filename)}
+                        >
+                          <Download className="size-4" />
+                          Download
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* AI Extractions */}
+            <TabsContent value="ai-extractions" className="mt-4">
+              {extractions.length === 0 ? (
+                <div className="rounded-lg border border-border bg-card p-5">
+                  <p className="text-center text-sm text-muted-foreground py-8">
+                    No AI extractions yet. Upload a document to trigger extraction.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted/50 px-4 py-2.5">
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">{extractions.length} fields</span>{" "}
+                      extracted by AI
+                      {pendingExtractions.length > 0 && ` · ${pendingExtractions.length} pending`}
+                    </p>
+                    {pendingExtractions.length > 0 && (
+                      <Button size="sm" onClick={handleAcceptAll}>
+                        Accept All
+                      </Button>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-border bg-card">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="h-9 text-xs font-medium text-muted-foreground">Field</TableHead>
+                          <TableHead className="h-9 text-xs font-medium text-muted-foreground">Value</TableHead>
+                          <TableHead className="h-9 text-xs font-medium text-muted-foreground">Confidence</TableHead>
+                          <TableHead className="h-9 text-xs font-medium text-muted-foreground">Source</TableHead>
+                          <TableHead className="h-9 text-xs font-medium text-muted-foreground">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {extractions.map((e) => {
+                          const accepted = e.status === "ACCEPTED"
+                          const rejected = e.status === "REJECTED"
+                          return (
+                            <TableRow
+                              key={e.id}
+                              className={cn(
+                                "hover:bg-muted/50",
+                                (accepted || rejected) && "opacity-60",
+                              )}
+                            >
+                              <TableCell className="py-2.5">
+                                <div className="flex items-center gap-1.5">
+                                  {accepted && <Check className="size-3.5 text-emerald-600" />}
+                                  <span className="text-sm font-medium text-foreground">{e.field}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2.5 text-sm text-muted-foreground">
+                                {e.rawValue ?? "—"}
+                              </TableCell>
+                              <TableCell className="py-2.5">
+                                <div className="flex items-center gap-2">
+                                  <Progress
+                                    value={Math.round(e.confidence * 100)}
+                                    className="h-1.5 w-12"
+                                  />
+                                  <span className="text-xs tabular-nums text-muted-foreground">
+                                    {Math.round(e.confidence * 100)}%
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="max-w-[200px] py-2.5">
+                                {e.sourceText && (
+                                  <p className="truncate text-xs italic text-muted-foreground">
+                                    &quot;{e.sourceText}&quot;
+                                  </p>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-2.5">
+                                {!accepted && !rejected && (
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7"
+                                      onClick={() => handleExtraction(e.id, "accept")}
+                                    >
+                                      Accept
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7"
+                                      onClick={() => handleExtraction(e.id, "reject")}
+                                    >
+                                      Reject
+                                    </Button>
+                                  </div>
+                                )}
+                                {accepted && (
+                                  <span className="text-xs text-emerald-600">Accepted</span>
+                                )}
+                                {rejected && (
+                                  <span className="text-xs text-muted-foreground">Rejected</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
+            </TabsContent>
+
+            {/* Activity */}
+            <TabsContent value="activity" className="mt-4">
+              <div className="rounded-lg border border-border bg-card p-5">
+                {activities.length === 0 ? (
+                  <p className="text-center text-sm text-muted-foreground py-8">No activity yet</p>
+                ) : (
+                  <ActivityTimeline activities={activities} />
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Right Column — Sidebar */}
+        <div className="col-span-12 lg:col-span-4">
+          <div className="sticky top-6 space-y-4">
+            {/* File Card */}
+            {latestFile && (
+              <div className="rounded-lg border border-border bg-card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-9 items-center justify-center rounded bg-muted">
+                    <FileText className="size-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{latestFile.filename}</p>
+                    <p className="text-xs text-muted-foreground">{formatBytes(latestFile.sizeBytes)}</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setUploadOpen(true)}
+                  >
+                    Preview
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadFile(latestFile.id, latestFile.filename)}
+                  >
+                    <Download className="size-4" />
+                    Download
                   </Button>
                 </div>
-              ))}
-            </div>
-          )}
-        </TabsContent>
+              </div>
+            )}
 
-        {/* Activity */}
-        <TabsContent value="activity" className="mt-6">
-          <ActivityTimeline activities={activities} />
-        </TabsContent>
-      </Tabs>
+            {/* Contract Type */}
+            {contract.contractType && (
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs text-muted-foreground">Contract Type</p>
+                <div className="mt-1.5">
+                  <TypeBadge type={contract.contractType} />
+                </div>
+              </div>
+            )}
+
+            {/* Tags */}
+            <div className="rounded-lg border border-border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Tags</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {(contract.tags ?? []).map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs text-foreground"
+                  >
+                    {tag.name}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag.id)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </span>
+                ))}
+                {addingTag ? (
+                  <div className="relative">
+                    <Input
+                      autoFocus
+                      className="h-6 w-28 text-xs px-2"
+                      placeholder="Tag name..."
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          const match = allTags.find(t => t.name.toLowerCase() === tagInput.toLowerCase())
+                          if (match) addTag(match.id)
+                          else if (tagInput.trim()) createAndAddTag(tagInput)
+                        }
+                        if (e.key === "Escape") { setAddingTag(false); setTagInput("") }
+                      }}
+                      onBlur={() => { if (!tagInput.trim()) { setAddingTag(false) } }}
+                    />
+                    {tagInput && (
+                      <div className="absolute left-0 top-full z-10 mt-1 w-40 rounded-md border border-border bg-card shadow-md">
+                        {allTags
+                          .filter(t =>
+                            t.name.toLowerCase().includes(tagInput.toLowerCase()) &&
+                            !(contract.tags ?? []).some(ct => ct.id === t.id)
+                          )
+                          .slice(0, 5)
+                          .map(t => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); addTag(t.id) }}
+                              className="w-full px-3 py-1.5 text-left text-xs hover:bg-muted"
+                            >
+                              {t.name}
+                            </button>
+                          ))
+                        }
+                        {!allTags.some(t => t.name.toLowerCase() === tagInput.toLowerCase()) && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); createAndAddTag(tagInput) }}
+                            className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted"
+                          >
+                            + Create &quot;{tagInput}&quot;
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingTag(true)}
+                    className="inline-flex items-center gap-0.5 rounded border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                  >
+                    <Plus className="size-2.5" />
+                    Add
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-xs font-medium text-destructive">Danger Zone</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Archiving removes this contract from your active list.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={() => changeStatus("ARCHIVED")}
+              >
+                <Archive className="size-4" />
+                Archive Contract
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Edit Sheet */}
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
           <SheetHeader>
             <SheetTitle>Edit Contract</SheetTitle>
           </SheetHeader>
           <div className="mt-6 space-y-4">
             <div className="space-y-1.5">
               <Label>Title</Label>
-              <Input value={editForm.title ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} />
+              <Input
+                value={editForm.title ?? ""}
+                onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Contract Type</Label>
-              <Select value={editForm.contractType ?? ""} onValueChange={(v) => setEditForm((p) => ({ ...p, contractType: v as typeof p.contractType }))}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger>
+              <Select
+                value={editForm.contractType ?? ""}
+                onValueChange={(v) =>
+                  setEditForm((p) => ({ ...p, contractType: v as typeof p.contractType }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
                 <SelectContent>
-                  {CONTRACT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {CONTRACT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Counterparty Name</Label>
-                <Input value={editForm.counterpartyName ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, counterpartyName: e.target.value }))} />
+                <Input
+                  value={editForm.counterpartyName ?? ""}
+                  onChange={(e) => setEditForm((p) => ({ ...p, counterpartyName: e.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Counterparty Email</Label>
-                <Input type="email" value={editForm.counterpartyContact ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, counterpartyContact: e.target.value }))} />
+                <Input
+                  type="email"
+                  value={editForm.counterpartyContact ?? ""}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, counterpartyContact: e.target.value }))
+                  }
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Value</Label>
-                <Input type="number" value={editForm.value ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, value: e.target.value ? Number(e.target.value) : null }))} />
+                <Input
+                  type="number"
+                  value={editForm.value ?? ""}
+                  onChange={(e) =>
+                    setEditForm((p) => ({
+                      ...p,
+                      value: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Currency</Label>
-                <Select value={editForm.currency ?? "USD"} onValueChange={(v) => setEditForm((p) => ({ ...p, currency: v }))}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <Select
+                  value={editForm.currency ?? "USD"}
+                  onValueChange={(v) => setEditForm((p) => ({ ...p, currency: v }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -392,24 +878,43 @@ export default function ContractDetailPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Start Date</Label>
-                <Input type="date" value={editForm.startDate ? editForm.startDate.slice(0, 10) : ""} onChange={(e) => setEditForm((p) => ({ ...p, startDate: e.target.value }))} />
+                <Input
+                  type="date"
+                  value={editForm.startDate ? editForm.startDate.slice(0, 10) : ""}
+                  onChange={(e) => setEditForm((p) => ({ ...p, startDate: e.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>End Date</Label>
-                <Input type="date" value={editForm.endDate ? editForm.endDate.slice(0, 10) : ""} onChange={(e) => setEditForm((p) => ({ ...p, endDate: e.target.value }))} />
+                <Input
+                  type="date"
+                  value={editForm.endDate ? editForm.endDate.slice(0, 10) : ""}
+                  onChange={(e) => setEditForm((p) => ({ ...p, endDate: e.target.value }))}
+                />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Governing Law</Label>
-              <Input value={editForm.governingLaw ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, governingLaw: e.target.value }))} />
+              <Input
+                value={editForm.governingLaw ?? ""}
+                onChange={(e) => setEditForm((p) => ({ ...p, governingLaw: e.target.value }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Notes</Label>
-              <Textarea rows={4} value={editForm.notes ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} />
+              <Textarea
+                rows={4}
+                value={editForm.notes ?? ""}
+                onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))}
+              />
             </div>
             <div className="flex gap-3 pt-2">
-              <Button onClick={saveEdit} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button>
-              <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+              <Button onClick={saveEdit} disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="outline" onClick={() => setEditOpen(false)}>
+                Cancel
+              </Button>
             </div>
           </div>
         </SheetContent>
@@ -421,13 +926,15 @@ export default function ContractDetailPage() {
           <DialogHeader>
             <DialogTitle>Upload File</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 mt-2">
+          <div className="mt-2 space-y-4">
             <FileUploadZone onFileSelect={setUploadFile} />
             <div className="flex gap-3">
               <Button onClick={handleUpload} disabled={!uploadFile || uploading}>
                 {uploading ? "Uploading..." : "Upload"}
               </Button>
-              <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setUploadOpen(false)}>
+                Cancel
+              </Button>
             </div>
           </div>
         </DialogContent>

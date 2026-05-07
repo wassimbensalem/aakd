@@ -1,53 +1,43 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import {
-  LayoutDashboard, FileText, Folder, Settings, Bell,
-  ChevronRight, PanelLeftClose, PanelLeftOpen, LogOut, FileText as LogoIcon,
-  Search
-} from "lucide-react"
+import { LayoutDashboard, FileText, Search, Settings, LogOut, Moon, Sun } from "lucide-react"
+import { useTheme } from "next-themes"
 import { useSession, useActiveOrganization, signOut } from "@/lib/auth/client"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { CmdK } from "@/components/cmd-k"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CmdK } from "@/components/cmd-k"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard", Icon: LayoutDashboard },
-  { label: "Contracts", href: "/contracts", Icon: FileText },
-  { label: "Folders", href: "/contracts?view=folders", Icon: Folder },
-  { label: "Search", href: "/search", Icon: Search },
-  { label: "Settings", href: "/settings/org", Icon: Settings },
+  { href: "/dashboard",    icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/contracts",    icon: FileText,         label: "Contracts" },
+  { href: "/search",       icon: Search,           label: "Search" },
+  { href: "/settings/org", icon: Settings,         label: "Settings" },
 ]
 
 function getInitials(name: string) {
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
 }
 
-const ID_RE = /^[a-z0-9]{20,}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function Breadcrumbs() {
-  const pathname = usePathname()
-  const parts = pathname.split("/").filter(Boolean).filter((p) => !ID_RE.test(p))
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme()
   return (
-    <nav className="flex items-center gap-1 text-sm text-muted-foreground">
-      {parts.map((part, i) => {
-        const isLast = i === parts.length - 1
-        const label = part.replace(/-/g, " ").charAt(0).toUpperCase() + part.replace(/-/g, " ").slice(1)
-        return (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight className="h-3.5 w-3.5" />}
-            <span className={cn(isLast ? "text-foreground font-medium" : "")}>
-              {label}
-            </span>
-          </span>
-        )
-      })}
-    </nav>
+    <button
+      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      className="text-muted-foreground hover:text-foreground transition-colors"
+      aria-label="Toggle theme"
+    >
+      <Sun className="size-4 dark:hidden" />
+      <Moon className="size-4 hidden dark:block" />
+    </button>
   )
 }
 
@@ -55,10 +45,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const { data: session, isPending } = useSession()
-  // Task 1 fix: guard on orgPending so the redirect doesn't fire while the org
-  // cookie is still being read on the initial hydration frame.
   const { data: activeOrg, isPending: orgPending } = useActiveOrganization()
-  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -67,17 +54,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [isPending, session, router])
 
   useEffect(() => {
-    // Only redirect once both the session AND org checks have settled.
     if (!isPending && !orgPending && session?.user && !activeOrg) {
       router.replace("/create-org")
     }
   }, [isPending, orgPending, session, activeOrg, router])
 
-  // Show skeleton while either check is in-flight.
   if (isPending || orgPending) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <div className="space-y-3 w-64">
+        <div className="w-64 space-y-3">
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-4 w-1/2" />
@@ -89,115 +74,79 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!session?.user) return null
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar — Task 2: use transition-[width] instead of transition-all.
-          transition-all forces a CSS stacking context (via transform or will-change)
-          which clips Base UI Select portals even though they use document.body.
-          transition-[width] animates only the width, so no stacking context is created. */}
-      <aside
-        className={cn(
-          "flex flex-col border-r border-slate-800 bg-slate-900 transition-[width] duration-200 shrink-0",
-          collapsed ? "w-14" : "w-56"
-        )}
-      >
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-border bg-card">
         {/* Logo */}
-        <div className={cn("flex items-center gap-2.5 h-14 px-3 border-b border-slate-800", collapsed && "justify-center px-2")}>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary shrink-0">
-            <LogoIcon className="h-3.5 w-3.5 text-primary-foreground" />
+        <div className="flex h-14 items-center gap-2 border-b border-border px-4">
+          <div className="flex size-7 items-center justify-center rounded bg-foreground">
+            <span className="text-xs font-bold text-background">CF</span>
           </div>
-          {!collapsed && (
-            <span className="font-semibold text-sm tracking-tight text-white">ClauseFlow</span>
-          )}
+          <span className="text-sm font-semibold text-foreground">ClauseFlow</span>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-          {navItems.map(({ label, href, Icon }) => {
-            const isActive = href === "/contracts?view=folders"
-              ? pathname === "/contracts" && false
-              : pathname.startsWith(href.split("?")[0]) && (href === "/dashboard" ? pathname === "/dashboard" : true)
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-                  isActive
-                    ? "bg-white/10 text-white font-medium"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white",
-                  collapsed && "justify-center px-2"
-                )}
-                title={collapsed ? label : undefined}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>{label}</span>}
-              </Link>
-            )
-          })}
+        {/* Navigation */}
+        <nav className="flex-1 p-2">
+          <div className="space-y-0.5">
+            {navItems.map(({ href, icon: Icon, label }) => {
+              const isActive =
+                pathname === href ||
+                (href !== "/dashboard" && pathname.startsWith(href + "/")) ||
+                (href === "/settings/org" && pathname.startsWith("/settings"))
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-4" />
+                  <span>{label}</span>
+                </Link>
+              )
+            })}
+          </div>
         </nav>
 
-        {/* Org + User */}
-        <div className="border-t border-slate-800 p-2 space-y-2">
-          {!collapsed && activeOrg && (
-            <div className="px-2 py-1.5 rounded-md bg-white/5">
-              <p className="text-xs font-medium truncate text-slate-300">{activeOrg.name}</p>
-              <p className="text-xs text-slate-400">Organization</p>
-            </div>
-          )}
-          <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
-            <Avatar className="h-7 w-7 shrink-0">
+        {/* User section */}
+        <div className="border-t border-border p-3">
+          <div className="flex items-center gap-2.5">
+            <Avatar className="size-7">
               {session.user.image && <AvatarImage src={session.user.image} />}
-              <AvatarFallback className="text-xs bg-slate-700 text-slate-200">{getInitials(session.user.name ?? session.user.email)}</AvatarFallback>
+              <AvatarFallback className="bg-secondary text-xs font-medium text-foreground">
+                {getInitials(session.user.name ?? session.user.email)}
+              </AvatarFallback>
             </Avatar>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate text-slate-200">{session.user.name}</p>
-                <p className="text-xs truncate text-slate-400">{session.user.email}</p>
-              </div>
-            )}
-            {!collapsed && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-slate-400 hover:text-white hover:bg-white/5"
-                onClick={() => signOut({ fetchOptions: { onSuccess: () => router.push("/login") } })}
-                title="Sign out"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </Button>
-            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">
+                {session.user.name ?? session.user.email}
+              </p>
+              {activeOrg && (
+                <p className="truncate text-xs text-muted-foreground">{activeOrg.name}</p>
+              )}
+            </div>
+            <ThemeToggle />
+            <button
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() =>
+                signOut({ fetchOptions: { onSuccess: () => router.push("/login") } })
+              }
+              aria-label="Sign out"
+            >
+              <LogOut className="size-4" />
+            </button>
           </div>
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar — bg-background (white) for contrast against dark sidebar */}
-        <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-background px-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setCollapsed((v) => !v)}
-            >
-              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-            </Button>
-            <Breadcrumbs />
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
-              <Bell className="h-4 w-4" />
-            </Button>
-            <ThemeToggle />
-          </div>
-        </header>
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-      </div>
+      {/* Main content */}
+      <main className="flex-1 overflow-auto">
+        {children}
+      </main>
 
       <CmdK />
     </div>

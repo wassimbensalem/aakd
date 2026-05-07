@@ -84,9 +84,9 @@ describe("GET /api/contracts/[id]/extractions", () => {
 
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(Array.isArray(body)).toBe(true)
-    expect(body).toHaveLength(1)
-    expect(body[0].field).toBe("startDate")
+    expect(Array.isArray(body.extractions)).toBe(true)
+    expect(body.extractions).toHaveLength(1)
+    expect(body.extractions[0].field).toBe("startDate")
   })
 })
 

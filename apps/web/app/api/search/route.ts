@@ -60,6 +60,9 @@ export async function GET(req: Request) {
       contractType: string | null
       status: string
       counterpartyName: string | null
+      value: number | null
+      currency: string | null
+      endDate: Date | null
       createdAt: Date
       organizationId: string
     }
@@ -74,6 +77,9 @@ export async function GET(req: Request) {
             "contractType",
             status,
             "counterpartyName",
+            value,
+            currency,
+            "endDate",
             "createdAt",
             "organizationId"
           FROM "Contract"
@@ -109,6 +115,9 @@ export async function GET(req: Request) {
           contractType: true,
           status: true,
           counterpartyName: true,
+          value: true,
+          currency: true,
+          endDate: true,
           createdAt: true,
         },
         orderBy: { updatedAt: "desc" },
@@ -162,6 +171,9 @@ export async function GET(req: Request) {
           contractType: true,
           status: true,
           counterpartyName: true,
+          value: true,
+          currency: true,
+          endDate: true,
           createdAt: true,
         },
         orderBy: { updatedAt: "desc" },

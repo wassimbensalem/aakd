@@ -10,8 +10,10 @@
 }
 
 /* ─── ClauseFlow — Vercel theme ───────────────────────────────────────
-   CSS variables sourced from shadcn/ui v4 globals.css (apps/v4/app/globals.css)
-   Pure neutral oklch palette — no chroma, no hue. Same aesthetic as vercel.com.
+   CSS variables in HSL channel format (h s% l%) for Tailwind v3 compatibility.
+   Tailwind generates hsl(var(--x)) so variables must contain channel values,
+   not complete color functions like oklch().
+   Pure neutral palette — no chroma, no hue. Same aesthetic as vercel.com.
    ──────────────────────────────────────────────────────────────────── */
 
 @layer base {
@@ -20,96 +22,96 @@
     --radius: 0.5rem;
 
     /* Surface */
-    --background:             oklch(1 0 0);
-    --foreground:             oklch(0.145 0 0);
+    --background:             0 0% 100%;
+    --foreground:             0 0% 4%;
 
     /* Cards / popovers */
-    --card:                   oklch(1 0 0);
-    --card-foreground:        oklch(0.145 0 0);
-    --popover:                oklch(1 0 0);
-    --popover-foreground:     oklch(0.145 0 0);
+    --card:                   0 0% 100%;
+    --card-foreground:        0 0% 4%;
+    --popover:                0 0% 100%;
+    --popover-foreground:     0 0% 4%;
 
     /* Primary action — near-black button, white text */
-    --primary:                oklch(0.205 0 0);
-    --primary-foreground:     oklch(0.985 0 0);
+    --primary:                0 0% 9%;
+    --primary-foreground:     0 0% 98%;
 
     /* Secondary — off-white surface, dark text */
-    --secondary:              oklch(0.97 0 0);
-    --secondary-foreground:   oklch(0.205 0 0);
+    --secondary:              0 0% 96%;
+    --secondary-foreground:   0 0% 9%;
 
     /* Muted — same as secondary */
-    --muted:                  oklch(0.97 0 0);
-    --muted-foreground:       oklch(0.556 0 0);
+    --muted:                  0 0% 96%;
+    --muted-foreground:       0 0% 45%;
 
     /* Accent — same as secondary (hover states, light tint) */
-    --accent:                 oklch(0.97 0 0);
-    --accent-foreground:      oklch(0.205 0 0);
+    --accent:                 0 0% 96%;
+    --accent-foreground:      0 0% 9%;
 
-    /* Destructive — standard red kept for error clarity */
-    --destructive:            oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.97 0.01 17);
+    /* Destructive — standard red */
+    --destructive:            0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
 
     /* Borders / inputs */
-    --border:                 oklch(0.922 0 0);
-    --input:                  oklch(0.922 0 0);
-    --ring:                   oklch(0.708 0 0);
+    --border:                 0 0% 90%;
+    --input:                  0 0% 90%;
+    --ring:                   0 0% 63%;
 
     /* Sidebar — slight off-white separation from main canvas */
-    --sidebar:                oklch(0.985 0 0);
-    --sidebar-foreground:     oklch(0.145 0 0);
-    --sidebar-primary:        oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent:         oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border:         oklch(0.922 0 0);
-    --sidebar-ring:           oklch(0.708 0 0);
+    --sidebar:                0 0% 98%;
+    --sidebar-foreground:     0 0% 4%;
+    --sidebar-primary:        0 0% 9%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent:         0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 9%;
+    --sidebar-border:         0 0% 90%;
+    --sidebar-ring:           0 0% 63%;
   }
 
   .dark {
     /* Surface */
-    --background:             oklch(0.145 0 0);
-    --foreground:             oklch(0.985 0 0);
+    --background:             0 0% 4%;
+    --foreground:             0 0% 98%;
 
     /* Cards / popovers */
-    --card:                   oklch(0.205 0 0);
-    --card-foreground:        oklch(0.985 0 0);
-    --popover:                oklch(0.205 0 0);
-    --popover-foreground:     oklch(0.985 0 0);
+    --card:                   0 0% 9%;
+    --card-foreground:        0 0% 98%;
+    --popover:                0 0% 9%;
+    --popover-foreground:     0 0% 98%;
 
     /* Primary — near-white button on dark surface */
-    --primary:                oklch(0.922 0 0);
-    --primary-foreground:     oklch(0.205 0 0);
+    --primary:                0 0% 90%;
+    --primary-foreground:     0 0% 9%;
 
     /* Secondary */
-    --secondary:              oklch(0.269 0 0);
-    --secondary-foreground:   oklch(0.985 0 0);
+    --secondary:              0 0% 15%;
+    --secondary-foreground:   0 0% 98%;
 
     /* Muted */
-    --muted:                  oklch(0.269 0 0);
-    --muted-foreground:       oklch(0.708 0 0);
+    --muted:                  0 0% 15%;
+    --muted-foreground:       0 0% 63%;
 
     /* Accent */
-    --accent:                 oklch(0.371 0 0);
-    --accent-foreground:      oklch(0.985 0 0);
+    --accent:                 0 0% 25%;
+    --accent-foreground:      0 0% 98%;
 
     /* Destructive */
-    --destructive:            oklch(0.704 0.191 22.216);
-    --destructive-foreground: oklch(0.58 0.22 27);
+    --destructive:            0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
 
     /* Borders / inputs */
-    --border:                 oklch(1 0 0 / 10%);
-    --input:                  oklch(1 0 0 / 15%);
-    --ring:                   oklch(0.556 0 0);
+    --border:                 0 0% 15%;
+    --input:                  0 0% 18%;
+    --ring:                   0 0% 45%;
 
     /* Sidebar */
-    --sidebar:                oklch(0.205 0 0);
-    --sidebar-foreground:     oklch(0.985 0 0);
-    --sidebar-primary:        oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent:         oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border:         oklch(1 0 0 / 10%);
-    --sidebar-ring:           oklch(0.439 0 0);
+    --sidebar:                0 0% 9%;
+    --sidebar-foreground:     0 0% 98%;
+    --sidebar-primary:        250 70% 40%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent:         0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border:         0 0% 15%;
+    --sidebar-ring:           0 0% 32%;
   }
 }
 

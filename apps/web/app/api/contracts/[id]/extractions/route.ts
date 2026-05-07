@@ -26,7 +26,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       orderBy: { createdAt: "asc" },
     })
 
-    return Response.json(extractions)
+    return Response.json({ extractions })
   })
 }
 

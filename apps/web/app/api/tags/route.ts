@@ -48,11 +48,11 @@ export async function POST(req: Request) {
           organizationId: ctx.organizationId,
         },
       },
-      // organizationId is injected by Prisma middleware from AsyncLocalStorage
       create: {
         name: parsed.data.name,
         color: parsed.data.color,
-      } as any,
+        organization: { connect: { id: ctx.organizationId } },
+      },
       update: {},
       include: { _count: { select: { contracts: true } } },
     })

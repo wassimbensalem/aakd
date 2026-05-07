@@ -3,30 +3,44 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Plus, Search, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
+import { Plus, Search, ChevronLeft, ChevronRight, MoreHorizontal, FileText, Archive, Eye, FolderOpen, Settings2 } from "lucide-react"
 import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ContractStatusBadge } from "@/components/contract-status-badge"
-import { ContractTypeBadge } from "@/components/contract-type-badge"
-import { Contract, ContractStatus, ContractType } from "@/lib/types"
-import { format, differenceInDays } from "date-fns"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { TypeBadge, StatusBadge } from "@/components/contract-badges"
+import { Contract, ContractStatus, Folder } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
-const CONTRACT_STATUSES: ContractStatus[] = [
-  "DRAFT", "INTERNAL_REVIEW", "PENDING_APPROVAL", "AWAITING_SIGNATURE",
-  "ACTIVE", "EXPIRED", "TERMINATED", "ARCHIVED",
+const STATUS_FILTERS: (ContractStatus | "ALL")[] = [
+  "ALL", "ACTIVE", "DRAFT", "EXPIRED", "ARCHIVED",
 ]
 
-const CONTRACT_TYPES: ContractType[] = [
-  "NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER",
-]
+const STATUS_LABELS: Record<ContractStatus | "ALL", string> = {
+  ALL:                "All",
+  ACTIVE:             "Active",
+  DRAFT:              "Draft",
+  INTERNAL_REVIEW:    "Internal Review",
+  PENDING_APPROVAL:   "Pending Approval",
+  AWAITING_SIGNATURE: "Awaiting Signature",
+  EXPIRED:            "Expired",
+  TERMINATED:         "Terminated",
+  ARCHIVED:           "Archived",
+}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -37,8 +51,18 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced
 }
 
-function formatCurrency(value: number, currency: string = "USD") {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0 }).format(value)
+function formatCurrency(value: number, currency = "USD") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+interface FolderWithCount extends Folder {
+  _count?: { contracts: number }
+  children?: FolderWithCount[]
 }
 
 export default function ContractsPage() {
@@ -52,22 +76,33 @@ export default function ContractsPage() {
   const pageSize = 20
 
   const [search, setSearch] = useState(searchParams.get("search") ?? "")
-  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "")
-  const [typeFilter, setTypeFilter] = useState<string>(searchParams.get("type") ?? "")
+  const [statusFilter, setStatusFilter] = useState<ContractStatus | "ALL">(
+    (searchParams.get("status") as ContractStatus) ?? "ALL",
+  )
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
+  const [folders, setFolders] = useState<FolderWithCount[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const debouncedSearch = useDebounce(search, 300)
+
+  useEffect(() => {
+    fetch("/api/folders")
+      .then((r) => r.json())
+      .then((data) => setFolders(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [])
 
   const fetchContracts = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams()
       if (debouncedSearch) params.set("search", debouncedSearch)
-      if (statusFilter) params.set("status", statusFilter)
-      if (typeFilter) params.set("contractType", typeFilter)
+      if (statusFilter && statusFilter !== "ALL") params.set("status", statusFilter)
+      if (selectedFolder) params.set("folderId", selectedFolder)
       params.set("limit", String(pageSize))
-      params.set("offset", String((page - 1) * pageSize))
+      params.set("page", String(page))
 
       const res = await fetch(`/api/contracts?${params}`)
-      if (!res.ok) throw new Error("Failed to fetch")
+      if (!res.ok) throw new Error("Failed")
       const data = await res.json()
       setContracts(data.contracts ?? data ?? [])
       setTotal(data.total ?? (data.contracts ?? data ?? []).length)
@@ -76,9 +111,12 @@ export default function ContractsPage() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, statusFilter, typeFilter, page])
+  }, [debouncedSearch, statusFilter, selectedFolder, page])
 
-  useEffect(() => { fetchContracts() }, [fetchContracts])
+  useEffect(() => {
+    fetchContracts()
+    setSelectedIds(new Set())
+  }, [fetchContracts])
 
   async function archiveContract(id: string) {
     try {
@@ -90,176 +128,286 @@ export default function ContractsPage() {
       toast.success("Contract archived")
       fetchContracts()
     } catch {
-      toast.error("Failed to archive contract")
+      toast.error("Failed to archive")
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === contracts.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(contracts.map((c) => c.id)))
     }
   }
 
   const totalPages = Math.ceil(total / pageSize)
+  const allSelected = contracts.length > 0 && selectedIds.size === contracts.length
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Contracts</h1>
-        <Link href="/contracts/new" className="inline-flex items-center gap-1 h-7 px-2.5 text-[0.8rem] font-medium rounded-[min(var(--radius-md),12px)] bg-primary text-primary-foreground transition-colors hover:opacity-90">
-          <Plus className="h-3.5 w-3.5" />
-          New Contract
-        </Link>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search contracts..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="pl-8 w-64"
-          />
+    <div className="flex h-full">
+      {/* Folders sidebar */}
+      <aside className="flex h-full w-48 shrink-0 flex-col border-r border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+          <span className="text-xs font-medium text-muted-foreground">Folders</span>
+          <Settings2 className="size-3.5 text-muted-foreground" />
         </div>
-        <Select
-          value={statusFilter || "all"}
-          onValueChange={(v) => { setStatusFilter(v == null || v === "all" ? "" : v); setPage(1) }}
-        >
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {CONTRACT_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={typeFilter || "all"}
-          onValueChange={(v) => { setTypeFilter(v == null || v === "all" ? "" : v); setPage(1) }}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="All types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            {CONTRACT_TYPES.map((t) => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        <nav className="flex-1 overflow-y-auto p-1.5">
+          <button
+            onClick={() => { setSelectedFolder(null); setPage(1) }}
+            className={cn(
+              "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors",
+              selectedFolder === null
+                ? "bg-secondary font-medium text-foreground"
+                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <FolderOpen className="size-3.5" />
+              All Contracts
+            </span>
+            <span className="text-xs tabular-nums">{total}</span>
+          </button>
+          {folders.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => { setSelectedFolder(f.id); setPage(1) }}
+              className={cn(
+                "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors",
+                selectedFolder === f.id
+                  ? "bg-secondary font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
+              )}
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <FolderOpen className="size-3.5 shrink-0" />
+                <span className="truncate">{f.name}</span>
+              </span>
+              {f._count != null && (
+                <span className="text-xs tabular-nums">{f._count.contracts}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </aside>
 
-      {/* Table */}
-      <div className="rounded-xl border border-border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40">
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Title</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Type</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Counterparty</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Value</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">End Date</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Owner</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="border-b border-border last:border-0">
-                  {Array.from({ length: 8 }).map((_, j) => (
-                    <td key={j} className="px-4 py-3">
-                      <Skeleton className="h-4 w-full" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : contracts.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
-                  No contracts found.{" "}
-                  <Link href="/contracts/new" className="text-primary hover:underline">
-                    Create one
-                  </Link>
-                </td>
-              </tr>
-            ) : (
-              contracts.map((c) => {
-                const daysToEnd = c.endDate
-                  ? differenceInDays(new Date(c.endDate), new Date())
-                  : null
-                return (
-                  <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <Link href={`/contracts/${c.id}`} className="font-medium hover:text-primary transition-colors line-clamp-1">
+      {/* Main content */}
+      <div className="flex h-full flex-1 flex-col overflow-auto p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-foreground">Contracts</h1>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setPage(1)
+                }}
+                className="h-8 w-56 pl-8 text-sm"
+              />
+            </div>
+            <Link href="/contracts/new" className={buttonVariants({ size: "sm" })}>
+              <Plus className="size-4" />
+              New Contract
+            </Link>
+          </div>
+        </div>
+
+        {/* Status Filter Chips */}
+        <div className="mt-4 flex gap-1.5">
+          {STATUS_FILTERS.map((filter) => (
+            <button
+              key={filter}
+              onClick={() => {
+                setStatusFilter(filter)
+                setPage(1)
+              }}
+              className={cn(
+                "rounded px-2.5 py-1 text-sm font-medium transition-colors",
+                statusFilter === filter
+                  ? "bg-foreground text-background"
+                  : "bg-muted text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {STATUS_LABELS[filter]}
+            </button>
+          ))}
+        </div>
+
+        {/* Table */}
+        {loading ? (
+          <div className="mt-4 rounded-lg border border-border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-10" />
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Name</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Counterparty</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Type</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Status</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Value</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">End Date</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <TableCell key={j} className="py-2.5">
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : contracts.length === 0 ? (
+          <div className="mt-16 flex flex-col items-center justify-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+              <FileText className="size-6 text-muted-foreground" />
+            </div>
+            <h3 className="mt-3 text-sm font-medium text-foreground">No contracts</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {search || statusFilter !== "ALL"
+                ? "No contracts match your filters"
+                : "Upload your first contract to get started"}
+            </p>
+            {!search && statusFilter === "ALL" && (
+              <Link href="/contracts/new" className={buttonVariants({ size: "sm" }) + " mt-4"}>Upload Contract</Link>
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-lg border border-border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-10 pl-4">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      className="size-4 rounded border-input accent-foreground cursor-pointer"
+                    />
+                  </TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Name</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Counterparty</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Type</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Status</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">Value</TableHead>
+                  <TableHead className="h-9 text-xs font-medium text-muted-foreground">End Date</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {contracts.map((c) => (
+                  <TableRow key={c.id} className={cn("hover:bg-muted/50", selectedIds.has(c.id) && "bg-muted/30")}>
+                    <TableCell className="w-10 pl-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                        className="size-4 rounded border-input accent-foreground cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </TableCell>
+                    <TableCell className="py-2.5">
+                      <Link
+                        href={`/contracts/${c.id}`}
+                        className="text-sm font-medium text-foreground hover:underline"
+                      >
                         {c.title}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ContractTypeBadge type={c.contractType} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <ContractStatusBadge status={c.status} />
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{c.counterpartyName ?? "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="py-2.5 text-sm text-muted-foreground">
+                      {c.counterpartyName ?? "—"}
+                    </TableCell>
+                    <TableCell className="py-2.5">
+                      <TypeBadge type={c.contractType} />
+                    </TableCell>
+                    <TableCell className="py-2.5">
+                      <StatusBadge status={c.status} />
+                    </TableCell>
+                    <TableCell className="py-2.5 text-sm tabular-nums text-muted-foreground">
                       {c.value != null ? formatCurrency(c.value, c.currency ?? "USD") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {c.endDate ? (
-                        <span className={daysToEnd !== null && daysToEnd < 30 ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"}>
-                          {format(new Date(c.endDate), "MMM d, yyyy")}
-                        </span>
-                      ) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {c.owner?.name ?? "—"}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="py-2.5 text-sm text-muted-foreground">
+                      {c.endDate
+                        ? new Date(c.endDate).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="py-2.5">
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                          <MoreHorizontal className="h-4 w-4" />
+                        <DropdownMenuTrigger className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+                          <MoreHorizontal className="size-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => router.push(`/contracts/${c.id}`)}>
+                            <Eye className="size-4" />
                             View
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => router.push(`/contracts/${c.id}?edit=true`)}>
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={() => archiveContract(c.id)}
-                          >
+                          <DropdownMenuItem onClick={() => archiveContract(c.id)} variant="destructive">
+                            <Archive className="size-4" />
                             Archive
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            {total} contract{total !== 1 ? "s" : ""}
-          </p>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage((p) => p - 1)} disabled={page === 1}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm px-2">{page} / {totalPages}</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage((p) => p + 1)} disabled={page === totalPages}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {total} contract{total !== 1 ? "s" : ""}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-8"
+                onClick={() => setPage((p) => p - 1)}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span className="px-2 text-sm">
+                {page} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-8"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page === totalPages}
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

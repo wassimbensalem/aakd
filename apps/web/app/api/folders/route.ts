@@ -49,18 +49,12 @@ export async function POST(req: Request) {
       return Response.json({ error: parsed.error.flatten() }, { status: 422 })
     }
 
-    if (parsed.data.parentId) {
-      const parent = await prisma.folder.findUnique({
-        where: { id: parsed.data.parentId },
-        select: { id: true },
-      })
-      if (!parent) return new Response("Parent folder not found", { status: 404 })
-    }
-
     const folder = await prisma.folder.create({
       data: {
         name: parsed.data.name,
-        parentId: parsed.data.parentId ?? null,
+        ...(parsed.data.parentId
+          ? { parent: { connect: { id: parsed.data.parentId } } }
+          : {}),
         organization: { connect: { id: ctx.organizationId } },
       } as any,
     })

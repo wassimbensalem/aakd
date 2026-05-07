@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { LayoutDashboard, FileText, Search, Settings, LogOut, Moon, Sun, Shield, ChevronLeft, ChevronRight } from "lucide-react"
+import { LayoutDashboard, FileText, Search, Settings, LogOut, Moon, Sun, Shield, ChevronLeft, ChevronRight, BotIcon } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useSession, useActiveOrganization, signOut, organization } from "@/lib/auth/client"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -47,6 +47,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession()
   const { data: activeOrg, isPending: orgPending } = useActiveOrganization()
   const [collapsed, setCollapsed] = useState(false)
+  const [aiStatus, setAiStatus] = useState<{ provider: string | null; model: string | null } | null>(null)
+
+  useEffect(() => {
+    fetch("/api/ai-status").then(r => r.json()).then(setAiStatus).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -129,6 +134,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </div>
         </nav>
+
+        {/* AI model status */}
+        {!collapsed && aiStatus && (
+          <div className="px-3 py-2 border-t border-zinc-800">
+            <div className="flex items-center gap-2">
+              <BotIcon className="size-3.5 shrink-0 text-zinc-500" />
+              {aiStatus.provider ? (
+                <span className="text-xs text-zinc-400 truncate">
+                  <span className="text-zinc-300">{aiStatus.provider}</span>
+                  {aiStatus.model && <span> · {aiStatus.model}</span>}
+                </span>
+              ) : (
+                <span className="text-xs text-zinc-500">No AI configured</span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Collapse toggle */}
         <div className="border-t border-zinc-800 px-3 py-2">

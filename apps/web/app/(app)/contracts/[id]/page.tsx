@@ -1159,7 +1159,7 @@ export default function ContractDetailPage() {
 
       {/* Edit Sheet */}
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetContent className="w-full overflow-y-auto sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Edit Contract</SheetTitle>
           </SheetHeader>
@@ -1189,7 +1189,7 @@ export default function ContractDetailPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Counterparty Name</Label>
                 <Input
@@ -1208,7 +1208,7 @@ export default function ContractDetailPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Value</Label>
                 <Input
@@ -1239,7 +1239,7 @@ export default function ContractDetailPage() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Start Date</Label>
                 <Input

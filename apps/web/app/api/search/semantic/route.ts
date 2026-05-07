@@ -68,6 +68,17 @@ export async function POST(req: Request) {
 
     const embeddingStr = `[${embedding.join(",")}]`
 
+    // Tune ivfflat recall — 10 probes is a reasonable default; higher = better
+    // recall at the cost of more CPU. SET applies for the rest of this session
+    // (pooled connection), but Prisma reuses connections so it's effectively
+    // per-query here. Failing to set is non-fatal (e.g. if the index isn't
+    // ivfflat) — fall back silently.
+    try {
+      await prisma.$executeRaw`SET ivfflat.probes = 10`
+    } catch {
+      // ignore — extension not loaded or index uses hnsw
+    }
+
     const rows = await prisma.$queryRaw<SemanticRow[]>(
       Prisma.sql`
         SELECT

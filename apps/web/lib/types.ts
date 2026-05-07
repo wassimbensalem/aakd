@@ -60,7 +60,7 @@ export interface Contract {
   tags?: Tag[]
   files?: ContractFile[]
   activities?: Activity[]
-  extractedText?: string | null
+  hasExtractedText?: boolean
   docusealSubmissionId?: string | null
   signingUrl?: string | null
   createdAt: string

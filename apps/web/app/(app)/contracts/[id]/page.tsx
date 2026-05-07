@@ -655,7 +655,7 @@ export default function ContractDetailPage() {
               </div>
 
               {/* Ask AI section — only shown when contract text has been extracted */}
-              {contract.extractedText && (
+              {contract.hasExtractedText && (
                 <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-4">
                   <p className="text-sm font-medium text-zinc-900">Ask AI about this contract</p>
                   <p className="mt-0.5 text-xs text-zinc-500">

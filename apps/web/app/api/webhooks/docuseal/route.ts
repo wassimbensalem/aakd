@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "crypto"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
@@ -6,6 +7,9 @@ import { storage } from "@/lib/storage"
 // Receives DocuSeal webhook events.
 // This route is intentionally unauthenticated — DocuSeal calls it directly.
 // We return 200 for all events to prevent DocuSeal retries on ignored events.
+//
+// Security: if DOCUSEAL_WEBHOOK_SECRET is set, the X-DocuSeal-Signature header
+// must be a valid HMAC-SHA256 signature of the raw request body.
 
 interface DocuSealWebhookPayload {
   event_type: string
@@ -16,11 +20,51 @@ interface DocuSealWebhookPayload {
   }
 }
 
-export async function POST(req: Request) {
-  let payload: DocuSealWebhookPayload
+/**
+ * Verify the HMAC-SHA256 signature from DocuSeal.
+ * Returns true when:
+ *   - No secret is configured (backwards-compatible dev mode)
+ *   - Secret is configured AND signature matches
+ * Returns false when secret is configured but signature is missing or invalid.
+ */
+function verifySignature(rawBody: string, signatureHeader: string | null): boolean {
+  const secret = process.env.DOCUSEAL_WEBHOOK_SECRET
+  if (!secret) {
+    // No secret configured — allow through for local dev / backwards compat
+    return true
+  }
+
+  if (!signatureHeader) {
+    return false
+  }
+
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex")
+
+  // Support both plain hex and "sha256=<hex>" formats
+  const provided = signatureHeader.startsWith("sha256=")
+    ? signatureHeader.slice(7)
+    : signatureHeader
 
   try {
-    payload = await req.json()
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(provided, "hex"))
+  } catch {
+    // Lengths differ — definitely invalid
+    return false
+  }
+}
+
+export async function POST(req: Request) {
+  // Read raw body first — needed for HMAC verification
+  const rawBody = await req.text()
+
+  const signatureHeader = req.headers.get("x-docuseal-signature")
+  if (!verifySignature(rawBody, signatureHeader)) {
+    return Response.json({ error: "Invalid signature" }, { status: 401 })
+  }
+
+  let payload: DocuSealWebhookPayload
+  try {
+    payload = JSON.parse(rawBody) as DocuSealWebhookPayload
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 })
   }

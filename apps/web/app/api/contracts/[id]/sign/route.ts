@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
 import { createTemplate, createSubmission } from "@/lib/docuseal"
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 
 // ─── POST /api/contracts/[id]/sign ───────────────────────────────────────────
 // Trigger DocuSeal signing flow for a contract that is AWAITING_SIGNATURE.
@@ -11,6 +12,10 @@ import { createTemplate, createSubmission } from "@/lib/docuseal"
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+  // Rate limit: 5 requests/min per org (signing is expensive + irreversible)
+  const rl = rateLimit(`${ctx.organizationId}:sign`, 5, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   return requestContext.run(ctx, async () => {
     // ── org-scope check ───────────────────────────────────────────────────────

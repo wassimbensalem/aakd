@@ -2,6 +2,7 @@ import { resolveAuth } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { generateEmbedding } from "@/lib/embedding"
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -27,6 +28,10 @@ type SemanticRow = {
 export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return new Response("Unauthorized", { status: 401 })
+
+  // Rate limit: 30 requests/min per org
+  const rl = rateLimit(`${ctx.organizationId}:semantic-search`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   let body: unknown
   try {

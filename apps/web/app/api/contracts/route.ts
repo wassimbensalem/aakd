@@ -3,6 +3,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { generateAlertsForContract } from "@/lib/alerts/generate"
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { z } from "zod"
 
 const CreateContractSchema = z.object({
@@ -70,6 +71,10 @@ export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
+  // Rate limit: 20 requests/min per org
+  const rl = rateLimit(`${ctx.organizationId}:create-contract`, 20, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
+
   return requestContext.run(ctx, async () => {
     let body: unknown
     try {
@@ -84,6 +89,12 @@ export async function POST(req: Request) {
     }
 
     const { tagIds, folderId, startDate, endDate, renewalDate, ...rest } = parsed.data
+
+    // Strip any HTML tags from free-text fields to prevent XSS persistence
+    const stripHtml = (s: string) => s.replace(/<[^>]*>/g, "")
+    if (rest.title) rest.title = stripHtml(rest.title)
+    if (rest.counterpartyName) rest.counterpartyName = stripHtml(rest.counterpartyName)
+    if (rest.notes) rest.notes = stripHtml(rest.notes)
 
     const contract = await prisma.contract.create({
       // organizationId is injected by the Prisma middleware from AsyncLocalStorage

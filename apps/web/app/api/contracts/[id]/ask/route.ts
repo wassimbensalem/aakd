@@ -1,6 +1,7 @@
 import { resolveAuth } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { z } from "zod"
 
 const AskSchema = z.object({
@@ -66,6 +67,10 @@ export async function POST(
 ) {
   const ctx = await resolveAuth(req)
   if (!ctx) return new Response("Unauthorized", { status: 401 })
+
+  // Rate limit: 20 requests/min per org (AI inference is costly)
+  const rl = rateLimit(`${ctx.organizationId}:ask`, 20, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   const { id } = await params
 

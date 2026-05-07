@@ -157,6 +157,7 @@ model Contract {
   extractions         AIExtraction[]
   alerts              ContractAlert[]
   approvals           Approval[]
+  embedding           ContractEmbedding?
   extractedText         String?
   docusealSubmissionId  String?
   signingUrl            String?
@@ -301,6 +302,19 @@ model ContractAlert {
   emailSentAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// ─── M3: Semantic Embeddings ──────────────────────────────────────────────────
+
+model ContractEmbedding {
+  id         String   @id @default(cuid())
+  contractId String   @unique
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  model      String   @default("text-embedding-3-small")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("ContractEmbedding")
 }
 
 // ─── M2: Approval Workflow ────────────────────────────────────────────────────

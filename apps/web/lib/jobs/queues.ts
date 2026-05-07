@@ -21,6 +21,11 @@ export interface AlertsCheckJobData {
   triggeredAt: string
 }
 
+export interface ContractEmbedJobData {
+  contractId: string
+  extractedText: string
+}
+
 // ─── Queue instances ──────────────────────────────────────────────────────────
 
 export const contractExtractQueue = new Queue<ContractExtractJobData>(
@@ -30,6 +35,11 @@ export const contractExtractQueue = new Queue<ContractExtractJobData>(
 
 export const contractAiExtractQueue = new Queue<ContractAiExtractJobData>(
   "contract.ai_extract",
+  { connection },
+)
+
+export const contractEmbedQueue = new Queue<ContractEmbedJobData>(
+  "contract.embed",
   { connection },
 )
 

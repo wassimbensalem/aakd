@@ -49,7 +49,7 @@ describe("POST /api/mcp — authentication", () => {
 })
 
 describe("POST /api/mcp — tools/list", () => {
-  it("returns all 4 tools", async () => {
+  it("returns all 6 tools", async () => {
     const { POST } = await import("@/app/api/mcp/route")
     const res = await POST(mcpRequest("tools/list"))
 
@@ -57,13 +57,15 @@ describe("POST /api/mcp — tools/list", () => {
     const body = await res.json()
     expect(body.jsonrpc).toBe("2.0")
     expect(body.id).toBe(1)
-    expect(body.result.tools).toHaveLength(4)
+    expect(body.result.tools).toHaveLength(6)
 
     const names = body.result.tools.map((t: { name: string }) => t.name)
     expect(names).toContain("search_contracts")
     expect(names).toContain("get_contract")
     expect(names).toContain("create_contract")
     expect(names).toContain("list_contracts")
+    expect(names).toContain("semantic_search")
+    expect(names).toContain("ask_contract")
   })
 
   it("each tool has name, description, and inputSchema", async () => {

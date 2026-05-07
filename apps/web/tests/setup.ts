@@ -4,6 +4,7 @@ import { vi } from "vitest"
 vi.mock("@/lib/jobs/queues", () => ({
   contractExtractQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
   contractAiExtractQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
+  contractEmbedQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
 }))
 
 vi.mock("@/lib/db/client", () => ({

@@ -21,8 +21,9 @@ import OpenAI from "openai"
 import { getWorkerPrisma } from "@/lib/db/worker-client"
 import { storage } from "@/lib/storage"
 import { checkAndFireAlerts } from "@/lib/alerts/check"
-import type { ContractExtractJobData, ContractAiExtractJobData, AlertsCheckJobData } from "@/lib/jobs/queues"
-import { contractAiExtractQueue, alertsCheckQueue } from "@/lib/jobs/queues"
+import { generateEmbedding } from "@/lib/embedding"
+import type { ContractExtractJobData, ContractAiExtractJobData, AlertsCheckJobData, ContractEmbedJobData } from "@/lib/jobs/queues"
+import { contractAiExtractQueue, contractEmbedQueue, alertsCheckQueue } from "@/lib/jobs/queues"
 
 // ─── Redis connection ─────────────────────────────────────────────────────────
 
@@ -290,6 +291,10 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
     console.log(
       `[ai_extract] Upserted ${nonNullFields.length} extraction records for contract ${contractId}: ${nonNullFields.join(", ")}`,
     )
+
+    // Enqueue embedding generation after AI extraction
+    await contractEmbedQueue.add("embed", { contractId, extractedText: textToAnalyze })
+    console.log(`[ai_extract] Enqueued embed job for contract ${contractId}`)
   },
   { connection },
 )
@@ -299,6 +304,46 @@ aiExtractWorker.on("completed", (job) =>
 )
 aiExtractWorker.on("failed", (job, err) =>
   console.error(`[ai_extract] Job ${job?.id} failed:`, err),
+)
+
+// ─── Worker: contract.embed ───────────────────────────────────────────────────
+
+const embedWorker = new Worker<ContractEmbedJobData>(
+  "contract.embed",
+  async (job: Job<ContractEmbedJobData>) => {
+    const { contractId, extractedText } = job.data
+
+    console.log(`[embed] Processing job ${job.id} for contract ${contractId}`)
+
+    const embedding = await generateEmbedding(extractedText)
+    if (!embedding) {
+      console.warn(`[embed] No embedding provider configured — skipping ${contractId}`)
+      return
+    }
+
+    const db = getWorkerPrisma()
+    const id = `emb_${Date.now()}`
+
+    // Upsert using raw SQL (pgvector — Prisma does not support vector type natively)
+    await db.$executeRaw`
+      INSERT INTO "ContractEmbedding" ("id", "contractId", "embedding", "model", "createdAt", "updatedAt")
+      VALUES (${id}, ${contractId}, ${JSON.stringify(embedding)}::vector, 'text-embedding-3-small', NOW(), NOW())
+      ON CONFLICT ("contractId") DO UPDATE
+        SET "embedding" = EXCLUDED."embedding",
+            "model" = EXCLUDED."model",
+            "updatedAt" = NOW()
+    `
+
+    console.log(`[embed] Embedded contract ${contractId} (${embedding.length} dims)`)
+  },
+  { connection },
+)
+
+embedWorker.on("completed", (job) =>
+  console.log(`[embed] Job ${job.id} completed`),
+)
+embedWorker.on("failed", (job, err) =>
+  console.error(`[embed] Job ${job?.id} failed:`, err),
 )
 
 // ─── Worker: alerts.check ─────────────────────────────────────────────────────
@@ -335,8 +380,10 @@ async function shutdown() {
   console.log("[worker] Shutting down gracefully…")
   await extractWorker.close()
   await aiExtractWorker.close()
+  await embedWorker.close()
   await alertsWorker.close()
   await contractAiExtractQueue.close()
+  await contractEmbedQueue.close()
   await alertsCheckQueue.close()
   await getWorkerPrisma().$disconnect()
   process.exit(0)

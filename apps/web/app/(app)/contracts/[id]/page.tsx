@@ -130,6 +130,9 @@ export default function ContractDetailPage() {
   const [tagInput, setTagInput] = useState("")
   const [addingTag, setAddingTag] = useState(false)
   const [sendingForSignature, setSendingForSignature] = useState(false)
+  const [aiQuestion, setAiQuestion] = useState("")
+  const [aiAnswer, setAiAnswer] = useState("")
+  const [askingAI, setAskingAI] = useState(false)
 
   const fetchContract = useCallback(async () => {
     try {
@@ -395,6 +398,30 @@ export default function ContractDetailPage() {
     }
   }
 
+  async function askAI() {
+    if (!aiQuestion.trim()) return
+    setAskingAI(true)
+    setAiAnswer("")
+    try {
+      const res = await fetch(`/api/contracts/${id}/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: aiQuestion }),
+      })
+      if (res.ok) {
+        const { answer } = await res.json()
+        setAiAnswer(answer)
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error ?? "Failed to get answer")
+      }
+    } catch {
+      toast.error("Failed to get answer")
+    } finally {
+      setAskingAI(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-6 space-y-4">
@@ -597,6 +624,40 @@ export default function ContractDetailPage() {
                   </div>
                 )}
               </div>
+
+              {/* Ask AI section — only shown when contract text has been extracted */}
+              {contract.extractedText && (
+                <div className="mt-4 rounded-lg border border-border bg-card p-4">
+                  <p className="text-sm font-medium text-foreground">Ask AI about this contract</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Ask a question and get an answer based on the contract text.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Input
+                      placeholder="e.g. What is the notice period?"
+                      value={aiQuestion}
+                      onChange={(e) => setAiQuestion(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") askAI()
+                      }}
+                      className="flex-1 text-sm"
+                      disabled={askingAI}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={askAI}
+                      disabled={!aiQuestion.trim() || askingAI}
+                    >
+                      {askingAI ? "Thinking..." : "Ask"}
+                    </Button>
+                  </div>
+                  {aiAnswer && (
+                    <div className="mt-3 rounded-md bg-muted p-3">
+                      <p className="whitespace-pre-wrap text-sm text-foreground">{aiAnswer}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </TabsContent>
 
             {/* Documents */}

@@ -2,6 +2,7 @@ import { resolveAuth } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
+import { generateEmbedding } from "@/lib/embedding"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -124,6 +125,32 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "semantic_search",
+    description:
+      "Search contracts using semantic (vector) similarity. Finds contracts that are conceptually relevant to the query, even without exact keyword matches.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Natural language search query" },
+        limit: { type: "number", description: "Max results, default 10, max 50" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "ask_contract",
+    description:
+      "Ask a question about a specific contract and get an AI-generated answer based on the contract text.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contractId: { type: "string", description: "Contract ID" },
+        question: { type: "string", description: "Question to ask about the contract" },
+      },
+      required: ["contractId", "question"],
+    },
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -170,6 +197,16 @@ const ListContractsSchema = z.object({
   contractType: z.string().optional(),
   limit: z.number().int().min(1).max(100).default(20),
   page: z.number().int().min(1).default(1),
+})
+
+const SemanticSearchMcpSchema = z.object({
+  query: z.string().min(1),
+  limit: z.number().int().min(1).max(50).default(10),
+})
+
+const AskContractMcpSchema = z.object({
+  contractId: z.string().min(1),
+  question: z.string().min(1).max(2000),
 })
 
 // ---------------------------------------------------------------------------
@@ -394,6 +431,155 @@ async function toolListContracts(
   return toolSuccess(id, { contracts, total, page, limit })
 }
 
+const QA_SYSTEM_PROMPT = `You are a contract analysis assistant. Answer the user's question based ONLY on the contract text provided. Be concise and cite specific clauses when relevant. If the answer cannot be found in the contract, say so clearly.`
+
+async function toolSemanticSearch(
+  args: unknown,
+  orgId: string,
+  id: string | number,
+): Promise<Response> {
+  const parsed = SemanticSearchMcpSchema.safeParse(args)
+  if (!parsed.success) {
+    return toolError(id, `Invalid arguments: ${JSON.stringify(parsed.error.flatten())}`)
+  }
+
+  const { query, limit } = parsed.data
+
+  let embedding: number[] | null
+  try {
+    embedding = await generateEmbedding(query)
+  } catch (err) {
+    return toolError(id, `Embedding generation failed: ${String(err)}`)
+  }
+
+  if (!embedding) {
+    return toolError(id, "Error: Embedding provider not configured")
+  }
+
+  type SemanticRow = {
+    id: string
+    title: string
+    contractType: string | null
+    status: string
+    counterpartyName: string | null
+    value: number | null
+    currency: string | null
+    endDate: Date | null
+    createdAt: Date
+    similarity: number
+  }
+
+  const embeddingStr = `[${embedding.join(",")}]`
+
+  const rows = await prisma.$queryRaw<SemanticRow[]>(
+    Prisma.sql`
+      SELECT
+        c.id,
+        c.title,
+        c."contractType",
+        c.status,
+        c."counterpartyName",
+        c.value,
+        c.currency,
+        c."endDate",
+        c."createdAt",
+        1 - (ce.embedding <=> ${embeddingStr}::vector) AS similarity
+      FROM "ContractEmbedding" ce
+      JOIN "Contract" c ON c.id = ce."contractId"
+      WHERE c."organizationId" = ${orgId}
+        AND 1 - (ce.embedding <=> ${embeddingStr}::vector) > 0.3
+      ORDER BY ce.embedding <=> ${embeddingStr}::vector
+      LIMIT ${limit}
+    `,
+  )
+
+  return toolSuccess(id, { results: rows, total: rows.length })
+}
+
+async function toolAskContract(
+  args: unknown,
+  orgId: string,
+  id: string | number,
+): Promise<Response> {
+  const parsed = AskContractMcpSchema.safeParse(args)
+  if (!parsed.success) {
+    return toolError(id, `Invalid arguments: ${JSON.stringify(parsed.error.flatten())}`)
+  }
+
+  const { contractId, question } = parsed.data
+
+  const contract = await prisma.contract.findUnique({
+    where: { id: contractId },
+    select: {
+      id: true,
+      title: true,
+      extractedText: true,
+      organizationId: true,
+    },
+  })
+
+  if (!contract || contract.organizationId !== orgId) {
+    return toolError(id, "Error: Contract not found")
+  }
+
+  if (!contract.extractedText) {
+    return toolError(id, "Error: No extracted text available for this contract")
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+    return toolError(id, "Error: No AI provider configured")
+  }
+
+  const userContent = `Contract: ${contract.title}\n\nContract text:\n${contract.extractedText.slice(0, 40000)}\n\nQuestion: ${question}`
+
+  let answer: string | null = null
+
+  try {
+    if (process.env.ANTHROPIC_API_KEY) {
+      const Anthropic = (await import("@anthropic-ai/sdk")).default
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+      const msg = await anthropic.messages.create({
+        model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
+        max_tokens: 1024,
+        system: QA_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userContent }],
+      })
+      const block = msg.content.find((b) => b.type === "text")
+      answer = block?.type === "text" ? block.text.trim() : null
+    } else if (process.env.OPENAI_API_KEY) {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+          max_tokens: 1024,
+          messages: [
+            { role: "system", content: QA_SYSTEM_PROMPT },
+            { role: "user", content: userContent },
+          ],
+        }),
+      })
+      if (res.ok) {
+        const data = (await res.json()) as {
+          choices: Array<{ message: { content: string | null } }>
+        }
+        answer = data.choices[0]?.message.content?.trim() ?? null
+      }
+    }
+  } catch (err) {
+    return toolError(id, `Error: AI call failed: ${String(err)}`)
+  }
+
+  if (!answer) {
+    return toolError(id, "Error: No AI provider configured or call returned empty")
+  }
+
+  return toolSuccess(id, { answer, contractId: contract.id, contractTitle: contract.title })
+}
+
 // ---------------------------------------------------------------------------
 // Main POST handler
 // ---------------------------------------------------------------------------
@@ -451,6 +637,10 @@ export async function POST(req: Request) {
           return toolCreateContract(toolArgs, ctx.organizationId, ctx.userId, id)
         case "list_contracts":
           return toolListContracts(toolArgs, ctx.organizationId, id)
+        case "semantic_search":
+          return toolSemanticSearch(toolArgs, ctx.organizationId, id)
+        case "ask_contract":
+          return toolAskContract(toolArgs, ctx.organizationId, id)
         default:
           return toolError(id, `Error: Unknown tool "${toolName}"`)
       }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Search, FileText } from "lucide-react"
+import { Search, FileText, Sparkles } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -59,6 +59,8 @@ export default function SearchPage() {
   const [valueMin, setValueMin] = useState("")
   const [valueMax, setValueMax] = useState("")
 
+  const [semanticMode, setSemanticMode] = useState(false)
+
   const [results, setResults] = useState<SearchResult[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -74,6 +76,7 @@ export default function SearchPage() {
     dateTo: string,
     minVal: string,
     maxVal: string,
+    isSemantic: boolean,
   ) => {
     const needsSearch = q.trim() || types.size > 0 || statuses.size > 0 || dateFrom || dateTo || minVal || maxVal
     if (!needsSearch) {
@@ -88,7 +91,18 @@ export default function SearchPage() {
     try {
       let allResults: SearchResult[] = []
 
-      if (q.trim()) {
+      if (q.trim() && isSemantic) {
+        // Semantic (pgvector) search
+        const res = await fetch("/api/search/semantic", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: q.trim(), limit: 20 }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          allResults = (data.results ?? []).map((r: SearchResult) => r)
+        }
+      } else if (q.trim()) {
         // Use the FTS endpoint: searches title, counterparty, notes, and extracted document text
         const params = new URLSearchParams({ q: q.trim(), limit: "100" })
         const res = await fetch(`/api/search?${params}`)
@@ -153,12 +167,12 @@ export default function SearchPage() {
   }, [])
 
   useEffect(() => {
-    runSearch(debouncedQuery, selectedTypes, selectedStatuses, endDateFrom, endDateTo, valueMin, valueMax)
+    runSearch(debouncedQuery, selectedTypes, selectedStatuses, endDateFrom, endDateTo, valueMin, valueMax, semanticMode)
     const params = new URLSearchParams(window.location.search)
     if (debouncedQuery) params.set("q", debouncedQuery)
     else params.delete("q")
     window.history.replaceState(null, "", `${window.location.pathname}${params.toString() ? `?${params}` : ""}`)
-  }, [debouncedQuery, selectedTypes, selectedStatuses, endDateFrom, endDateTo, valueMin, valueMax, runSearch])
+  }, [debouncedQuery, selectedTypes, selectedStatuses, endDateFrom, endDateTo, valueMin, valueMax, semanticMode, runSearch])
 
   function toggleType(t: ContractType) {
     setSelectedTypes((prev) => {
@@ -287,15 +301,28 @@ export default function SearchPage() {
       <div className="flex h-full flex-1 flex-col overflow-auto">
         {/* Search input */}
         <div className="border-b border-border px-6 py-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              autoFocus
-              placeholder="Search contracts, counterparties..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="pl-9"
-            />
+          <div className="relative flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                autoFocus
+                placeholder={semanticMode ? "Ask a semantic question..." : "Search contracts, counterparties..."}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setSemanticMode((s) => !s)}
+              title={semanticMode ? "Switch to keyword search" : "Switch to semantic search"}
+              className={cn(
+                "flex items-center justify-center rounded-md p-2 transition-colors hover:bg-muted",
+                semanticMode ? "text-foreground bg-muted" : "text-muted-foreground",
+              )}
+            >
+              <Sparkles className="size-4" />
+            </button>
           </div>
         </div>
 
@@ -328,11 +355,19 @@ export default function SearchPage() {
             </div>
           ) : results.length > 0 ? (
             <>
-              <p className="mb-3 text-sm text-muted-foreground">
-                {total} result{total !== 1 ? "s" : ""}
-                {debouncedQuery ? ` for "${debouncedQuery}"` : ""}
-                {hasFilters ? " (filtered)" : ""}
-              </p>
+              <div className="mb-3 flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">
+                  {total} result{total !== 1 ? "s" : ""}
+                  {debouncedQuery ? ` for "${debouncedQuery}"` : ""}
+                  {hasFilters ? " (filtered)" : ""}
+                </p>
+                {semanticMode && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    <Sparkles className="size-3" />
+                    AI-powered
+                  </span>
+                )}
+              </div>
               <div className="rounded-lg border border-border bg-card">
                 <Table>
                   <TableHeader>

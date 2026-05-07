@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { sendAlertEmail, ContractAlertWithContract } from "@/lib/email"
+import { sendSlackAlert, sendTeamsAlert } from "@/lib/notifications/webhooks"
 
 const ALERT_DETAIL: Record<string, string> = {
   EXPIRY_90:     "Expiry warning: contract expires in 90 days",
@@ -43,6 +44,31 @@ export async function checkAndFireAlerts(): Promise<{ fired: number; errors: num
         console.error(`[alerts] email failed for alert ${alert.id}:`, err)
         errors++
       })
+
+      // Fire Slack + Teams in parallel — failures are logged inside the helpers
+      const appUrl =
+        process.env.NEXT_PUBLIC_APP_URL ??
+        process.env.BETTER_AUTH_URL ??
+        "http://localhost:3000"
+      const daysUntilExpiry = alert.contract.endDate
+        ? Math.max(0, Math.ceil((new Date(alert.contract.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+        : 0
+      await Promise.allSettled([
+        sendSlackAlert({
+          contractTitle: alert.contract.title,
+          counterpartyName: alert.contract.counterpartyName ?? null,
+          daysUntilExpiry,
+          contractId: alert.contract.id,
+          appUrl,
+        }),
+        sendTeamsAlert({
+          contractTitle: alert.contract.title,
+          counterpartyName: alert.contract.counterpartyName ?? null,
+          daysUntilExpiry,
+          contractId: alert.contract.id,
+          appUrl,
+        }),
+      ])
 
       // Write immutable audit entry
       const detail = ALERT_DETAIL[alert.alertType] ?? `Alert fired: ${alert.alertType}`

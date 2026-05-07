@@ -281,9 +281,11 @@ export default function NewContractPage() {
   const [newTagName, setNewTagName] = useState("")
 
   // ── Polling refs ──────────────────────────────────────────────────────────────
-  const pollTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pollStartRef    = useRef<number>(0)
-  const pollActiveRef   = useRef(false)
+  const pollTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollStartRef      = useRef<number>(0)
+  const pollActiveRef     = useRef(false)
+  // Track the last file that was successfully uploaded so we don't re-upload on Back → Continue
+  const lastUploadedFileRef = useRef<File | null>(null)
 
   // ── Fetch folders + tags once ─────────────────────────────────────────────────
   useEffect(() => {
@@ -358,38 +360,67 @@ export default function NewContractPage() {
     if (!title.trim()) return
     setLoading(true)
     try {
-      // 1. Create contract
-      const createRes = await fetch("/api/contracts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim() }),
-      })
-      if (!createRes.ok) {
-        const err = await createRes.json().catch(() => ({}))
-        throw new Error((err as { error?: string }).error ?? "Failed to create contract")
-      }
-      const contract = await createRes.json() as { id: string }
-      setContractId(contract.id)
+      let currentContractId = contractId
 
-      // 2. Upload file if selected
-      if (file) {
+      if (currentContractId) {
+        // Contract already created (user went Back from step 2) — just update the title
+        await fetch(`/api/contracts/${currentContractId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: title.trim() }),
+        }).catch(() => {})
+      } else {
+        // First time through — create the contract
+        const createRes = await fetch("/api/contracts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: title.trim() }),
+        })
+        if (!createRes.ok) {
+          const err = await createRes.json().catch(() => ({}))
+          throw new Error((err as { error?: string }).error ?? "Failed to create contract")
+        }
+        const contract = await createRes.json() as { id: string }
+        currentContractId = contract.id
+        setContractId(contract.id)
+      }
+
+      // Upload file only if there's a file AND it hasn't been uploaded before
+      // (user may have gone Back without changing the file — skip re-upload)
+      const fileIsNew = file !== null && file !== lastUploadedFileRef.current
+
+      if (file && fileIsNew) {
         const fd = new FormData()
         fd.append("file", file)
-        const uploadRes = await fetch(`/api/contracts/${contract.id}/upload`, {
+        const uploadRes = await fetch(`/api/contracts/${currentContractId}/upload`, {
           method: "POST",
           body: fd,
         })
         if (!uploadRes.ok) {
           const uploadErr = await uploadRes.text().catch(() => "Upload failed")
           toast.error(`File upload failed: ${uploadErr}. Continuing without AI extraction.`)
+          // Clear any stale extraction state
+          setExtractions([])
+          setFieldValues({})
+          setFieldCleared(new Set())
           setStep(2)
           return
         }
-        // 3. Switch to analyzing + start polling
+        lastUploadedFileRef.current = file
+      }
+
+      // Clear previous extraction state so step 2 is always fresh
+      setExtractions([])
+      setFieldValues({})
+      setFieldCleared(new Set())
+      setFieldEditing(null)
+
+      if (file) {
+        // File exists (new or previously uploaded) — poll for AI extractions
         setStep("analyzing")
-        startPolling(contract.id)
+        startPolling(currentContractId!)
       } else {
-        // No file — skip to review with empty extractions
+        // No file — skip straight to manual review
         setStep(2)
       }
     } catch (err) {
@@ -574,7 +605,16 @@ export default function NewContractPage() {
           onClick={() => {
             if (step === "analyzing") return
             if (step === 1) router.back()
-            else if (step === 2) setStep(1)
+            else if (step === 2) {
+              // Stop any active polling and wipe extraction state so step 2 re-enters fresh
+              pollActiveRef.current = false
+              if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+              setExtractions([])
+              setFieldValues({})
+              setFieldCleared(new Set())
+              setFieldEditing(null)
+              setStep(1)
+            }
             else if (step === 3) setStep(2)
           }}
           className={cn(

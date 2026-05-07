@@ -32,7 +32,7 @@ RUN npm install -g prisma
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/apps/web/prisma ./prisma
-COPY --from=builder /app/apps/web/public ./public
+# public/ is optional — only copy if it exists (Next.js creates it if needed)
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
 USER nextjs

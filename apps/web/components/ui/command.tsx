@@ -5,13 +5,6 @@ import { Command as CommandPrimitive } from "cmdk"
 
 import { cn } from "@/lib/utils"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
   InputGroup,
   InputGroupAddon,
 } from "@/components/ui/input-group"
@@ -33,36 +26,53 @@ function Command({
   )
 }
 
+// Plain overlay implementation — avoids cmdk + Base UI Dialog subscribe() incompatibility.
 function CommandDialog({
   title = "Command Palette",
-  description = "Search for a command to run...",
   children,
   className,
-  showCloseButton = false,
-  ...props
-}: Omit<React.ComponentProps<typeof Dialog>, "children"> & {
+  open,
+  onOpenChange,
+}: {
   title?: string
   description?: string
   className?: string
   showCloseButton?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children: React.ReactNode
 }) {
+  React.useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onOpenChange?.(false)
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [open, onOpenChange])
+
+  if (!open) return null
+
   return (
-    <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
-      <DialogContent
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/10 supports-backdrop-filter:backdrop-blur-sm"
+        onClick={() => onOpenChange?.(false)}
+      />
+      {/* Palette */}
+      <div
+        role="dialog"
+        aria-label={title}
+        aria-modal="true"
         className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
+          "relative z-50 w-full max-w-lg overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl",
           className
         )}
-        showCloseButton={showCloseButton}
       >
         {children}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }
 

@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { LayoutDashboard, FileText, Search, Settings, LogOut, Moon, Sun, Shield, ChevronLeft, ChevronRight } from "lucide-react"
 import { useTheme } from "next-themes"
-import { useSession, useActiveOrganization, signOut } from "@/lib/auth/client"
+import { useSession, useActiveOrganization, signOut, organization } from "@/lib/auth/client"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CmdK } from "@/components/cmd-k"
@@ -56,7 +56,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isPending && !orgPending && session?.user && !activeOrg) {
-      router.replace("/create-org")
+      // Auto-select the first existing org if the user already has one,
+      // instead of always redirecting to /create-org on every fresh login.
+      organization.list().then((result) => {
+        const orgs = result?.data
+        if (orgs && orgs.length > 0) {
+          organization.setActive({ organizationId: orgs[0].id })
+        } else {
+          router.replace("/create-org")
+        }
+      }).catch(() => {
+        router.replace("/create-org")
+      })
     }
   }, [isPending, orgPending, session, activeOrg, router])
 

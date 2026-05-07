@@ -1,4 +1,4 @@
-import { resolveAuth } from "@/lib/auth/middleware"
+import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
@@ -36,8 +36,14 @@ export async function GET(req: Request) {
     const folderId = url.searchParams.get("folderId") ?? undefined
     const tagId = url.searchParams.get("tagId") ?? undefined
     const search = url.searchParams.get("search") ?? undefined
-    const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10))
-    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "20", 10)))
+    const page = (() => {
+      const n = parseInt(url.searchParams.get("page") ?? "1", 10)
+      return Number.isNaN(n) ? 1 : Math.max(1, n)
+    })()
+    const limit = (() => {
+      const n = parseInt(url.searchParams.get("limit") ?? "20", 10)
+      return Number.isNaN(n) ? 20 : Math.min(Math.max(1, n), 100)
+    })()
 
     const where: Record<string, unknown> = {}
     if (status) where.status = status
@@ -70,6 +76,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const scopeError = requireWriteScope(ctx)
+  if (scopeError) return scopeError
 
   // Rate limit: 20 requests/min per org
   const rl = rateLimit(`${ctx.organizationId}:create-contract`, 20, 60_000)

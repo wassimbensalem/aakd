@@ -10,8 +10,14 @@ export async function GET(req: Request) {
   return requestContext.run(ctx, async () => {
     const url = new URL(req.url)
     const q = (url.searchParams.get("q") ?? "").trim()
-    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "20", 10)))
-    const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10))
+    const limit = (() => {
+      const n = parseInt(url.searchParams.get("limit") ?? "20", 10)
+      return Number.isNaN(n) ? 20 : Math.min(Math.max(1, n), 100)
+    })()
+    const offset = (() => {
+      const n = parseInt(url.searchParams.get("offset") ?? "0", 10)
+      return Number.isNaN(n) ? 0 : Math.max(0, n)
+    })()
 
     if (!q) {
       return Response.json({ results: [], total: 0 })

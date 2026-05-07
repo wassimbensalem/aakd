@@ -26,24 +26,35 @@ export interface ContractEmbedJobData {
   extractedText: string
 }
 
-// ─── Queue instances ──────────────────────────────────────────────────────────
+// ─── Lazy queue singletons ────────────────────────────────────────────────────
+// Queue instances are created on first use (not at module load time) so that
+// Next.js's static-generation phase during `next build` does not attempt a
+// Redis connection. Callers should use these getters, not the raw constructors.
 
-export const contractExtractQueue = new Queue<ContractExtractJobData>(
-  "contract.extract",
-  { connection },
-)
+let _contractExtractQueue: Queue<ContractExtractJobData> | null = null
+let _contractAiExtractQueue: Queue<ContractAiExtractJobData> | null = null
+let _contractEmbedQueue: Queue<ContractEmbedJobData> | null = null
+let _alertsCheckQueue: Queue<AlertsCheckJobData> | null = null
 
-export const contractAiExtractQueue = new Queue<ContractAiExtractJobData>(
-  "contract.ai_extract",
-  { connection },
-)
+export function getContractExtractQueue(): Queue<ContractExtractJobData> {
+  return (_contractExtractQueue ??= new Queue<ContractExtractJobData>("contract.extract", { connection }))
+}
 
-export const contractEmbedQueue = new Queue<ContractEmbedJobData>(
-  "contract.embed",
-  { connection },
-)
+export function getContractAiExtractQueue(): Queue<ContractAiExtractJobData> {
+  return (_contractAiExtractQueue ??= new Queue<ContractAiExtractJobData>("contract.ai_extract", { connection }))
+}
 
-export const alertsCheckQueue = new Queue<AlertsCheckJobData>(
-  "alerts.check",
-  { connection },
-)
+export function getContractEmbedQueue(): Queue<ContractEmbedJobData> {
+  return (_contractEmbedQueue ??= new Queue<ContractEmbedJobData>("contract.embed", { connection }))
+}
+
+export function getAlertsCheckQueue(): Queue<AlertsCheckJobData> {
+  return (_alertsCheckQueue ??= new Queue<AlertsCheckJobData>("alerts.check", { connection }))
+}
+
+// ─── Legacy named exports (kept for backward compat) ─────────────────────────
+// These are getters so the Queue is still created lazily.
+export const contractExtractQueue = { add: (...a: Parameters<Queue<ContractExtractJobData>["add"]>) => getContractExtractQueue().add(...a) }
+export const contractAiExtractQueue = { add: (...a: Parameters<Queue<ContractAiExtractJobData>["add"]>) => getContractAiExtractQueue().add(...a) }
+export const contractEmbedQueue = { add: (...a: Parameters<Queue<ContractEmbedJobData>["add"]>) => getContractEmbedQueue().add(...a) }
+export const alertsCheckQueue = { add: (...a: Parameters<Queue<AlertsCheckJobData>["add"]>) => getAlertsCheckQueue().add(...a) }

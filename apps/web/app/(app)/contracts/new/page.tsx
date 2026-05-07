@@ -83,7 +83,7 @@ interface FieldEditorProps {
   onCancel: () => void
 }
 
-function FieldEditor({ fieldKey: _fieldKey, fieldType, value, onSave, onCancel }: FieldEditorProps) {
+function FieldEditor({ fieldType, value, onSave, onCancel }: FieldEditorProps) {
   const [draft, setDraft] = useState(value)
 
   if (fieldType === "contractType_select") {

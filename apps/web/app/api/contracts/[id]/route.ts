@@ -17,21 +17,23 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   ARCHIVED:            [], // terminal — no transitions out
 }
 
+const isoDate = z.union([z.string().date(), z.string().datetime({ offset: true })])
+
 const UpdateContractSchema = z.object({
   title: z.string().min(1).max(500).optional(),
-  contractType: z.enum(["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"]).optional(),
+  contractType: z.enum(["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"]).nullable().optional(),
   status: z.enum(["DRAFT", "INTERNAL_REVIEW", "PENDING_APPROVAL", "AWAITING_SIGNATURE", "ACTIVE", "EXPIRED", "TERMINATED", "ARCHIVED"]).optional(),
-  counterpartyName: z.string().optional(),
-  counterpartyContact: z.string().email().optional().or(z.literal("")),
-  value: z.number().positive().optional(),
-  currency: z.string().length(3).optional(),
-  governingLaw: z.string().optional(),
-  startDate: z.string().date().optional(),
-  endDate: z.string().date().optional(),
-  renewalDate: z.string().date().optional(),
-  noticePeriodDays: z.number().int().min(0).optional(),
+  counterpartyName: z.string().nullable().optional(),
+  counterpartyContact: z.string().email().or(z.literal("")).nullable().optional(),
+  value: z.number().positive().nullable().optional(),
+  currency: z.string().length(3).nullable().optional(),
+  governingLaw: z.string().nullable().optional(),
+  startDate: isoDate.nullable().optional(),
+  endDate: isoDate.nullable().optional(),
+  renewalDate: isoDate.nullable().optional(),
+  noticePeriodDays: z.number().int().min(0).nullable().optional(),
   autoRenewal: z.boolean().optional(),
-  notes: z.string().max(10000).optional(),
+  notes: z.string().max(10000).nullable().optional(),
   folderId: z.string().nullable().optional(),
   tagIds: z.array(z.string()).optional(),
 })
@@ -123,10 +125,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return Response.json({ error: parsed.error.flatten() }, { status: 422 })
     }
 
-    const existing = await prisma.contract.findUnique({
-      where: { id: params.id },
-      select: { status: true, endDate: true, renewalDate: true, noticePeriodDays: true },
-    })
+    let existing: { status: string; endDate: Date | null; renewalDate: Date | null; noticePeriodDays: number | null } | null
+    try {
+      existing = await prisma.contract.findUnique({
+        where: { id: params.id },
+        select: { status: true, endDate: true, renewalDate: true, noticePeriodDays: true },
+      })
+    } catch (err) {
+      console.error("[PATCH /contracts/:id] findUnique error:", err)
+      return Response.json({ error: "Database error looking up contract" }, { status: 500 })
+    }
     if (!existing) return new Response("Not Found", { status: 404 })
 
     // Validate status transition
@@ -141,28 +149,39 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       }
     }
 
-    const updated = await prisma.contract.update({
-      where: { id: params.id },
-      data: {
-        ...rest,
-        status: status ?? undefined,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        renewalDate: renewalDate ? new Date(renewalDate) : undefined,
-        tags: tagIds !== undefined ? { set: tagIds.map((id) => ({ id })) } : undefined,
-      },
-      include: {
-        owner: { select: { id: true, name: true, email: true } },
-        tags: true,
-        folder: true,
-      },
-    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let updated: any
+    try {
+      updated = await prisma.contract.update({
+        where: { id: params.id },
+        data: {
+          ...rest,
+          status: status ?? undefined,
+          startDate: startDate === undefined ? undefined : startDate ? new Date(startDate) : null,
+          endDate: endDate === undefined ? undefined : endDate ? new Date(endDate) : null,
+          renewalDate: renewalDate === undefined ? undefined : renewalDate ? new Date(renewalDate) : null,
+          tags: tagIds !== undefined ? { set: tagIds.map((id) => ({ id })) } : undefined,
+        },
+        include: {
+          owner: { select: { id: true, name: true, email: true } },
+          tags: true,
+          folder: true,
+        },
+      })
+    } catch (err) {
+      console.error("[PATCH /contracts/:id] update error:", err)
+      return Response.json({ error: "Database error updating contract" }, { status: 500 })
+    }
 
     const changedFields = Object.keys(parsed.data).join(", ")
-    await writeActivity(params.id, ctx.userId, "UPDATED", changedFields)
+    await writeActivity(params.id, ctx.userId, "UPDATED", changedFields).catch((err) =>
+      console.error("[PATCH /contracts/:id] writeActivity UPDATED error:", err)
+    )
 
     if (status && status !== existing.status) {
-      await writeActivity(params.id, ctx.userId, "STATUS_CHANGED", `${existing.status} → ${status}`)
+      await writeActivity(params.id, ctx.userId, "STATUS_CHANGED", `${existing.status} → ${status}`).catch((err) =>
+        console.error("[PATCH /contracts/:id] writeActivity STATUS_CHANGED error:", err)
+      )
     }
 
     // Regenerate renewal alerts if any date-related field changed

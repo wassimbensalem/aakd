@@ -184,10 +184,20 @@ export default function ContractDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       })
-      if (!res.ok) throw new Error("Failed")
+      if (!res.ok) {
+        let msg = "Failed to update status"
+        try {
+          const body = await res.json()
+          if (body?.error) msg = typeof body.error === "string" ? body.error : JSON.stringify(body.error)
+        } catch {}
+        toast.error(msg)
+        console.error("[changeStatus] API error", res.status, newStatus)
+        return
+      }
       toast.success("Status updated")
       fetchContract()
-    } catch {
+    } catch (err) {
+      console.error("[changeStatus] fetch error", err)
       toast.error("Failed to update status")
     }
   }

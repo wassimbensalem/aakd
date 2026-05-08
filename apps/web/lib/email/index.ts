@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer"
 import { ContractAlert, Contract, Organization } from "@prisma/client"
+import { prisma } from "@/lib/db/client"
 
 export type ContractAlertWithContract = ContractAlert & {
   contract: Contract & { organization: Organization }
@@ -79,12 +80,42 @@ function getTransporter() {
   })
 }
 
+async function resolveAlertRecipients(alert: ContractAlertWithContract): Promise<string[]> {
+  const recipients = new Set<string>()
+
+  // Always include the contract owner if we can find them
+  const owner = await prisma.user.findUnique({
+    where: { id: alert.contract.ownerId },
+    select: { email: true },
+  })
+  if (owner?.email) recipients.add(owner.email)
+
+  // Plus all org admins, so a contract whose owner has left still gets attention
+  const admins = await prisma.member.findMany({
+    where: { organizationId: alert.contract.organizationId, role: "admin" },
+    select: { user: { select: { email: true } } },
+  })
+  for (const m of admins) {
+    if (m.user?.email) recipients.add(m.user.email)
+  }
+
+  // Optional global override / fallback for self-hosted deployments
+  if (process.env.ALERT_EMAIL_TO) {
+    for (const addr of process.env.ALERT_EMAIL_TO.split(",")) {
+      const trimmed = addr.trim()
+      if (trimmed) recipients.add(trimmed)
+    }
+  }
+
+  return Array.from(recipients)
+}
+
 export async function sendAlertEmail(alert: ContractAlertWithContract): Promise<void> {
   // Silently skip if SMTP is not configured
   if (!process.env.SMTP_HOST) return
 
-  const to = process.env.ALERT_EMAIL_TO
-  if (!to) return
+  const to = await resolveAlertRecipients(alert)
+  if (to.length === 0) return
 
   const label = ALERT_LABELS[alert.alertType] ?? alert.alertType
   const subject = `[ClauseFlow] ${label} — ${alert.contract.title}`
@@ -95,5 +126,11 @@ export async function sendAlertEmail(alert: ContractAlertWithContract): Promise<
     to,
     subject,
     html: buildAlertHtml(alert),
+  })
+
+  // Stamp emailSentAt so we can audit which alerts triggered an email
+  await prisma.contractAlert.update({
+    where: { id: alert.id },
+    data: { emailSentAt: new Date() },
   })
 }

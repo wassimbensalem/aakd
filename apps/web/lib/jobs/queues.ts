@@ -53,8 +53,21 @@ export function getAlertsCheckQueue(): Queue<AlertsCheckJobData> {
 }
 
 // ─── Legacy named exports (kept for backward compat) ─────────────────────────
-// These are getters so the Queue is still created lazily.
-export const contractExtractQueue = { add: (...a: Parameters<Queue<ContractExtractJobData>["add"]>) => getContractExtractQueue().add(...a) }
-export const contractAiExtractQueue = { add: (...a: Parameters<Queue<ContractAiExtractJobData>["add"]>) => getContractAiExtractQueue().add(...a) }
-export const contractEmbedQueue = { add: (...a: Parameters<Queue<ContractEmbedJobData>["add"]>) => getContractEmbedQueue().add(...a) }
-export const alertsCheckQueue = { add: (...a: Parameters<Queue<AlertsCheckJobData>["add"]>) => getAlertsCheckQueue().add(...a) }
+// These are getters so the Queue is still created lazily. We proxy both `add`
+// (used by API routes / worker handlers) and `close` (used by graceful shutdown).
+export const contractExtractQueue = {
+  add: (...a: Parameters<Queue<ContractExtractJobData>["add"]>) => getContractExtractQueue().add(...a),
+  close: () => _contractExtractQueue?.close() ?? Promise.resolve(),
+}
+export const contractAiExtractQueue = {
+  add: (...a: Parameters<Queue<ContractAiExtractJobData>["add"]>) => getContractAiExtractQueue().add(...a),
+  close: () => _contractAiExtractQueue?.close() ?? Promise.resolve(),
+}
+export const contractEmbedQueue = {
+  add: (...a: Parameters<Queue<ContractEmbedJobData>["add"]>) => getContractEmbedQueue().add(...a),
+  close: () => _contractEmbedQueue?.close() ?? Promise.resolve(),
+}
+export const alertsCheckQueue = {
+  add: (...a: Parameters<Queue<AlertsCheckJobData>["add"]>) => getAlertsCheckQueue().add(...a),
+  close: () => _alertsCheckQueue?.close() ?? Promise.resolve(),
+}

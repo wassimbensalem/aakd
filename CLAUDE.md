@@ -166,13 +166,19 @@ Job handlers live in `worker/` — not in `apps/web/`.
 
 ## What NOT to build (v1 scope — do not add these)
 
-- Tracked changes / redlining (v3)
-- Counterparty negotiation portal (v3)
-- Browser-native contract editor (v2)
-- Template library (v2)
-- SSO / SAML (Enterprise tier)
-- CRM integrations (paid tier)
-- Mobile app
+These are intentionally deferred to later milestones. Do not implement in M0–M4.
+
+- Tracked changes / redlining → v3
+- Counterparty negotiation portal → v3
+- Browser-native contract editor → v2
+- Template + clause library → v2
+- Obligation tracking → v2
+- Analytics / reporting dashboard → v2
+- Guided contracting / legal playbooks → v3
+- AI redlining with playbook enforcement → v3
+- SSO / SAML → v4 Enterprise
+- CRM-native contract generation (Salesforce/HubSpot CPQ→contract) → v4 Enterprise
+- Mobile app → v4 Enterprise
 
 If a task seems to require any of these, stop and ask.
 
@@ -222,6 +228,8 @@ AI and email are optional — the app runs without them (AI features degrade gra
 
 ## Milestones
 
+### v1 — Foundation (current)
+
 | Milestone | Status | Scope |
 |---|---|---|
 | M0 — Contract Repository | 🔨 In progress | CRUD, upload, RBAC, API keys, Docker |
@@ -229,6 +237,32 @@ AI and email are optional — the app runs without them (AI features degrade gra
 | M2 — Workflow + Signing | Pending | Approvals, DocuSeal, MCP server |
 | M3 — AI Layer | Pending | pgvector semantic search, Q&A |
 | M4 — Launch Prep | Pending | Security audit, docs, v1.0.0 tag |
+
+### v2 — Authoring + Intelligence
+
+| Milestone | Scope |
+|---|---|
+| M5 — Authoring | Browser-native contract editor (no Word round-trips), template library |
+| M6 — Clause Library | Versioned clause store, deviation tracking vs. approved language |
+| M7 — Obligation Tracking | Post-signature deliverable/SLA/milestone tracking, pass/fail status |
+| M8 — Analytics | Portfolio dashboard: KPIs, risk flags, cycle time, clause deviation rates |
+
+### v3 — Collaboration + AI Negotiation
+
+| Milestone | Scope |
+|---|---|
+| M9 — Redlining | Tracked changes, internal markup and version comparison |
+| M10 — AI Playbook | AI redlining with playbook enforcement, auto-suggest approved fallbacks |
+| M11 — Counterparty Portal | External party collaborates and redlines in-browser, no email attachments |
+| M12 — Guided Contracting | Legal guardrails embedded in templates, self-serve sales contracting within guardrails |
+
+### v4 — Enterprise
+
+| Milestone | Scope |
+|---|---|
+| M13 — SSO / SAML | Enterprise identity providers (Okta, Azure AD, Google Workspace) |
+| M14 — CRM Integrations | Salesforce/HubSpot CPQ→contract generation, bi-directional sync |
+| M15 — Mobile | iOS + Android app |
 
 ---
 

@@ -2,8 +2,29 @@ import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
+import { generateAlertsForContract } from "@/lib/alerts/generate"
 import { z } from "zod"
 import type { ContractType } from "@prisma/client"
+
+// Fields whose acceptance must trigger renewal-alert regeneration
+const ALERT_TRIGGERING_FIELDS = new Set(["endDate", "renewalDate", "noticePeriodDays"])
+
+async function regenerateAlertsIfTouched(contractId: string, touchedFields: string[]) {
+  if (!touchedFields.some((f) => ALERT_TRIGGERING_FIELDS.has(f))) return
+  const c = await prisma.contract.findUnique({
+    where: { id: contractId },
+    select: { endDate: true, renewalDate: true, noticePeriodDays: true },
+  })
+  if (!c) return
+  await generateAlertsForContract(
+    contractId,
+    c.endDate,
+    c.renewalDate,
+    c.noticePeriodDays,
+  ).catch((err) =>
+    console.error("[alerts] generateAlertsForContract failed after extraction accept:", err),
+  )
+}
 
 // ─── GET /api/contracts/[id]/extractions ─────────────────────────────────────
 // Returns all AIExtraction records for the contract, ordered by createdAt.
@@ -119,6 +140,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         `Accepted all ${pending.length} AI extraction fields`,
       )
 
+      await regenerateAlertsIfTouched(params.id, Object.keys(contractUpdates))
+
       return Response.json({ accepted: pending.length })
     }
 
@@ -163,6 +186,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         "METADATA_UPDATED",
         `Accepted AI extraction for field "${extraction.field}"`,
       )
+
+      await regenerateAlertsIfTouched(params.id, [extraction.field])
     } else {
       await prisma.aIExtraction.update({
         where: { id: extractionId },

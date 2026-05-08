@@ -63,20 +63,21 @@ services:
       STORAGE_ACCESS_KEY: minioadmin
       STORAGE_SECRET_KEY: minioadmin
       STORAGE_REGION: us-east-1
-      # AI provider — set one of the keys below (all optional, AI features degrade gracefully)
-      # AI_PROVIDER: anthropic
-      # ANTHROPIC_API_KEY: ""
-      # ANTHROPIC_MODEL: claude-haiku-4-5
-      # AI_PROVIDER: openai
-      # OPENAI_API_KEY: ""
-      # OPENAI_MODEL: gpt-4o-mini
-      # Email alerts (optional)
-      # SMTP_HOST: ""
-      # SMTP_PORT: "587"
-      # SMTP_USER: ""
-      # SMTP_PASS: ""
-      # SMTP_FROM: "noreply@clauseflow.io"
-      # ALERT_EMAIL_TO: ""
+      # AI provider — read from .env at project root (all optional, features degrade gracefully)
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+      # Email alerts (optional) — also read from .env
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@clauseflow.io}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
     depends_on:
       db:
         condition: service_healthy
@@ -98,20 +99,21 @@ services:
       STORAGE_ACCESS_KEY: minioadmin
       STORAGE_SECRET_KEY: minioadmin
       STORAGE_REGION: us-east-1
-      # AI provider — set one of the keys below
-      # AI_PROVIDER: anthropic
-      # ANTHROPIC_API_KEY: ""
-      # ANTHROPIC_MODEL: claude-haiku-4-5
-      # AI_PROVIDER: openai
-      # OPENAI_API_KEY: ""
-      # OPENAI_MODEL: gpt-4o-mini
+      # AI provider — read from .env at project root
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
       # Email alerts (optional)
-      # SMTP_HOST: ""
-      # SMTP_PORT: "587"
-      # SMTP_USER: ""
-      # SMTP_PASS: ""
-      # SMTP_FROM: "noreply@clauseflow.io"
-      # ALERT_EMAIL_TO: ""
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@clauseflow.io}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
     depends_on:
       db:
         condition: service_healthy

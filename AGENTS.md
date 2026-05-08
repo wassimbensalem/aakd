@@ -235,7 +235,7 @@ AI and email are optional — the app runs without them (AI features degrade gra
 | M0 — Contract Repository | ✅ Complete | CRUD, upload, RBAC, API keys, Docker |
 | M1 — Renewal Tracking | ✅ Complete | AI extraction, alerts, email, full-text + semantic search |
 | M2 — Workflow + Signing | ✅ Complete | Approvals, DocuSeal signing, signing sync, MCP server |
-| M3 — AI Layer | 🔨 In progress | Contract Q&A and retrieval-backed AI workflows |
+| M3 — AI Layer | ✅ Complete | Retrieval-grounded Contract Q&A with excerpt citations |
 | M4 — Launch Prep | Pending | Security audit, docs, v1.0.0 tag |
 
 ### v2 — Authoring + Intelligence

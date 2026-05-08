@@ -69,6 +69,12 @@ interface AIExtraction {
   status: "pending" | "accepted" | "rejected"
 }
 
+interface AskCitation {
+  chunkIndex: number
+  text: string
+  similarity: number | null
+}
+
 const STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
   DRAFT:               ["INTERNAL_REVIEW", "ARCHIVED"],
   INTERNAL_REVIEW:     ["PENDING_APPROVAL", "DRAFT", "ARCHIVED"],
@@ -157,6 +163,7 @@ export default function ContractDetailPage() {
   const [sendingForSignature, setSendingForSignature] = useState(false)
   const [aiQuestion, setAiQuestion] = useState("")
   const [aiAnswer, setAiAnswer] = useState("")
+  const [aiCitations, setAiCitations] = useState<AskCitation[]>([])
   const [askingAI, setAskingAI] = useState(false)
 
   const fetchContract = useCallback(async () => {
@@ -460,6 +467,7 @@ export default function ContractDetailPage() {
     if (!aiQuestion.trim()) return
     setAskingAI(true)
     setAiAnswer("")
+    setAiCitations([])
     try {
       const res = await fetch(`/api/contracts/${id}/ask`, {
         method: "POST",
@@ -467,8 +475,9 @@ export default function ContractDetailPage() {
         body: JSON.stringify({ question: aiQuestion }),
       })
       if (res.ok) {
-        const { answer } = await res.json()
+        const { answer, citations } = await res.json()
         setAiAnswer(answer)
+        setAiCitations(Array.isArray(citations) ? citations : [])
       } else {
         const err = await res.json().catch(() => ({}))
         toast.error(err.error ?? "Failed to get answer")
@@ -724,6 +733,28 @@ export default function ContractDetailPage() {
                   {aiAnswer && (
                     <div className="mt-3 rounded-md bg-zinc-50 border border-zinc-200 p-3">
                       <p className="whitespace-pre-wrap text-sm text-zinc-900">{aiAnswer}</p>
+                      {aiCitations.length > 0 && (
+                        <div className="mt-3 border-t border-zinc-200 pt-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Sources</p>
+                          <div className="mt-2 space-y-2">
+                            {aiCitations.map((citation) => (
+                              <details key={citation.chunkIndex} className="rounded border border-zinc-200 bg-white px-3 py-2">
+                                <summary className="cursor-pointer text-xs font-medium text-zinc-700">
+                                  Excerpt {citation.chunkIndex + 1}
+                                  {citation.similarity != null && (
+                                    <span className="ml-2 text-zinc-400">
+                                      {(citation.similarity * 100).toFixed(0)}% match
+                                    </span>
+                                  )}
+                                </summary>
+                                <p className="mt-2 line-clamp-6 whitespace-pre-wrap text-xs text-zinc-600">
+                                  {citation.text}
+                                </p>
+                              </details>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

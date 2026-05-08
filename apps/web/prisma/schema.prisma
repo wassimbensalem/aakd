@@ -318,6 +318,10 @@ model ContractEmbedding {
   @@map("ContractEmbedding")
 }
 
+// Backed by pgvector via raw SQL. The embedding column exists in the database
+// but is intentionally not represented here because Prisma has no native vector
+// scalar. See migration 20260508130000_m3_contract_chunk_embeddings.
+
 // ─── M2: Approval Workflow ────────────────────────────────────────────────────
 
 model Approval {

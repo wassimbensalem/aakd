@@ -3,6 +3,9 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { QA_SYSTEM_PROMPT } from "@/lib/ai/prompts"
+import { generateEmbedding } from "@/lib/embedding"
+import { chunkText } from "@/lib/ai/chunking"
+import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
 const AskSchema = z.object({
@@ -11,10 +14,10 @@ const AskSchema = z.object({
 
 async function callQaLLM(
   contractTitle: string,
-  contractText: string,
+  contextText: string,
   question: string,
 ): Promise<string | null> {
-  const userContent = `Contract: ${contractTitle}\n\nContract text:\n${contractText.slice(0, 40000)}\n\nQuestion: ${question}`
+  const userContent = `Contract: ${contractTitle}\n\nRelevant contract excerpts:\n${contextText}\n\nQuestion: ${question}`
 
   if (process.env.ANTHROPIC_API_KEY) {
     const Anthropic = (await import("@anthropic-ai/sdk")).default
@@ -58,6 +61,64 @@ async function callQaLLM(
   }
 
   return null
+}
+
+type AskCitation = {
+  chunkIndex: number
+  text: string
+  similarity: number | null
+}
+
+async function retrieveRelevantChunks(
+  contractId: string,
+  extractedText: string,
+  question: string,
+): Promise<AskCitation[]> {
+  const embedding = await generateEmbedding(question)
+  if (!embedding) {
+    return chunkText(extractedText, 8000, 1000)
+      .slice(0, 5)
+      .map((chunk) => ({ chunkIndex: chunk.index, text: chunk.text, similarity: null }))
+  }
+
+  const embeddingStr = `[${embedding.join(",")}]`
+  type ChunkRow = {
+    chunkIndex: number
+    text: string
+    similarity: number
+  }
+
+  const rows = await prisma.$queryRaw<ChunkRow[]>(
+    Prisma.sql`
+      SELECT
+        "chunkIndex",
+        "text",
+        1 - ("embedding" <=> ${embeddingStr}::vector) AS similarity
+      FROM "ContractChunkEmbedding"
+      WHERE "contractId" = ${contractId}
+      ORDER BY "embedding" <=> ${embeddingStr}::vector
+      LIMIT 5
+    `,
+  )
+
+  if (rows.length > 0) {
+    return rows.map((row) => ({
+      chunkIndex: row.chunkIndex,
+      text: row.text,
+      similarity: row.similarity,
+    }))
+  }
+
+  return chunkText(extractedText, 8000, 1000)
+    .slice(0, 5)
+    .map((chunk) => ({ chunkIndex: chunk.index, text: chunk.text, similarity: null }))
+}
+
+function buildContext(chunks: AskCitation[]): string {
+  return chunks
+    .map((chunk) => `[Excerpt ${chunk.chunkIndex + 1}]\n${chunk.text}`)
+    .join("\n\n---\n\n")
+    .slice(0, 50000)
 }
 
 export async function POST(
@@ -121,9 +182,24 @@ export async function POST(
       )
     }
 
+    let citations: AskCitation[]
+    try {
+      citations = await retrieveRelevantChunks(contract.id, contract.extractedText, question)
+    } catch (err) {
+      console.error(`[ask] Retrieval failed for contract ${id}:`, err)
+      return Response.json({ error: "Retrieval failed" }, { status: 503 })
+    }
+
+    if (citations.length === 0) {
+      return Response.json(
+        { error: "No usable contract text available for this contract" },
+        { status: 400 },
+      )
+    }
+
     let answer: string | null
     try {
-      answer = await callQaLLM(contract.title, contract.extractedText, question)
+      answer = await callQaLLM(contract.title, buildContext(citations), question)
     } catch (err) {
       console.error(`[ask] LLM call failed for contract ${id}:`, err)
       return Response.json({ error: "AI call failed" }, { status: 503 })
@@ -137,6 +213,7 @@ export async function POST(
       answer,
       contractId: contract.id,
       contractTitle: contract.title,
+      citations,
     })
   })
 }

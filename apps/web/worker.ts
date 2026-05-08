@@ -24,6 +24,7 @@ import { storage } from "@/lib/storage"
 import { checkAndFireAlerts } from "@/lib/alerts/check"
 import { generateEmbedding } from "@/lib/embedding"
 import { getSubmission } from "@/lib/docuseal"
+import { chunkText } from "@/lib/ai/chunking"
 import type { ContractExtractJobData, ContractAiExtractJobData, AlertsCheckJobData, ContractEmbedJobData, SigningSyncJobData } from "@/lib/jobs/queues"
 import { contractAiExtractQueue, contractEmbedQueue, alertsCheckQueue, signingSyncQueue } from "@/lib/jobs/queues"
 
@@ -450,7 +451,19 @@ const embedWorker = new Worker<ContractEmbedJobData>(
             "updatedAt" = NOW()
     `
 
-    console.log(`[embed] Embedded contract ${contractId} (${embedding.length} dims)`)
+    const chunks = chunkText(extractedText)
+    await db.$executeRaw`DELETE FROM "ContractChunkEmbedding" WHERE "contractId" = ${contractId}`
+
+    for (const chunk of chunks) {
+      const chunkEmbedding = await generateEmbedding(chunk.text)
+      if (!chunkEmbedding) break
+      await db.$executeRaw`
+        INSERT INTO "ContractChunkEmbedding" ("id", "contractId", "chunkIndex", "text", "embedding", "model", "createdAt", "updatedAt")
+        VALUES (${crypto.randomUUID()}, ${contractId}, ${chunk.index}, ${chunk.text}, ${JSON.stringify(chunkEmbedding)}::vector, 'text-embedding-3-small', NOW(), NOW())
+      `
+    }
+
+    console.log(`[embed] Embedded contract ${contractId} (${embedding.length} dims, ${chunks.length} chunks)`)
   },
   { connection },
 )

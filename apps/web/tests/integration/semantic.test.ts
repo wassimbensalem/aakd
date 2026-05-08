@@ -225,4 +225,50 @@ describe("POST /api/contracts/[id]/ask", () => {
     )
     expect(res.status).toBe(404)
   })
+
+  it("answers using retrieved chunks and returns citations", async () => {
+    process.env.OPENAI_API_KEY = "test-key"
+
+    const { generateEmbedding } = await import("@/lib/embedding")
+    vi.mocked(generateEmbedding).mockResolvedValueOnce(Array.from({ length: 1536 }, () => 0.1))
+
+    vi.mocked(prisma.contract.findUnique).mockResolvedValueOnce({
+      id: "c1",
+      title: "Test Contract",
+      extractedText: "The customer may terminate on 30 days notice.",
+      organizationId: "org-1",
+    } as any)
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+      {
+        chunkIndex: 0,
+        text: "The customer may terminate on 30 days notice.",
+        similarity: 0.91,
+      },
+    ] as any)
+
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "The notice period is 30 days. See Excerpt 1." } }],
+      }),
+    } as any)
+
+    const { POST } = await import("@/app/api/contracts/[id]/ask/route")
+
+    const req = new Request("http://localhost/api/contracts/c1/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: "What is the notice period?" }),
+    })
+
+    const res = await requestContext.run(mockCtx, () =>
+      POST(req, { params: Promise.resolve({ id: "c1" }) }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.answer).toContain("30 days")
+    expect(body.citations).toHaveLength(1)
+    expect(body.citations[0].chunkIndex).toBe(0)
+    expect(body.citations[0].similarity).toBe(0.91)
+  })
 })

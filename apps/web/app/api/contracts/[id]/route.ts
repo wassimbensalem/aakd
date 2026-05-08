@@ -66,6 +66,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         folderId: true,
         docusealSubmissionId: true,
         signingUrl: true,
+        signingStatus: true,
         createdAt: true,
         updatedAt: true,
         owner: { select: { id: true, name: true, email: true } },

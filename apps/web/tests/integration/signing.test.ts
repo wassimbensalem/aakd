@@ -175,6 +175,7 @@ describe("POST /api/contracts/[id]/sign", () => {
       ...mockContract,
       docusealSubmissionId: "99",
       signingUrl: "https://docuseal.com/s/abc123",
+      signingStatus: "sent",
     } as any)
 
     // Mock the fetch for file download
@@ -204,6 +205,7 @@ describe("POST /api/contracts/[id]/sign", () => {
     const body = await res.json()
     expect(body.submissionId).toBe(99)
     expect(body.signingUrl).toBe("https://docuseal.com/s/abc123")
+    expect(body.signingStatus).toBe("sent")
 
     expect(prisma.contract.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -211,6 +213,7 @@ describe("POST /api/contracts/[id]/sign", () => {
         data: expect.objectContaining({
           docusealSubmissionId: "99",
           signingUrl: "https://docuseal.com/s/abc123",
+          signingStatus: "sent",
         }),
       }),
     )
@@ -323,6 +326,16 @@ describe("POST /api/webhooks/docuseal", () => {
 
     // Should have run a transaction
     expect(prisma.$transaction).toHaveBeenCalled()
+    expect(prisma.contract.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "contract-1" },
+        data: expect.objectContaining({
+          status: "ACTIVE",
+          signingStatus: "completed",
+          signingUrl: null,
+        }),
+      }),
+    )
 
     // Should have written SIGNED activity
     expect(writeActivity).toHaveBeenCalledWith(
@@ -330,6 +343,47 @@ describe("POST /api/webhooks/docuseal", () => {
       null,
       "SIGNED",
       expect.stringContaining("99"),
+    )
+  })
+
+  it("records terminal non-completed signing states without downloading a PDF", async () => {
+    const mockFoundContract = {
+      id: "contract-1",
+      organizationId: "org-1",
+      ownerId: "user-1",
+    }
+
+    vi.mocked(prisma.contract.findFirst).mockResolvedValueOnce(mockFoundContract as any)
+    vi.mocked(prisma.contract.update).mockResolvedValueOnce({
+      ...mockFoundContract,
+      signingStatus: "declined",
+    } as any)
+    global.fetch = vi.fn()
+
+    const { POST } = await import("@/app/api/webhooks/docuseal/route")
+    const { writeActivity } = await import("@/lib/db/activity")
+
+    const req = new Request("http://localhost/api/webhooks/docuseal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_type: "form.declined",
+        data: { id: 99, status: "declined", documents: [] },
+      }),
+    })
+    const res = await POST(req)
+
+    expect(res.status).toBe(200)
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(prisma.contract.update).toHaveBeenCalledWith({
+      where: { id: "contract-1" },
+      data: { signingStatus: "declined" },
+    })
+    expect(writeActivity).toHaveBeenCalledWith(
+      "contract-1",
+      null,
+      "UPDATED",
+      expect.stringContaining("declined"),
     )
   })
 })

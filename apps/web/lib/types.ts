@@ -17,6 +17,13 @@ export type ContractType =
   | "CUSTOMER"
   | "OTHER"
 
+export type SigningStatus =
+  | "sent"
+  | "completed"
+  | "declined"
+  | "expired"
+  | "failed"
+
 export type ActivityAction =
   | "CREATED"
   | "UPLOADED"
@@ -63,6 +70,7 @@ export interface Contract {
   hasExtractedText?: boolean
   docusealSubmissionId?: string | null
   signingUrl?: string | null
+  signingStatus?: SigningStatus | null
   createdAt: string
   updatedAt: string
 }

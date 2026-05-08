@@ -4,7 +4,7 @@
  * Never import any third-party DocuSeal SDK — use fetch only.
  */
 
-const BASE = process.env.DOCUSEAL_API_URL || "https://api.docuseal.com"
+const BASE = process.env.DOCUSEAL_API_URL || process.env.DOCUSEAL_BASE_URL || "https://api.docuseal.com"
 const KEY = process.env.DOCUSEAL_API_KEY
 
 function authHeaders(): Record<string, string> {

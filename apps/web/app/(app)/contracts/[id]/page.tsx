@@ -56,7 +56,7 @@ import { StatusBadge, TypeBadge } from "@/components/contract-badges"
 import { ActivityTimeline } from "@/components/activity-timeline"
 import { FileUploadZone } from "@/components/file-upload-zone"
 import { RelativeTime } from "@/components/relative-time"
-import { Contract, ContractFile, Activity, ContractStatus, ContractAlert, Tag, Approval, OrgMember } from "@/lib/types"
+import { Contract, ContractFile, Activity, ContractStatus, ContractAlert, Tag, Approval, OrgMember, SigningStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface AIExtraction {
@@ -96,6 +96,31 @@ function MetaField({ label, value }: { label: string; value?: string | number | 
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</p>
       <p className="mt-0.5 text-sm text-zinc-900">{String(value)}</p>
     </div>
+  )
+}
+
+const SIGNING_STATUS_LABELS: Record<SigningStatus, string> = {
+  sent: "Sent",
+  completed: "Completed",
+  declined: "Declined",
+  expired: "Expired",
+  failed: "Failed",
+}
+
+function SigningStatusBadge({ status }: { status: SigningStatus }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+        status === "completed" && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+        status === "sent" && "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
+        status === "declined" && "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+        status === "expired" && "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+        status === "failed" && "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200",
+      )}
+    >
+      {SIGNING_STATUS_LABELS[status]}
+    </span>
   )
 }
 
@@ -475,6 +500,9 @@ export default function ContractDetailPage() {
   const latestFile = files.find((f) => f.isLatest) ?? files[0]
   const pendingExtractions = extractions.filter((e) => e.status === "pending")
   const pendingApprovals = approvals.filter((a) => a.status === "pending")
+  const canSendForSignature =
+    contract.status === "AWAITING_SIGNATURE" &&
+    (!contract.signingStatus || ["declined", "expired", "failed"].includes(contract.signingStatus))
 
   // Determine if current user can request approvals (admin or legal in this org)
   const currentMember = members.find((m) => m.userId === session?.user?.id)
@@ -522,7 +550,7 @@ export default function ContractDetailPage() {
             <Upload className="size-4" />
             Upload
           </Button>
-          {contract.status === "AWAITING_SIGNATURE" && !contract.signingUrl && (
+          {canSendForSignature && (
             <Button
               size="sm"
               disabled={sendingForSignature}
@@ -617,23 +645,26 @@ export default function ContractDetailPage() {
                   <MetaField label="Owner" value={contract.owner?.name} />
                   <MetaField label="Folder" value={contract.folder?.name} />
                 </div>
+                {contract.signingStatus && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Signing</p>
+                    <SigningStatusBadge status={contract.signingStatus} />
+                    {contract.signingUrl && contract.signingStatus === "sent" && (
+                      <a
+                        href={contract.signingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline"
+                      >
+                        Open signing link <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                  </div>
+                )}
                 {contract.notes && (
                   <div className="mt-4">
                     <p className="text-xs text-zinc-500">Notes</p>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-900">{contract.notes}</p>
-                  </div>
-                )}
-                {contract.signingUrl && (
-                  <div className="mt-4 flex items-center gap-2">
-                    <p className="text-xs text-zinc-500">Signing link:</p>
-                    <a
-                      href={contract.signingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
-                    >
-                      Open <ExternalLink className="size-3" />
-                    </a>
                   </div>
                 )}
                 {alerts.length > 0 && (

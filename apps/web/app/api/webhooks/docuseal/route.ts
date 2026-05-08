@@ -16,9 +16,11 @@ interface DocuSealWebhookPayload {
   data: {
     id: number
     status: string
-    documents: { url: string }[]
+    documents?: { url: string }[]
   }
 }
+
+type SigningStatus = "completed" | "declined" | "expired" | "failed"
 
 /**
  * Verify the HMAC-SHA256 signature from DocuSeal.
@@ -53,6 +55,18 @@ function verifySignature(rawBody: string, signatureHeader: string | null): boole
   }
 }
 
+function normalizeSigningStatus(payload: DocuSealWebhookPayload): SigningStatus | null {
+  const eventType = payload.event_type.toLowerCase()
+  const dataStatus = payload.data.status?.toLowerCase()
+
+  if (eventType === "form.completed" || dataStatus === "completed") return "completed"
+  if (eventType === "form.declined" || dataStatus === "declined") return "declined"
+  if (eventType === "form.expired" || dataStatus === "expired") return "expired"
+  if (eventType === "form.failed" || dataStatus === "failed") return "failed"
+
+  return null
+}
+
 export async function POST(req: Request) {
   // Read raw body first — needed for HMAC verification
   const rawBody = await req.text()
@@ -69,8 +83,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  // Only process form.completed — acknowledge all others silently
-  if (payload.event_type !== "form.completed") {
+  const signingStatus = normalizeSigningStatus(payload)
+
+  // Only process terminal signing states — acknowledge all others silently
+  if (!signingStatus) {
     return Response.json({ ok: true })
   }
 
@@ -88,6 +104,22 @@ export async function POST(req: Request) {
 
   // If not found, return 200 so DocuSeal stops retrying
   if (!contract) {
+    return Response.json({ ok: true })
+  }
+
+  if (signingStatus !== "completed") {
+    await prisma.contract.update({
+      where: { id: contract.id },
+      data: { signingStatus },
+    })
+
+    await writeActivity(
+      contract.id,
+      null,
+      "UPDATED",
+      `DocuSeal submission #${data.id} marked ${signingStatus}`,
+    )
+
     return Response.json({ ok: true })
   }
 
@@ -145,7 +177,11 @@ export async function POST(req: Request) {
     }),
     prisma.contract.update({
       where: { id: contract.id },
-      data: { status: "ACTIVE" },
+      data: {
+        status: "ACTIVE",
+        signingStatus: "completed",
+        signingUrl: null,
+      },
     }),
   ])
 

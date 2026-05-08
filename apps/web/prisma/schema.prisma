@@ -161,6 +161,7 @@ model Contract {
   extractedText         String?
   docusealSubmissionId  String?
   signingUrl            String?
+  signingStatus         String?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 }

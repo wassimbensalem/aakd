@@ -105,6 +105,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       data: {
         docusealSubmissionId: String(submission.id),
         signingUrl,
+        signingStatus: "sent",
       },
     })
 
@@ -115,6 +116,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       `Sent for signature to ${signerEmail}`,
     )
 
-    return Response.json({ submissionId: submission.id, signingUrl }, { status: 200 })
+    return Response.json({ submissionId: submission.id, signingUrl, signingStatus: "sent" }, { status: 200 })
   })
 }

@@ -9,6 +9,14 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { OrgMember } from "@/lib/types"
 
 const ROLES = ["admin", "legal", "member", "viewer"]
@@ -119,28 +127,28 @@ export default function MembersPage() {
       </div>
 
       {/* Members table */}
-      <div className="rounded-lg border border-zinc-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500">Member</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500">Role</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500">Joined</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Member</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Joined</TableHead>
+              <TableHead className="w-12" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <tr key={i} className="border-b border-zinc-200 last:border-0">
+                <TableRow key={i}>
                   {Array.from({ length: 4 }).map((_, j) => (
-                    <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
-                </tr>
+                </TableRow>
               ))
             ) : members.map((m) => (
-              <tr key={m.id} className="border-b border-zinc-200 last:border-0">
-                <td className="px-4 py-3">
+              <TableRow key={m.id}>
+                <TableCell>
                   <div className="flex items-center gap-2.5">
                     <Avatar size="sm">
                       {m.user.image && <AvatarImage src={m.user.image} />}
@@ -151,8 +159,8 @@ export default function MembersPage() {
                       <p className="text-xs text-zinc-500">{m.user.email}</p>
                     </div>
                   </div>
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>
                   <Select value={m.role} onValueChange={(v) => v != null && changeRole(m.id, v)}>
                     <SelectTrigger className="h-7 w-28 text-xs">
                       <SelectValue />
@@ -161,11 +169,11 @@ export default function MembersPage() {
                       {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                </td>
-                <td className="px-4 py-3 text-zinc-500">
+                </TableCell>
+                <TableCell className="text-zinc-500">
                   {format(new Date(m.createdAt), "MMM d, yyyy")}
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -174,11 +182,11 @@ export default function MembersPage() {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   )

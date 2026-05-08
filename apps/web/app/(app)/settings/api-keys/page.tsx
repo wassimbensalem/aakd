@@ -10,6 +10,14 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { ApiKey } from "@/lib/types"
 
 const SCOPES = ["read", "write"] as const
@@ -136,48 +144,48 @@ export default function ApiKeysPage() {
       </div>
 
       {/* Keys table */}
-      <div className="rounded-lg border border-zinc-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500">Name</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500">Prefix</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500">Scopes</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500">Last Used</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Name</TableHead>
+              <TableHead>Prefix</TableHead>
+              <TableHead>Scopes</TableHead>
+              <TableHead>Last Used</TableHead>
+              <TableHead className="w-12" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading ? (
               Array.from({ length: 2 }).map((_, i) => (
-                <tr key={i} className="border-b border-zinc-200 last:border-0">
+                <TableRow key={i}>
                   {Array.from({ length: 5 }).map((_, j) => (
-                    <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
-                </tr>
+                </TableRow>
               ))
             ) : keys.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500 text-sm">
+              <TableRow>
+                <TableCell colSpan={5} className="py-8 text-center text-sm text-zinc-500">
                   No API keys yet
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               keys.map((k) => (
-                <tr key={k.id} className={`border-b border-zinc-200 last:border-0 ${k.revokedAt ? "opacity-50" : ""}`}>
-                  <td className="px-4 py-3 font-medium text-zinc-900">{k.name}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-500">{k.prefix}...</td>
-                  <td className="px-4 py-3">
+                <TableRow key={k.id} className={k.revokedAt ? "opacity-50" : ""}>
+                  <TableCell className="font-medium text-zinc-900">{k.name}</TableCell>
+                  <TableCell className="font-mono text-xs text-zinc-500">{k.prefix}...</TableCell>
+                  <TableCell>
                     <div className="flex gap-1">
                       {k.scopes.map((s) => (
                         <Badge key={s} variant="outline" className="text-xs">{s}</Badge>
                       ))}
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500">
+                  </TableCell>
+                  <TableCell className="text-zinc-500">
                     {k.lastUsedAt ? format(new Date(k.lastUsedAt), "MMM d, yyyy") : "Never"}
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     {!k.revokedAt && (
                       <Button
                         variant="ghost"
@@ -188,12 +196,12 @@ export default function ApiKeysPage() {
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {/* New key reveal modal */}

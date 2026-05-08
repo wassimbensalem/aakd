@@ -4,6 +4,13 @@ import { prismaAdapter } from "better-auth/adapters/prisma"
 import { prisma } from "@/lib/db/client"
 import { sendInvitationEmail } from "@/lib/email/invitation"
 
+const authOrigin = process.env.BETTER_AUTH_URL ?? "http://localhost:3000"
+const publicAppOrigin = process.env.NEXT_PUBLIC_APP_URL ?? authOrigin
+const devOrigins =
+  process.env.NODE_ENV === "production"
+    ? []
+    : ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003"]
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: { enabled: true },
@@ -31,7 +38,7 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24,       // refresh if 1 day old
   },
-  trustedOrigins: [process.env.BETTER_AUTH_URL ?? "http://localhost:3000"],
+  trustedOrigins: Array.from(new Set([authOrigin, publicAppOrigin, ...devOrigins])),
 })
 
 export type Auth = typeof auth

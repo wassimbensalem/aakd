@@ -96,7 +96,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const filename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
     const key = storage.storageKey(existing.organizationId, params.id, filename)
 
-    await storage.upload(key, buffer, mimeType)
+    try {
+      await storage.upload(key, buffer, mimeType)
+    } catch (err) {
+      console.error("[upload] storage upload failed:", err)
+      return new Response("Storage upload failed", { status: 502 })
+    }
 
     // Atomic: find prior latest, flip it, create new file + version row.
     // Without a transaction, a crash between the updateMany and create leaves
@@ -143,14 +148,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await writeActivity(params.id, ctx.userId, "UPLOADED", filename)
 
     // Enqueue text extraction job — heavy work must not block the API route
-    await contractExtractQueue.add("extract", {
-      contractId: params.id,
-      fileId: contractFile.id,
-      storageKey: key,
-    })
+    try {
+      await contractExtractQueue.add("extract", {
+        contractId: params.id,
+        fileId: contractFile.id,
+        storageKey: key,
+      })
+    } catch (err) {
+      console.error("[upload] failed to enqueue extraction job:", err)
+      return Response.json({ ...contractFile, downloadUrl: null, extractionQueued: false }, { status: 201 })
+    }
 
     const downloadUrl = await storage.getSignedDownloadUrl(key)
 
-    return Response.json({ ...contractFile, downloadUrl }, { status: 201 })
+    return Response.json({ ...contractFile, downloadUrl, extractionQueued: true }, { status: 201 })
   })
 }

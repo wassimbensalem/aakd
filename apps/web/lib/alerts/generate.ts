@@ -24,18 +24,24 @@ export async function generateAlertsForContract(
   const alerts: { contractId: string; alertType: string; triggerDate: Date }[] = []
 
   // Step 2: expiry-based alerts from endDate
-  if (endDate && endDate > now) {
-    const offsets: { type: string; days: number }[] = [
-      { type: "EXPIRY_90", days: 90 },
-      { type: "EXPIRY_30", days: 30 },
-      { type: "EXPIRY_7",  days: 7 },
-    ]
+  if (endDate) {
+    if (endDate > now) {
+      const offsets: { type: string; days: number }[] = [
+        { type: "EXPIRY_90", days: 90 },
+        { type: "EXPIRY_30", days: 30 },
+        { type: "EXPIRY_7",  days: 7 },
+      ]
 
-    for (const { type, days } of offsets) {
-      const triggerDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000)
-      if (triggerDate > now) {
-        alerts.push({ contractId, alertType: type, triggerDate })
+      for (const { type, days } of offsets) {
+        const triggerDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000)
+        if (triggerDate > now) {
+          alerts.push({ contractId, alertType: type, triggerDate })
+        }
       }
+    } else {
+      // Contract already expired — schedule EXPIRY_PAST alert to fire immediately
+      // (triggerDate in the past causes alerts.check to fire it on next run)
+      alerts.push({ contractId, alertType: "EXPIRY_PAST", triggerDate: endDate })
     }
   }
 

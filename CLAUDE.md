@@ -228,7 +228,7 @@ AI and email are optional — the app runs without them (AI features degrade gra
 
 ## Milestones
 
-### v1 — Foundation (current)
+### Open Source Track (ship first)
 
 | Milestone | Status | Scope |
 |---|---|---|
@@ -236,33 +236,24 @@ AI and email are optional — the app runs without them (AI features degrade gra
 | M1 — Renewal Tracking | ✅ Complete | AI extraction, alerts, email, full-text + semantic search |
 | M2 — Workflow + Signing | ✅ Complete | Approvals, DocuSeal signing, signing sync, MCP server |
 | M3 — AI Layer | ✅ Complete | Retrieval-grounded Contract Q&A with excerpt citations |
-| M4 — Launch Prep | Pending | Security audit, docs, v1.0.0 tag |
+| M4 — Launch Prep | ✅ Complete | Self-hosting docs, API reference, v1.0.0 changelog |
+| M5 — Ecosystem: Notifications | Pending | Full Slack/Teams/Outlook/Gmail event coverage, user-configurable webhooks, Zapier/Make connector |
+| M6 — Authoring | Pending | Browser-native contract editor + template library, Word import/export |
+| M7 — Obligation Tracking | Pending | Post-signature deliverables, SLAs, milestones, pass/fail status |
+| M8 — Analytics | Pending | Portfolio dashboard — KPIs, renewal timeline, status breakdown, contract health |
+| M9 — Ecosystem: CRM | Pending | HubSpot, Salesforce, Pipedrive — link contracts to deals, auto-create from CRM |
+| M10 — Redlining | Pending | Tracked changes, version comparison (may defer to post-launch) |
+| 🚀 | — | **Open Source Launch** — publish repo publicly, LinkedIn, developer communities |
 
-### v2 — Authoring + Intelligence
-
-| Milestone | Scope |
-|---|---|
-| M5 — Authoring | Browser-native contract editor (no Word round-trips), template library |
-| M6 — Clause Library | Versioned clause store, deviation tracking vs. approved language |
-| M7 — Obligation Tracking | Post-signature deliverable/SLA/milestone tracking, pass/fail status |
-| M8 — Analytics | Portfolio dashboard: KPIs, risk flags, cycle time, clause deviation rates |
-
-### v3 — Collaboration + AI Negotiation
+### Cloud / Hosted SaaS Track (after open source launch)
 
 | Milestone | Scope |
 |---|---|
-| M9 — Redlining | Tracked changes, internal markup and version comparison |
-| M10 — AI Playbook | AI redlining with playbook enforcement, auto-suggest approved fallbacks |
-| M11 — Counterparty Portal | External party collaborates and redlines in-browser, no email attachments |
-| M12 — Guided Contracting | Legal guardrails embedded in templates, self-serve sales contracting within guardrails |
-
-### v4 — Enterprise
-
-| Milestone | Scope |
-|---|---|
-| M13 — SSO / SAML | Enterprise identity providers (Okta, Azure AD, Google Workspace) |
-| M14 — CRM Integrations | Salesforce/HubSpot CPQ→contract generation, bi-directional sync |
-| M15 — Mobile | iOS + Android app |
+| C1 — Cloud Infra | Multi-tenant deployment, clauseflow.com, env isolation per org |
+| C2 — Billing | Stripe subscriptions, plan enforcement, usage tracking |
+| C3 — Managed AI | We host Anthropic/OpenAI keys, usage metering, per-org quotas |
+| C4 — AI Agents | Renewal Agent, Review Agent, Intake Agent (cloud-only) |
+| C5 — Enterprise | SSO/SAML (Okta, Azure AD), Google Drive/SharePoint import, commercial license |
 
 ---
 

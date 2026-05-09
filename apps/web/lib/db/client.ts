@@ -9,6 +9,8 @@ import { getRequestContext } from "@/lib/context"
 // causes a Prisma validation error (unknown field).
 const ORG_SCOPED_MODELS = new Set([
   "Contract", "Folder", "Tag", "ApiKey",
+  // M5: notification models with direct organizationId columns
+  "OrgNotificationChannel", "OutboundWebhook", "UserNotificationPreference",
 ])
 
 type ScopedQueryArgs = {

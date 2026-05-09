@@ -44,3 +44,9 @@ export const EVENT_LABELS: Record<NotificationEventName, string> = {
 export function isNotificationEventName(s: string): s is NotificationEventName {
   return NOTIFICATION_EVENT_SET.has(s)
 }
+
+/** Alias kept for callers that use the HUMAN_EVENT_LABELS name from fanout.ts. */
+export const HUMAN_EVENT_LABELS: Record<NotificationEventName, string> = EVENT_LABELS
+
+/** Semver-style API version sent in every outbound webhook payload. */
+export const WEBHOOK_API_VERSION = "2026-05-01"

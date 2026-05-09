@@ -5,61 +5,21 @@
  * single `notification.fanout` job on the queue and returns immediately.
  * The fanout worker (worker.ts) resolves recipients, builds payloads,
  * computes HMAC signatures, and enqueues every downstream delivery.
+ *
+ * All shared event-name types and label/default constants live in events.ts.
+ * This file re-exports them so callers don't need to update their import paths.
  */
 import { notificationFanoutQueue } from "@/lib/jobs/queues"
 
-export type NotificationEventName =
-  | "contract.uploaded"
-  | "contract.extracted"
-  | "approval.requested"
-  | "approval.approved"
-  | "approval.rejected"
-  | "contract.sent_for_signing"
-  | "contract.signed"
-  | "contract.expiring_soon"
-  | "contract.expired"
-  | "contract.archived"
+export {
+  type NotificationEventName,
+  NOTIFICATION_EVENTS as NOTIFICATION_EVENT_NAMES,
+  HUMAN_EVENT_LABELS,
+  DEFAULT_EMAIL_ENABLED,
+  WEBHOOK_API_VERSION,
+} from "@/lib/notifications/events"
 
-export const NOTIFICATION_EVENT_NAMES: ReadonlyArray<NotificationEventName> = [
-  "contract.uploaded",
-  "contract.extracted",
-  "approval.requested",
-  "approval.approved",
-  "approval.rejected",
-  "contract.sent_for_signing",
-  "contract.signed",
-  "contract.expiring_soon",
-  "contract.expired",
-  "contract.archived",
-]
-
-export const HUMAN_EVENT_LABELS: Record<NotificationEventName, string> = {
-  "contract.uploaded": "Contract file uploaded",
-  "contract.extracted": "AI metadata extracted",
-  "approval.requested": "Approval request assigned to me",
-  "approval.approved": "Approval decision: approved",
-  "approval.rejected": "Approval decision: rejected",
-  "contract.sent_for_signing": "Contract sent for signing",
-  "contract.signed": "Contract signed",
-  "contract.expiring_soon": "Contract expiring soon",
-  "contract.expired": "Contract expired",
-  "contract.archived": "Contract archived",
-}
-
-export const DEFAULT_EMAIL_ENABLED: Record<NotificationEventName, boolean> = {
-  "contract.uploaded": false,
-  "contract.extracted": false,
-  "approval.requested": true,
-  "approval.approved": true,
-  "approval.rejected": true,
-  "contract.sent_for_signing": false,
-  "contract.signed": true,
-  "contract.expiring_soon": true,
-  "contract.expired": true,
-  "contract.archived": false,
-}
-
-export const WEBHOOK_API_VERSION = "2026-05-01"
+import type { NotificationEventName } from "@/lib/notifications/events"
 
 /**
  * Enqueue a fan-out job for a single contract lifecycle event. Returns

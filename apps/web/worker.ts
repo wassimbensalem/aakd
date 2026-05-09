@@ -1186,18 +1186,17 @@ const deliverWorker = new Worker<NotificationDeliverJobData>(
         const delay = RETRY_DELAYS_MS[data.attempt - 1] ?? 30_000
 
         // Each retry is a fresh delivery log row so the per-attempt history is
-        // visible end-to-end.
+        // visible end-to-end. Fetch both fields in one query to avoid race
+        // conditions if the original log is deleted between reads.
+        const originalLog = await db.webhookDeliveryLog.findUnique({
+          where: { id: data.deliveryLogId },
+          select: { eventName: true, contractId: true },
+        })
         const nextLog = await db.webhookDeliveryLog.create({
           data: {
             webhookId: data.webhookId,
-            eventName: (await db.webhookDeliveryLog.findUnique({
-              where: { id: data.deliveryLogId },
-              select: { eventName: true },
-            }))?.eventName ?? "unknown",
-            contractId: (await db.webhookDeliveryLog.findUnique({
-              where: { id: data.deliveryLogId },
-              select: { contractId: true },
-            }))?.contractId ?? "unknown",
+            eventName: originalLog?.eventName ?? "unknown",
+            contractId: originalLog?.contractId ?? "unknown",
             payload: JSON.parse(data.payload) as object,
             attempt: nextAttempt,
             status: "pending",

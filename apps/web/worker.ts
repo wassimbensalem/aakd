@@ -27,8 +27,41 @@ import { getSubmission, isAllowedDocuSealUrl } from "@/lib/docuseal"
 import { chunkText } from "@/lib/ai/chunking"
 import { sendAlertEmailById } from "@/lib/email"
 import { sendApprovalRequestEmail } from "@/lib/email/approval"
-import type { ContractExtractJobData, ContractAiExtractJobData, AlertsCheckJobData, ContractEmbedJobData, SigningSyncJobData, EmailJobData } from "@/lib/jobs/queues"
-import { contractAiExtractQueue, contractEmbedQueue, alertsCheckQueue, signingSyncQueue, emailQueue } from "@/lib/jobs/queues"
+import { sendEventNotificationEmail } from "@/lib/email/event-notification"
+import { sendSlackEvent, sendTeamsEvent } from "@/lib/notifications/webhooks"
+import { decrypt } from "@/lib/notifications/crypto"
+import {
+  DEFAULT_EMAIL_ENABLED,
+  WEBHOOK_API_VERSION,
+  type NotificationEventName,
+} from "@/lib/notifications/fanout"
+import { enqueueNotification } from "@/lib/notifications/fanout"
+import type {
+  ContractExtractJobData,
+  ContractAiExtractJobData,
+  AlertsCheckJobData,
+  ContractEmbedJobData,
+  SigningSyncJobData,
+  EmailJobData,
+  NotificationFanoutJobData,
+  NotificationDeliverJobData,
+} from "@/lib/jobs/queues"
+import {
+  contractAiExtractQueue,
+  contractEmbedQueue,
+  alertsCheckQueue,
+  signingSyncQueue,
+  emailQueue,
+  notificationFanoutQueue,
+  notificationDeliverQueue,
+} from "@/lib/jobs/queues"
+
+// ─── Boot check: notification encryption key ─────────────────────────────────
+// Refuse to start if the key is missing — silently storing plaintext URLs and
+// signing secrets would be a serious security regression.
+if (!process.env.NOTIFICATION_ENCRYPTION_KEY) {
+  throw new Error("NOTIFICATION_ENCRYPTION_KEY is required")
+}
 
 // ─── Redis connection ─────────────────────────────────────────────────────────
 
@@ -436,6 +469,9 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
     // Enqueue embedding generation after AI extraction
     await contractEmbedQueue.add("embed", { contractId, extractedText: textToAnalyze })
     console.log(`[ai_extract] Enqueued embed job for contract ${contractId}`)
+
+    // Fan out the contract.extracted event — system-actor (no user)
+    await enqueueNotification("contract.extracted", contractId, null, {})
   },
   { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
 )
@@ -653,6 +689,9 @@ async function persistSignedDocument(contract: SyncableContract, documentUrl: st
       detail: `Contract signed via DocuSeal sync (submission #${contract.docusealSubmissionId})`,
     },
   })
+
+  // Fan out contract.signed — system-actor; recipients resolved by fanout worker
+  await enqueueNotification("contract.signed", contract.id, null, {})
 }
 
 async function syncDocuSealContract(contract: SyncableContract) {
@@ -747,6 +786,25 @@ const emailWorker = new Worker<EmailJobData>(
       })
       return
     }
+    if (data.kind === "event_notification") {
+      // orgName is looked up here so the event_notification job stays small
+      // (the fanout job already loaded the full contract context).
+      const contract = await getWorkerPrisma().contract.findUnique({
+        where: { id: data.contractId },
+        select: { organization: { select: { name: true } } },
+      })
+      await sendEventNotificationEmail({
+        to: data.to,
+        eventName: data.eventName,
+        contractId: data.contractId,
+        contractTitle: data.contractTitle,
+        actorName: data.actorName,
+        orgName: contract?.organization.name ?? "your organization",
+        metadata: data.metadata,
+        unsubscribeToken: data.unsubscribeToken,
+      })
+      return
+    }
   },
   { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
 )
@@ -756,6 +814,428 @@ emailWorker.on("completed", (job) =>
 )
 emailWorker.on("failed", (job, err) =>
   console.error(`[email] Job ${job?.id} failed:`, err),
+)
+
+// ─── Worker: notification.fanout ──────────────────────────────────────────────
+
+function appUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.BETTER_AUTH_URL ??
+    "http://localhost:3000"
+  )
+}
+
+function unsubscribeToken(userId: string, orgId: string, eventName: string): string {
+  const secret = process.env.BETTER_AUTH_SECRET
+  if (!secret) {
+    throw new Error("BETTER_AUTH_SECRET is required to mint unsubscribe tokens")
+  }
+  return crypto
+    .createHmac("sha256", secret)
+    .update(`${userId}:${orgId}:${eventName}`)
+    .digest("base64url")
+}
+
+const fanoutWorker = new Worker<NotificationFanoutJobData>(
+  "notification.fanout",
+  async (job: Job<NotificationFanoutJobData>) => {
+    const { eventName, contractId, actorId, metadata } = job.data
+    console.log(`[fanout] ${eventName} contract=${contractId} actor=${actorId ?? "system"}`)
+
+    const db = getWorkerPrisma()
+
+    // 1. Resolve contract + org context
+    const contract = await db.contract.findUnique({
+      where: { id: contractId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        ownerId: true,
+        counterpartyName: true,
+        organizationId: true,
+        organization: { select: { id: true, name: true } },
+      },
+    })
+    if (!contract) {
+      console.warn(`[fanout] Contract ${contractId} not found — skipping`)
+      return
+    }
+
+    const actor = actorId
+      ? await db.user.findUnique({
+          where: { id: actorId },
+          select: { id: true, name: true, email: true },
+        })
+      : null
+
+    // 2. Build the standard webhook envelope (used for outbound webhook delivery)
+    const envelope = {
+      event: eventName,
+      orgId: contract.organizationId,
+      timestamp: new Date().toISOString(),
+      apiVersion: WEBHOOK_API_VERSION,
+      data: {
+        contractId: contract.id,
+        contractTitle: contract.title,
+        counterpartyName: contract.counterpartyName,
+        status: contract.status,
+        ownerId: contract.ownerId,
+        actorId: actor?.id ?? null,
+        actorName: actor?.name ?? null,
+        metadata,
+      },
+    }
+
+    // 3. Slack/Teams channels (DB-configured)
+    const channels = await db.orgNotificationChannel.findMany({
+      where: { organizationId: contract.organizationId, enabled: true },
+      select: { id: true },
+    })
+    for (const ch of channels) {
+      await notificationDeliverQueue.add("deliver", {
+        kind: "slack", // overwritten below if teams; lookup happens in deliver worker via channelId
+        channelId: ch.id,
+        eventName,
+        contractId: contract.id,
+        contractTitle: contract.title,
+        counterpartyName: contract.counterpartyName,
+        actorName: actor?.name ?? null,
+        appUrl: appUrl(),
+        metadata,
+      } as NotificationDeliverJobData)
+    }
+
+    // 4. Outbound webhooks — pre-create delivery log row, pre-compute HMAC, enqueue
+    const webhooks = await db.outboundWebhook.findMany({
+      where: { organizationId: contract.organizationId, enabled: true },
+      select: { id: true, signingSecret: true },
+    })
+    for (const wh of webhooks) {
+      const payload = JSON.stringify(envelope)
+      let signature: string
+      try {
+        const secretHex = decrypt(wh.signingSecret)
+        const secretBytes = Buffer.from(secretHex, "hex")
+        signature =
+          "sha256=" +
+          crypto.createHmac("sha256", secretBytes).update(payload).digest("hex")
+      } catch (err) {
+        console.error(`[fanout] failed to decrypt signingSecret for webhook ${wh.id}:`, err)
+        continue
+      }
+
+      const log = await db.webhookDeliveryLog.create({
+        data: {
+          webhookId: wh.id,
+          eventName,
+          contractId: contract.id,
+          payload: envelope as object,
+          attempt: 1,
+          status: "pending",
+        },
+        select: { id: true },
+      })
+
+      await notificationDeliverQueue.add("deliver", {
+        kind: "webhook",
+        webhookId: wh.id,
+        deliveryLogId: log.id,
+        attempt: 1,
+        payload,
+        signature,
+      })
+    }
+
+    // 5. Email recipients filtered by user preference
+    const recipientIds = await resolveEmailRecipientIds(
+      eventName as NotificationEventName,
+      contract.id,
+      contract.ownerId,
+      contract.organizationId,
+      actor?.id ?? null,
+      metadata,
+    )
+    if (recipientIds.size > 0) {
+      const users = await db.user.findMany({
+        where: { id: { in: Array.from(recipientIds) } },
+        select: { id: true, email: true },
+      })
+      const prefs = await db.userNotificationPreference.findMany({
+        where: {
+          userId: { in: users.map((u) => u.id) },
+          organizationId: contract.organizationId,
+          eventName,
+        },
+        select: { userId: true, emailEnabled: true },
+      })
+      const prefByUser = new Map(prefs.map((p) => [p.userId, p.emailEnabled]))
+      const defaultEnabled = DEFAULT_EMAIL_ENABLED[eventName as NotificationEventName] ?? false
+
+      for (const u of users) {
+        const enabled = prefByUser.has(u.id) ? prefByUser.get(u.id)! : defaultEnabled
+        if (!enabled) continue
+        const token = unsubscribeToken(u.id, contract.organizationId, eventName)
+        await emailQueue.add("send", {
+          kind: "event_notification",
+          eventName,
+          to: u.email,
+          contractId: contract.id,
+          contractTitle: contract.title,
+          actorName: actor?.name ?? null,
+          metadata,
+          unsubscribeToken: token,
+        })
+      }
+    }
+  },
+  { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
+)
+
+fanoutWorker.on("completed", (job) =>
+  console.log(`[fanout] Job ${job.id} completed`),
+)
+fanoutWorker.on("failed", (job, err) =>
+  console.error(`[fanout] Job ${job?.id} failed:`, err),
+)
+
+// Resolve per-event default recipients. Returns the set of userIds whose
+// preferences should be checked. The caller filters by UserNotificationPreference
+// (defaulting to DEFAULT_EMAIL_ENABLED when no row exists).
+async function resolveEmailRecipientIds(
+  eventName: NotificationEventName,
+  contractId: string,
+  ownerId: string,
+  orgId: string,
+  actorId: string | null,
+  metadata: Record<string, string | number | boolean | null>,
+): Promise<Set<string>> {
+  const db = getWorkerPrisma()
+  const ids = new Set<string>()
+
+  switch (eventName) {
+    case "contract.uploaded":
+    case "contract.extracted":
+    case "contract.sent_for_signing":
+    case "contract.signed":
+    case "contract.archived":
+      ids.add(ownerId)
+      break
+
+    case "approval.requested": {
+      const assigneeId = typeof metadata.assigneeId === "string" ? metadata.assigneeId : null
+      if (assigneeId) ids.add(assigneeId)
+      break
+    }
+
+    case "approval.approved":
+    case "approval.rejected": {
+      const requesterId = typeof metadata.requesterId === "string" ? metadata.requesterId : null
+      if (requesterId) ids.add(requesterId)
+      ids.add(ownerId)
+      break
+    }
+
+    case "contract.expiring_soon":
+    case "contract.expired": {
+      ids.add(ownerId)
+      const admins = await db.member.findMany({
+        where: { organizationId: orgId, role: "admin" },
+        select: { userId: true },
+      })
+      for (const a of admins) ids.add(a.userId)
+      break
+    }
+  }
+
+  // Don't email the actor about their own action.
+  if (actorId) ids.delete(actorId)
+  return ids
+}
+
+// ─── Worker: notification.deliver ─────────────────────────────────────────────
+
+const RETRY_DELAYS_MS = [10_000, 30_000] // attempt 1 → 2 uses index 0; 2 → 3 uses index 1
+
+const deliverWorker = new Worker<NotificationDeliverJobData>(
+  "notification.deliver",
+  async (job: Job<NotificationDeliverJobData>) => {
+    const data = job.data
+
+    if (data.kind === "slack" || data.kind === "teams") {
+      // Channel kind is determined by the DB record, not the job's kind hint
+      // (fanout enqueues every channel without lookup).
+      const channel = await getWorkerPrisma().orgNotificationChannel.findUnique({
+        where: { id: data.channelId },
+        select: { channelType: true, webhookUrl: true, enabled: true },
+      })
+      if (!channel || !channel.enabled) {
+        console.warn(`[deliver] channel ${data.channelId} missing or disabled`)
+        return
+      }
+
+      let plaintextUrl: string
+      try {
+        plaintextUrl = decrypt(channel.webhookUrl)
+      } catch (err) {
+        console.error(`[deliver] failed to decrypt webhookUrl for channel ${data.channelId}:`, err)
+        return
+      }
+
+      const opts = {
+        webhookUrl: plaintextUrl,
+        eventName: data.eventName,
+        contractTitle: data.contractTitle,
+        counterpartyName: data.counterpartyName,
+        actorName: data.actorName,
+        contractId: data.contractId,
+        appUrl: data.appUrl,
+        metadata: data.metadata,
+      }
+
+      if (channel.channelType === "slack") {
+        await sendSlackEvent(opts)
+      } else if (channel.channelType === "teams") {
+        await sendTeamsEvent(opts)
+      } else {
+        console.warn(`[deliver] unknown channelType="${channel.channelType}" for channel ${data.channelId}`)
+      }
+      return
+    }
+
+    if (data.kind === "webhook") {
+      const db = getWorkerPrisma()
+      const webhook = await db.outboundWebhook.findUnique({
+        where: { id: data.webhookId },
+        select: { url: true, enabled: true },
+      })
+      if (!webhook || !webhook.enabled) {
+        console.warn(`[deliver] webhook ${data.webhookId} missing or disabled`)
+        await db.webhookDeliveryLog.update({
+          where: { id: data.deliveryLogId },
+          data: { status: "failed", responseBody: "webhook disabled or deleted" },
+        })
+        return
+      }
+
+      let plaintextUrl: string
+      try {
+        plaintextUrl = decrypt(webhook.url)
+      } catch (err) {
+        console.error(`[deliver] failed to decrypt webhook URL for ${data.webhookId}:`, err)
+        await db.webhookDeliveryLog.update({
+          where: { id: data.deliveryLogId },
+          data: { status: "failed", responseBody: "decryption failed" },
+        })
+        return
+      }
+
+      const start = Date.now()
+      let httpStatus: number | null = null
+      let bodyText: string | null = null
+      let success = false
+
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 10_000)
+      try {
+        const res = await fetch(plaintextUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-ClauseFlow-Signature": data.signature,
+          },
+          body: data.payload,
+          signal: controller.signal,
+        })
+        httpStatus = res.status
+        try {
+          const text = await res.text()
+          bodyText = text.slice(0, 1000)
+        } catch {
+          bodyText = null
+        }
+        success = res.ok
+      } catch (err) {
+        console.error(`[deliver] webhook ${data.webhookId} attempt ${data.attempt} failed:`, err)
+      } finally {
+        clearTimeout(timer)
+      }
+
+      const durationMs = Date.now() - start
+
+      if (success) {
+        await db.webhookDeliveryLog.update({
+          where: { id: data.deliveryLogId },
+          data: {
+            status: "success",
+            httpStatus,
+            responseBody: bodyText,
+            durationMs,
+            deliveredAt: new Date(),
+          },
+        })
+        return
+      }
+
+      await db.webhookDeliveryLog.update({
+        where: { id: data.deliveryLogId },
+        data: {
+          status: "failed",
+          httpStatus,
+          responseBody: bodyText,
+          durationMs,
+        },
+      })
+
+      if (data.attempt < 3) {
+        const nextAttempt = data.attempt + 1
+        const delay = RETRY_DELAYS_MS[data.attempt - 1] ?? 30_000
+
+        // Each retry is a fresh delivery log row so the per-attempt history is
+        // visible end-to-end.
+        const nextLog = await db.webhookDeliveryLog.create({
+          data: {
+            webhookId: data.webhookId,
+            eventName: (await db.webhookDeliveryLog.findUnique({
+              where: { id: data.deliveryLogId },
+              select: { eventName: true },
+            }))?.eventName ?? "unknown",
+            contractId: (await db.webhookDeliveryLog.findUnique({
+              where: { id: data.deliveryLogId },
+              select: { contractId: true },
+            }))?.contractId ?? "unknown",
+            payload: JSON.parse(data.payload) as object,
+            attempt: nextAttempt,
+            status: "pending",
+          },
+          select: { id: true },
+        })
+
+        await notificationDeliverQueue.add(
+          "deliver",
+          {
+            kind: "webhook",
+            webhookId: data.webhookId,
+            deliveryLogId: nextLog.id,
+            attempt: nextAttempt,
+            payload: data.payload,
+            signature: data.signature,
+          },
+          { delay },
+        )
+      }
+      return
+    }
+  },
+  { connection, defaultJobOptions: { attempts: 1 } }, // retries are managed inline, never by BullMQ
+)
+
+deliverWorker.on("completed", (job) =>
+  console.log(`[deliver] Job ${job.id} completed`),
+)
+deliverWorker.on("failed", (job, err) =>
+  console.error(`[deliver] Job ${job?.id} failed:`, err),
 )
 
 // Register the daily cron (9 AM UTC). BullMQ deduplicates by name + pattern,
@@ -786,11 +1266,15 @@ async function shutdown() {
   await alertsWorker.close()
   await signingWorker.close()
   await emailWorker.close()
+  await fanoutWorker.close()
+  await deliverWorker.close()
   await contractAiExtractQueue.close()
   await contractEmbedQueue.close()
   await alertsCheckQueue.close()
   await signingSyncQueue.close()
   await emailQueue.close()
+  await notificationFanoutQueue.close()
+  await notificationDeliverQueue.close()
   await getWorkerPrisma().$disconnect()
   process.exit(0)
 }

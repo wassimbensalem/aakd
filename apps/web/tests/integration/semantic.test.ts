@@ -245,27 +245,27 @@ describe("POST /api/contracts/[id]/ask", () => {
     // Capture the SQL fragment passed into $queryRaw so we can assert that
     // the chunk query carries an organizationId filter — without it, an
     // attacker who guessed a contract id could pull chunks from another org.
-    const queryRawSpy = vi
-      .mocked(prisma.$queryRaw)
-      .mockImplementationOnce(async (sql: any) => {
-        // Prisma.sql produces an object with `strings` and `values`
-        const stringsJoined: string = (sql?.strings ?? []).join(" ")
-        const values: unknown[] = sql?.values ?? []
+    const queryRawSpy = vi.mocked(prisma.$queryRaw).mockImplementationOnce(((
+      sql: any,
+    ) => {
+      // Prisma.sql produces an object with `strings` and `values`
+      const stringsJoined: string = (sql?.strings ?? []).join(" ")
+      const values: unknown[] = sql?.values ?? []
 
-        expect(stringsJoined).toMatch(/JOIN\s+"Contract"/i)
-        expect(stringsJoined).toMatch(/c\."organizationId"/)
-        // org-1 must appear among the bound parameters; org-2 must not.
-        expect(values).toContain("org-1")
-        expect(values).not.toContain("org-2")
+      expect(stringsJoined).toMatch(/JOIN\s+"Contract"/i)
+      expect(stringsJoined).toMatch(/c\."organizationId"/)
+      // org-1 must appear among the bound parameters; org-2 must not.
+      expect(values).toContain("org-1")
+      expect(values).not.toContain("org-2")
 
-        return [
-          {
-            chunkIndex: 0,
-            text: "Confidentiality applies for 5 years.",
-            similarity: 0.92,
-          },
-        ] as any
-      })
+      return Promise.resolve([
+        {
+          chunkIndex: 0,
+          text: "Confidentiality applies for 5 years.",
+          similarity: 0.92,
+        },
+      ]) as any
+    }) as any)
 
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,

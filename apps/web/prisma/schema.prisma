@@ -27,6 +27,9 @@ model User {
   apiKeys        ApiKey[]
   approvalRequests    Approval[] @relation("ApprovalRequester")
   approvalAssignments Approval[] @relation("ApprovalAssignee")
+  createdNotificationChannels OrgNotificationChannel[] @relation("NotificationChannelCreatedBy")
+  createdOutboundWebhooks     OutboundWebhook[]        @relation("OutboundWebhookCreatedBy")
+  notificationPreferences     UserNotificationPreference[]
 }
 
 model Session {
@@ -82,6 +85,9 @@ model Organization {
   folders     Folder[]
   tags        Tag[]
   apiKeys     ApiKey[]
+  notificationChannels    OrgNotificationChannel[]
+  outboundWebhooks        OutboundWebhook[]
+  notificationPreferences UserNotificationPreference[]
 }
 
 model Member {
@@ -337,4 +343,66 @@ model Approval {
   decidedAt      DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+// ─── M5: Ecosystem Notifications ─────────────────────────────────────────────
+
+model OrgNotificationChannel {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channelType    String       // "slack" | "teams"
+  webhookUrl     String       // AES-256-GCM encrypted at rest
+  label          String       // max 100 chars
+  enabled        Boolean      @default(true)
+  createdById    String
+  createdBy      User         @relation("NotificationChannelCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model OutboundWebhook {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  url            String       // AES-256-GCM encrypted at rest
+  label          String       // max 100 chars
+  signingSecret  String       // 32-byte hex, AES-256-GCM encrypted at rest
+  enabled        Boolean      @default(true)
+  createdById    String
+  createdBy      User         @relation("OutboundWebhookCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  deliveryLogs   WebhookDeliveryLog[]
+}
+
+model WebhookDeliveryLog {
+  id           String          @id @default(cuid())
+  webhookId    String
+  webhook      OutboundWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventName    String          // one of the 10 canonical event names
+  contractId   String
+  payload      Json            // full envelope sent in the request body
+  attempt      Int             // 1 | 2 | 3
+  httpStatus   Int?            // null on network error
+  responseBody String?         // first 1000 chars of response body, null on network error
+  durationMs   Int?            // round-trip ms, null on network error
+  status       String          // "pending" | "success" | "failed"
+  deliveredAt  DateTime?       // set on success
+  createdAt    DateTime        @default(now())
+}
+
+model UserNotificationPreference {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventName      String       // one of the 10 canonical event names
+  emailEnabled   Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, organizationId, eventName])
 }

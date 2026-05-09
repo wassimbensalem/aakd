@@ -105,6 +105,28 @@ export async function POST(req: Request) {
     if (rest.counterpartyName) rest.counterpartyName = stripHtml(rest.counterpartyName)
     if (rest.notes) rest.notes = stripHtml(rest.notes)
 
+    // Verify folder + tags belong to the caller's org before connecting them.
+    // Prisma's `connect` does not re-check ownership, so without this an
+    // attacker who guesses an id could attach a cross-tenant folder/tag.
+    if (folderId) {
+      const folder = await prisma.folder.findFirst({
+        where: { id: folderId, organizationId: ctx.organizationId },
+        select: { id: true },
+      })
+      if (!folder) {
+        return Response.json({ error: "Folder not found in this organization" }, { status: 400 })
+      }
+    }
+    if (tagIds.length > 0) {
+      const found = await prisma.tag.findMany({
+        where: { id: { in: tagIds }, organizationId: ctx.organizationId },
+        select: { id: true },
+      })
+      if (found.length !== tagIds.length) {
+        return Response.json({ error: "One or more tags not found in this organization" }, { status: 400 })
+      }
+    }
+
     const data: Prisma.ContractCreateInput = {
       ...rest,
       owner: { connect: { id: ctx.userId } },

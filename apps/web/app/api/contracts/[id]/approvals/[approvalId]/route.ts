@@ -65,60 +65,73 @@ export async function PATCH(
       return Response.json({ error: "Approval already decided" }, { status: 409 })
     }
 
-    // Update the approval record
-    const updated = await prisma.approval.update({
-      where: { id: params.approvalId },
-      data: {
-        status: body.decision,
-        comment: body.comment ?? null,
-        decidedAt: new Date(),
-      },
-      include: {
-        requestedBy: { select: USER_SELECT },
-        assignedTo: { select: USER_SELECT },
-      },
+    // Decide approval, evaluate the gating condition, and (conditionally)
+    // advance the contract status atomically. Two reviewers approving the
+    // last pending approval at the same instant could otherwise both observe
+    // "no unresolved" and double-advance.
+    const { updated, advancedTo } = await prisma.$transaction(async (tx) => {
+      const updated = await tx.approval.update({
+        where: { id: params.approvalId },
+        data: {
+          status: body.decision,
+          comment: body.comment ?? null,
+          decidedAt: new Date(),
+        },
+        include: {
+          requestedBy: { select: USER_SELECT },
+          assignedTo: { select: USER_SELECT },
+        },
+      })
+
+      let advancedTo: "AWAITING_SIGNATURE" | "INTERNAL_REVIEW" | null = null
+
+      if (body.decision === "approved" && contract.status === "PENDING_APPROVAL") {
+        const unresolvedApprovals = await tx.approval.findMany({
+          where: {
+            contractId: params.id,
+            status: { in: ["pending", "rejected"] },
+          },
+          select: { id: true },
+        })
+        if (unresolvedApprovals.length === 0) {
+          await tx.contract.update({
+            where: { id: params.id, status: "PENDING_APPROVAL" },
+            data: { status: "AWAITING_SIGNATURE" },
+          })
+          advancedTo = "AWAITING_SIGNATURE"
+        }
+      }
+
+      if (body.decision === "rejected" && contract.status === "PENDING_APPROVAL") {
+        await tx.contract.update({
+          where: { id: params.id, status: "PENDING_APPROVAL" },
+          data: { status: "INTERNAL_REVIEW" },
+        })
+        advancedTo = "INTERNAL_REVIEW"
+      }
+
+      return { updated, advancedTo }
     })
 
-    // Write audit activity
+    // Side-effect audit writes — outside the transaction so a write failure
+    // here cannot rewind the approval decision.
     const action = body.decision === "approved" ? "APPROVED" : "REJECTED"
     const detail = body.comment
       ? `${body.decision === "approved" ? "Approved" : "Rejected"}: ${body.comment}`
       : body.decision === "approved"
         ? "Approved"
         : "Rejected"
-
     await writeActivity(params.id, ctx.userId, action, detail)
 
-    // On approval, auto-advance only after every approval request has approved.
-    if (body.decision === "approved" && contract.status === "PENDING_APPROVAL") {
-      const unresolvedApprovals = await prisma.approval.findMany({
-        where: {
-          contractId: params.id,
-          status: { in: ["pending", "rejected"] },
-        },
-        select: { id: true },
-      })
-
-      if (unresolvedApprovals.length === 0) {
-        await prisma.contract.update({
-          where: { id: params.id },
-          data: { status: "AWAITING_SIGNATURE" },
-        })
-        await writeActivity(
-          params.id,
-          ctx.userId,
-          "STATUS_CHANGED",
-          "PENDING_APPROVAL → AWAITING_SIGNATURE",
-          { from: "PENDING_APPROVAL", to: "AWAITING_SIGNATURE" },
-        )
-      }
-    }
-
-    if (body.decision === "rejected" && contract.status === "PENDING_APPROVAL") {
-      await prisma.contract.update({
-        where: { id: params.id },
-        data: { status: "INTERNAL_REVIEW" },
-      })
+    if (advancedTo === "AWAITING_SIGNATURE") {
+      await writeActivity(
+        params.id,
+        ctx.userId,
+        "STATUS_CHANGED",
+        "PENDING_APPROVAL → AWAITING_SIGNATURE",
+        { from: "PENDING_APPROVAL", to: "AWAITING_SIGNATURE" },
+      )
+    } else if (advancedTo === "INTERNAL_REVIEW") {
       await writeActivity(
         params.id,
         ctx.userId,

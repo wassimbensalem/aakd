@@ -23,6 +23,18 @@ function warnOllamaDimensionMismatch() {
   }
 }
 
+/**
+ * Returns the provider/model identifier that will be used for the next call
+ * to generateEmbedding(). Stored alongside the vector so we can identify
+ * stale rows after a provider switch.
+ */
+export function currentEmbeddingModel(): string | null {
+  if (process.env.OPENAI_API_KEY) return "text-embedding-3-small"
+  if (process.env.OLLAMA_BASE_URL)
+    return process.env.OLLAMA_EMBEDDING_MODEL ?? "mxbai-embed-large"
+  return null
+}
+
 export async function generateEmbedding(text: string): Promise<number[] | null> {
   // text-embedding-3-small supports ~8191 tokens. Roughly 4 chars per token,
   // so ~32K chars fits comfortably; cap at 30K for headroom.

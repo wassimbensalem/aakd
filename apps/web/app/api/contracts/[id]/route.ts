@@ -139,7 +139,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!existing) return new Response("Not Found", { status: 404 })
 
     // Validate status transition
-    const { tagIds, startDate, endDate, renewalDate, status, ...rest } = parsed.data
+    const { tagIds, folderId, startDate, endDate, renewalDate, status, ...rest } = parsed.data
     if (status && status !== existing.status) {
       const allowed = STATUS_TRANSITIONS[existing.status] ?? []
       if (!allowed.includes(status)) {
@@ -147,6 +147,26 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           { error: `Invalid transition: ${existing.status} → ${status}. Allowed: ${allowed.join(", ") || "none"}` },
           { status: 422 }
         )
+      }
+    }
+
+    // Verify folder + tags belong to the caller's org before connecting them.
+    if (folderId) {
+      const folder = await prisma.folder.findFirst({
+        where: { id: folderId, organizationId: ctx.organizationId },
+        select: { id: true },
+      })
+      if (!folder) {
+        return Response.json({ error: "Folder not found in this organization" }, { status: 400 })
+      }
+    }
+    if (tagIds && tagIds.length > 0) {
+      const found = await prisma.tag.findMany({
+        where: { id: { in: tagIds }, organizationId: ctx.organizationId },
+        select: { id: true },
+      })
+      if (found.length !== tagIds.length) {
+        return Response.json({ error: "One or more tags not found in this organization" }, { status: 400 })
       }
     }
 
@@ -158,6 +178,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         data: {
           ...rest,
           status: status ?? undefined,
+          folderId: folderId === undefined ? undefined : folderId,
           startDate: startDate === undefined ? undefined : startDate ? new Date(startDate) : null,
           endDate: endDate === undefined ? undefined : endDate ? new Date(endDate) : null,
           renewalDate: renewalDate === undefined ? undefined : renewalDate ? new Date(renewalDate) : null,

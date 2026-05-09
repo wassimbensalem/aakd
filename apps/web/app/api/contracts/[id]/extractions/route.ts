@@ -80,6 +80,17 @@ const FIELD_MAP: Record<string, { column: string; coerce: CoerceFn }> = {
   autoRenewal:      { column: "autoRenewal",       coerce: (v) => v === "true" || v === "1" },
 }
 
+/**
+ * Returns true if the coerced value is safe to write. NaN floats, NaN ints,
+ * and Invalid Date objects all coerce silently in JS but Prisma will either
+ * reject them or — worse — persist nonsense like NaN/null.
+ */
+function isCoercedValueValid(value: unknown): boolean {
+  if (typeof value === "number") return Number.isFinite(value)
+  if (value instanceof Date) return !Number.isNaN(value.getTime())
+  return value !== undefined
+}
+
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
@@ -116,11 +127,27 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       }
 
       const contractUpdates: Record<string, unknown> = {}
+      const invalidFields: string[] = []
       for (const ex of pending) {
         const mapping = FIELD_MAP[ex.field]
         if (mapping && ex.rawValue !== null) {
-          contractUpdates[mapping.column] = mapping.coerce(ex.rawValue)
+          const coerced = mapping.coerce(ex.rawValue)
+          if (isCoercedValueValid(coerced)) {
+            contractUpdates[mapping.column] = coerced
+          } else {
+            invalidFields.push(ex.field)
+          }
         }
+      }
+
+      if (invalidFields.length > 0) {
+        return Response.json(
+          {
+            error: "One or more AI-extracted values failed type coercion",
+            fields: invalidFields,
+          },
+          { status: 422 },
+        )
       }
 
       await prisma.$transaction([
@@ -158,25 +185,41 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
 
     if (body.action === "edit") {
-      // Update rawValue first, then fall through to accept logic below
+      // Update rawValue first, then fall through to accept logic below.
+      // Mark the extraction as user-edited so the audit trail reflects the
+      // human override of the AI value.
       await prisma.aIExtraction.update({
         where: { id: extractionId },
-        data: { rawValue: body.newValue },
+        data: { rawValue: body.newValue, extractedBy: "user" },
       })
       extraction.rawValue = body.newValue
     }
 
     if (body.action === "accept" || body.action === "edit") {
-      await prisma.aIExtraction.update({
-        where: { id: extractionId },
-        data: { status: "accepted" },
-      })
-
       const mapping = FIELD_MAP[extraction.field]
       if (mapping && extraction.rawValue !== null) {
+        const coerced = mapping.coerce(extraction.rawValue)
+        if (!isCoercedValueValid(coerced)) {
+          return Response.json(
+            {
+              error: "AI-extracted value failed type coercion",
+              field: extraction.field,
+            },
+            { status: 422 },
+          )
+        }
+        await prisma.aIExtraction.update({
+          where: { id: extractionId },
+          data: { status: "accepted" },
+        })
         await prisma.contract.update({
           where: { id: params.id },
-          data: { [mapping.column]: mapping.coerce(extraction.rawValue) },
+          data: { [mapping.column]: coerced },
+        })
+      } else {
+        await prisma.aIExtraction.update({
+          where: { id: extractionId },
+          data: { status: "accepted" },
         })
       }
 

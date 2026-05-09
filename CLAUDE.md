@@ -237,7 +237,7 @@ AI and email are optional — the app runs without them (AI features degrade gra
 | M2 — Workflow + Signing | ✅ Complete | Approvals, DocuSeal signing, signing sync, MCP server |
 | M3 — AI Layer | ✅ Complete | Retrieval-grounded Contract Q&A with excerpt citations |
 | M4 — Launch Prep | ✅ Complete | Self-hosting docs, API reference, v1.0.0 changelog |
-| M5 — Ecosystem: Notifications | Pending | Full Slack/Teams/Outlook/Gmail event coverage, user-configurable webhooks, Zapier/Make connector |
+| M5 — Ecosystem: Notifications | ✅ Complete | Full Slack/Teams event coverage, user-configurable webhooks, Zapier/Make connector, one-click unsubscribe |
 | M6 — Authoring | Pending | Browser-native contract editor + template library, Word import/export |
 | M7 — Obligation Tracking | Pending | Post-signature deliverables, SLAs, milestones, pass/fail status |
 | M8 — Analytics | Pending | Portfolio dashboard — KPIs, renewal timeline, status breakdown, contract health |

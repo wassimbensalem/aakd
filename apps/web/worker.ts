@@ -30,6 +30,7 @@ import { sendApprovalRequestEmail } from "@/lib/email/approval"
 import { sendEventNotificationEmail } from "@/lib/email/event-notification"
 import { sendSlackEvent, sendTeamsEvent } from "@/lib/notifications/webhooks"
 import { decrypt } from "@/lib/notifications/crypto"
+import { buildUnsubscribeToken } from "@/lib/notifications/unsubscribe-token"
 import {
   DEFAULT_EMAIL_ENABLED,
   WEBHOOK_API_VERSION,
@@ -826,16 +827,8 @@ function appUrl(): string {
   )
 }
 
-function unsubscribeToken(userId: string, orgId: string, eventName: string): string {
-  const secret = process.env.BETTER_AUTH_SECRET
-  if (!secret) {
-    throw new Error("BETTER_AUTH_SECRET is required to mint unsubscribe tokens")
-  }
-  return crypto
-    .createHmac("sha256", secret)
-    .update(`${userId}:${orgId}:${eventName}`)
-    .digest("base64url")
-}
+// Use shared helper so token format stays in lockstep with verifyUnsubscribeToken()
+const unsubscribeToken = buildUnsubscribeToken
 
 const fanoutWorker = new Worker<NotificationFanoutJobData>(
   "notification.fanout",

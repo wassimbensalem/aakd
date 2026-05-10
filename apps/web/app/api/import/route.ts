@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     })()
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const importJobModel = (prisma as any).importJob
+    const importJobModel = prisma.importJob
     if (!importJobModel) {
       // Prisma client not yet regenerated for M10 — return empty list
       // gracefully instead of 500-ing the settings page.

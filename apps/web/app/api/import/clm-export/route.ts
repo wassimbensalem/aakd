@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     // worker can read it without a schema change beyond what's already
     // planned for M10.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const importJobModel = (prisma as any).importJob
+    const importJobModel = prisma.importJob
     const job = await importJobModel.create({
       data: {
         id: jobId,

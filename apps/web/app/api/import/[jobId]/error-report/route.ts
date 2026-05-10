@@ -9,7 +9,7 @@ export async function GET(req: Request, { params }: { params: { jobId: string } 
 
   return requestContext.run(ctx, async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const importJobModel = (prisma as any).importJob
+    const importJobModel = prisma.importJob
     if (!importJobModel) {
       return Response.json({ error: "Not Found" }, { status: 404 })
     }

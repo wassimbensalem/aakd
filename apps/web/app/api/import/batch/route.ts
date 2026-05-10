@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
   return requestContext.run(ctx, async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const importJobModel = (prisma as any).importJob
+    const importJobModel = prisma.importJob
     const jobId = crypto.randomUUID()
 
     if (single instanceof File && isZipFile(single)) {

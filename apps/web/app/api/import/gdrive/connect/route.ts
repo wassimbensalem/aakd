@@ -74,7 +74,7 @@ export async function DELETE(req: Request) {
 
   return requestContext.run(ctx, async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const integrationModel = (prisma as any).googleDriveIntegration
+    const integrationModel = prisma.googleDriveIntegration
     if (!integrationModel) {
       return Response.json({ error: "Not Found" }, { status: 404 })
     }

@@ -1,19 +1,7 @@
-// Thin wrapper around the (yet-to-exist) import.process queue. The m10-core
-// branch defines `importProcessQueue` in lib/jobs/queues.ts. Until that lands,
-// dynamic-resolve at call time so this module's own typecheck does not break.
+// Re-export from the real queue module (was a dynamic-import shim while m10-core was pending)
+export type { ImportProcessJobData } from "@/lib/jobs/queues"
 
-export interface ImportProcessJobData {
-  importJobId: string
-  organizationId: string
-  createdById: string
-}
-
-export async function enqueueImportProcess(data: ImportProcessJobData): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const queues = (await import("@/lib/jobs/queues")) as any
-  const queue = queues.importProcessQueue ?? queues.getImportProcessQueue?.()
-  if (!queue) {
-    throw new Error("import.process queue is not configured")
-  }
-  await queue.add(`import-${data.importJobId}`, data)
+export async function enqueueImportProcess(data: import("@/lib/jobs/queues").ImportProcessJobData): Promise<void> {
+  const { importProcessQueue } = await import("@/lib/jobs/queues")
+  await importProcessQueue.add(`import-${data.importJobId}`, data)
 }

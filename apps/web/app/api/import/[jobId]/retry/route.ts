@@ -11,9 +11,9 @@ export async function POST(req: Request, { params }: { params: { jobId: string }
 
   return requestContext.run(ctx, async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const importJobModel = (prisma as any).importJob
+    const importJobModel = prisma.importJob
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const importRowModel = (prisma as any).importRow
+    const importRowModel = prisma.importRow
     if (!importJobModel || !importRowModel) {
       return Response.json({ error: "Not Found" }, { status: 404 })
     }

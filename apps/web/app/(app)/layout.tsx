@@ -1,43 +1,49 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { LayoutDashboard, FileText, Search, Settings, LogOut, Moon, Sun, Shield, ChevronLeft, ChevronRight, BotIcon } from "lucide-react"
-import { useTheme } from "next-themes"
-import { useSession, useActiveOrganization, signOut, organization } from "@/lib/auth/client"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Skeleton } from "@/components/ui/skeleton"
+import {
+  LayoutDashboard, FileText, Folder, Settings, Bell,
+  ChevronRight, PanelLeftClose, PanelLeftOpen, LogOut, FileText as LogoIcon
+} from "lucide-react"
+import { useSession, useActiveOrganization, signOut } from "@/lib/auth/client"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { CmdK } from "@/components/cmd-k"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { href: "/dashboard",    icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/contracts",    icon: FileText,         label: "Contracts" },
-  { href: "/search",       icon: Search,           label: "Search" },
-  { href: "/settings/org", icon: Settings,         label: "Settings" },
+  { label: "Dashboard", href: "/dashboard", Icon: LayoutDashboard },
+  { label: "Contracts", href: "/contracts", Icon: FileText },
+  { label: "Folders", href: "/contracts?view=folders", Icon: Folder },
+  { label: "Settings", href: "/settings/org", Icon: Settings },
 ]
 
 function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2)
+  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
 }
 
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+function Breadcrumbs() {
+  const pathname = usePathname()
+  const parts = pathname.split("/").filter(Boolean)
   return (
-    <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="text-zinc-400 hover:text-white transition-colors"
-      aria-label="Toggle theme"
-    >
-      <Sun className="size-4 dark:hidden" />
-      <Moon className="size-4 hidden dark:block" />
-    </button>
+    <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+      {parts.map((part, i) => {
+        const isLast = i === parts.length - 1
+        const label = part.charAt(0).toUpperCase() + part.slice(1)
+        return (
+          <span key={i} className="flex items-center gap-1">
+            {i > 0 && <ChevronRight className="h-3.5 w-3.5" />}
+            <span className={cn(isLast ? "text-foreground font-medium" : "")}>
+              {label}
+            </span>
+          </span>
+        )
+      })}
+    </nav>
   )
 }
 
@@ -47,11 +53,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession()
   const { data: activeOrg, isPending: orgPending } = useActiveOrganization()
   const [collapsed, setCollapsed] = useState(false)
-  const [aiStatus, setAiStatus] = useState<{ provider: string | null; model: string | null } | null>(null)
-
-  useEffect(() => {
-    fetch("/api/ai-status").then(r => r.json()).then(setAiStatus).catch(() => {})
-  }, [])
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -61,25 +62,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isPending && !orgPending && session?.user && !activeOrg) {
-      // Auto-select the first existing org if the user already has one,
-      // instead of always redirecting to /create-org on every fresh login.
-      organization.list().then((result) => {
-        const orgs = result?.data
-        if (orgs && orgs.length > 0) {
-          organization.setActive({ organizationId: orgs[0].id })
-        } else {
-          router.replace("/create-org")
-        }
-      }).catch(() => {
-        router.replace("/create-org")
-      })
+      router.replace("/create-org")
     }
   }, [isPending, orgPending, session, activeOrg, router])
 
   if (isPending || orgPending) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <div className="w-64 space-y-3">
+        <div className="space-y-3 w-64">
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-4 w-1/2" />
@@ -91,124 +81,112 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!session?.user) return null
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
       <aside
         className={cn(
-          "flex h-screen shrink-0 flex-col bg-zinc-900 text-white transition-all duration-200",
-          collapsed ? "w-16" : "w-[220px]",
+          "flex flex-col border-r border-border bg-slate-900 transition-[width] duration-200 shrink-0",
+          collapsed ? "w-14" : "w-56"
         )}
       >
         {/* Logo */}
-        <div className="flex h-14 items-center gap-2 border-b border-zinc-800 px-3">
-          <Shield className="size-6 shrink-0 text-indigo-400" />
+        <div className={cn("flex items-center gap-2.5 h-14 px-3 border-b border-slate-800", collapsed && "justify-center px-2")}>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary shrink-0">
+            <LogoIcon className="h-3.5 w-3.5 text-primary-foreground" />
+          </div>
           {!collapsed && (
-            <span className="text-sm font-semibold text-white">ClauseFlow</span>
+            <span className="font-semibold text-sm tracking-tight text-white">ClauseFlow</span>
           )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-2">
-          <div className="space-y-0.5">
-            {navItems.map(({ href, icon: Icon, label }) => {
-              const isActive =
-                pathname === href ||
-                (href !== "/dashboard" && pathname.startsWith(href + "/")) ||
-                (href === "/settings/org" && pathname.startsWith("/settings"))
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-indigo-600 text-white"
-                      : "text-zinc-400 hover:bg-zinc-800 hover:text-white",
-                  )}
-                  title={collapsed ? label : undefined}
-                >
-                  <Icon className="size-4 shrink-0" />
-                  {!collapsed && <span>{label}</span>}
-                </Link>
-              )
-            })}
-          </div>
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+          {navItems.map(({ label, href, Icon }) => {
+            const isActive = href === "/contracts?view=folders"
+              ? pathname === "/contracts" && false
+              : pathname.startsWith(href.split("?")[0]) && (href === "/dashboard" ? pathname === "/dashboard" : true)
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+                  isActive
+                    ? "bg-white/10 text-white font-medium"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white",
+                  collapsed && "justify-center px-2"
+                )}
+                title={collapsed ? label : undefined}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>{label}</span>}
+              </Link>
+            )
+          })}
         </nav>
 
-        {/* AI model status */}
-        {!collapsed && aiStatus && (
-          <div className="px-3 py-2 border-t border-zinc-800">
-            <div className="flex items-center gap-2">
-              <BotIcon className="size-3.5 shrink-0 text-zinc-500" />
-              {aiStatus.provider ? (
-                <span className="text-xs text-zinc-400 truncate">
-                  <span className="text-zinc-300">{aiStatus.provider}</span>
-                  {aiStatus.model && <span> · {aiStatus.model}</span>}
-                </span>
-              ) : (
-                <span className="text-xs text-zinc-500">No AI configured</span>
-              )}
+        {/* Org + User */}
+        <div className="border-t border-slate-800 p-2 space-y-2">
+          {!collapsed && activeOrg && (
+            <div className="px-2 py-1.5 rounded-md bg-white/5">
+              <p className="text-xs font-medium truncate text-slate-300">{activeOrg.name}</p>
+              <p className="text-xs text-slate-400">Organization</p>
             </div>
-          </div>
-        )}
-
-        {/* Collapse toggle */}
-        <div className="border-t border-zinc-800 px-3 py-2">
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            className="flex w-full items-center gap-2.5 rounded-md px-0 py-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? (
-              <ChevronRight className="size-4 shrink-0" />
-            ) : (
-              <>
-                <ChevronLeft className="size-4 shrink-0" />
-                <span>Collapse</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* User section */}
-        <div className="border-t border-zinc-800 p-3">
-          <div className={cn("flex items-center gap-2.5", collapsed && "justify-center")}>
-            <Avatar className="size-7 shrink-0">
+          )}
+          <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
+            <Avatar className="h-7 w-7 shrink-0">
               {session.user.image && <AvatarImage src={session.user.image} />}
-              <AvatarFallback className="bg-zinc-700 text-xs font-medium text-white">
-                {getInitials(session.user.name ?? session.user.email)}
-              </AvatarFallback>
+              <AvatarFallback className="text-xs bg-slate-700 text-slate-200">{getInitials(session.user.name ?? session.user.email)}</AvatarFallback>
             </Avatar>
             {!collapsed && (
-              <>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-white">
-                    {session.user.name ?? session.user.email}
-                  </p>
-                  {activeOrg && (
-                    <p className="truncate text-xs text-zinc-400">{activeOrg.name}</p>
-                  )}
-                </div>
-                <ThemeToggle />
-                <button
-                  className="text-zinc-400 hover:text-white transition-colors"
-                  onClick={() =>
-                    signOut({ fetchOptions: { onSuccess: () => router.push("/login") } })
-                  }
-                  aria-label="Sign out"
-                >
-                  <LogOut className="size-4" />
-                </button>
-              </>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate text-slate-200">{session.user.name}</p>
+                <p className="text-xs truncate text-slate-400">{session.user.email}</p>
+              </div>
+            )}
+            {!collapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 text-slate-400 hover:text-white hover:bg-white/5"
+                onClick={() => signOut({ fetchOptions: { onSuccess: () => router.push("/login") } })}
+                title="Sign out"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </Button>
             )}
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+      {/* Main */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Top bar */}
+        <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-background px-4 shrink-0">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCollapsed((v) => !v)}
+            >
+              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </Button>
+            <Breadcrumbs />
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
+              <Bell className="h-4 w-4" />
+            </Button>
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
 
       <CmdK />
     </div>

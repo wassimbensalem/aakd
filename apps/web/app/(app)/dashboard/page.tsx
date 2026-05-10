@@ -1,279 +1,124 @@
 import Link from "next/link"
 import { cookies } from "next/headers"
-import { differenceInDays, formatDistanceToNow } from "date-fns"
-import { Upload, FileText, Archive, Sparkles, CheckCircle, XCircle } from "lucide-react"
-import { StatCard } from "@/components/stat-card"
-import { StatusBadge, DaysRemainingBadge } from "@/components/contract-badges"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Contract, ContractAlert, Activity } from "@/lib/types"
+import { FileText, Clock, CheckSquare, PenSquare, Plus } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ContractStatusBadge } from "@/components/contract-status-badge"
+import { Contract } from "@/lib/types"
 
-async function apiFetch<T>(path: string): Promise<T | null> {
+async function fetchContracts(params: string): Promise<Contract[]> {
   try {
     const cookieStore = await cookies()
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}${path}`,
-      { headers: { cookie: cookieStore.toString() }, cache: "no-store" },
+      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/contracts?${params}`,
+      { headers: { cookie: cookieStore.toString() }, cache: "no-store" }
     )
-    if (!res.ok) return null
-    return res.json()
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.contracts ?? data ?? []
   } catch {
-    return null
+    return []
   }
 }
 
-const ACTION_VERBS: Partial<Record<string, string>> = {
-  CREATED:            "created",
-  UPLOADED:           "uploaded",
-  UPDATED:            "edited",
-  STATUS_CHANGED:     "changed status of",
-  METADATA_EXTRACTED: "extracted AI fields from",
-  METADATA_UPDATED:   "updated AI fields for",
-  ARCHIVED:           "archived",
-  TAGGED:             "tagged",
-  COMMENTED:          "commented on",
-  SIGNED:             "signed",
-  APPROVED:           "approved",
-  REJECTED:           "rejected",
-}
-
-function ActivityIcon({ action }: { action: string }) {
-  if (action === "CREATED" || action === "UPLOADED") {
-    return (
-      <span className="flex size-6 items-center justify-center rounded-full bg-indigo-50">
-        <Upload className="size-3 text-indigo-500" />
-      </span>
-    )
-  }
-  if (action === "UPDATED" || action === "METADATA_UPDATED") {
-    return (
-      <span className="flex size-6 items-center justify-center rounded-full bg-zinc-100">
-        <FileText className="size-3 text-zinc-500" />
-      </span>
-    )
-  }
-  if (action === "ARCHIVED") {
-    return (
-      <span className="flex size-6 items-center justify-center rounded-full bg-zinc-100">
-        <Archive className="size-3 text-zinc-500" />
-      </span>
-    )
-  }
-  if (action === "METADATA_EXTRACTED") {
-    return (
-      <span className="flex size-6 items-center justify-center rounded-full bg-violet-50">
-        <Sparkles className="size-3 text-violet-500" />
-      </span>
-    )
-  }
-  if (action === "SIGNED" || action === "APPROVED") {
-    return (
-      <span className="flex size-6 items-center justify-center rounded-full bg-emerald-50">
-        <CheckCircle className="size-3 text-emerald-500" />
-      </span>
-    )
-  }
-  if (action === "REJECTED") {
-    return (
-      <span className="flex size-6 items-center justify-center rounded-full bg-red-50">
-        <XCircle className="size-3 text-red-500" />
-      </span>
-    )
-  }
+function StatCard({ title, value, Icon, gradient, iconColor }: {
+  title: string
+  value: number
+  Icon: React.ComponentType<{ className?: string }>
+  gradient: string
+  iconColor: string
+}) {
   return (
-    <span className="flex size-6 items-center justify-center rounded-full bg-zinc-100">
-      <FileText className="size-3 text-zinc-400" />
-    </span>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <div className={`flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br ${gradient}`}>
+          <Icon className={`h-4 w-4 ${iconColor}`} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-2xl font-semibold">{value}</p>
+      </CardContent>
+    </Card>
   )
 }
 
-type ActivityWithContract = Activity & {
-  contract?: { id: string; title: string } | null
-}
-
 export default async function DashboardPage() {
-  const [totalData, activeData, expiredData, recentData, alertsData, activitiesData] = await Promise.all([
-    apiFetch<{ total: number }>("/api/contracts?limit=1"),
-    apiFetch<{ total: number }>("/api/contracts?status=ACTIVE&limit=1"),
-    apiFetch<{ total: number }>("/api/contracts?status=EXPIRED&limit=1"),
-    apiFetch<{ contracts: Contract[] }>("/api/contracts?limit=6"),
-    apiFetch<{ alerts: ContractAlert[] }>("/api/alerts?limit=5"),
-    apiFetch<{ activities: ActivityWithContract[] }>("/api/activities?limit=8"),
+  const [active, recent, pendingApproval, awaitingSig] = await Promise.all([
+    fetchContracts("status=ACTIVE&limit=1"),
+    fetchContracts("limit=5"),
+    fetchContracts("status=PENDING_APPROVAL&limit=1"),
+    fetchContracts("status=AWAITING_SIGNATURE&limit=1"),
   ])
 
-  const total = totalData?.total ?? 0
-  const active = activeData?.total ?? 0
-  const expired = expiredData?.total ?? 0
-  const recentContracts = recentData?.contracts ?? []
-  const alerts = alertsData?.alerts ?? []
-  const activities = activitiesData?.activities ?? []
-  const expiringSoon = alerts.filter((a) => a.alertType === "EXPIRY_30" && !a.firedAt).length
+  const activeCount = Array.isArray(active) ? active.length : 0
+  const pendingCount = Array.isArray(pendingApproval) ? pendingApproval.length : 0
+  const awaitingCount = Array.isArray(awaitingSig) ? awaitingSig.length : 0
+
+  const recentContracts: Contract[] = Array.isArray(recent) ? recent : []
 
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-semibold text-zinc-900">Dashboard</h1>
-
-      {/* Stat Cards */}
-      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard title="Total Contracts" value={total} variant="default" />
-        <StatCard title="Active" value={active} variant="default" />
-        <StatCard title="Expiring Soon" value={expiringSoon} subtitle="Next 30 days" variant="warning" />
-        <StatCard title="Expired" value={expired} variant="danger" />
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Dashboard</h1>
+        <Link href="/contracts/new" className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[0.8rem] font-medium rounded-[min(var(--radius-md),12px)] bg-primary text-primary-foreground transition-colors hover:opacity-90">
+          <Plus className="h-3.5 w-3.5" />
+          New Contract
+        </Link>
       </div>
 
-      {/* Two Column Layout */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left: Recent Contracts */}
-        <div className="rounded-lg border border-zinc-200 bg-white lg:col-span-2">
-          <div className="border-b border-zinc-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-zinc-900">Recent Contracts</h2>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Active Contracts" value={activeCount} Icon={FileText} gradient="from-emerald-400 to-emerald-600" iconColor="text-white" />
+        <StatCard title="Expiring in 30 days" value={0} Icon={Clock} gradient="from-amber-400 to-orange-500" iconColor="text-white" />
+        <StatCard title="Pending Approval" value={pendingCount} Icon={CheckSquare} gradient="from-blue-400 to-blue-600" iconColor="text-white" />
+        <StatCard title="Awaiting Signature" value={awaitingCount} Icon={PenSquare} gradient="from-violet-400 to-violet-600" iconColor="text-white" />
+      </div>
+
+      <div>
+        <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Contracts</h2>
+        {recentContracts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 py-16 gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
+              <FileText className="h-6 w-6 text-primary" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium">No contracts yet</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Upload your first contract to get started</p>
+            </div>
+            <Link href="/contracts/new" className="inline-flex items-center gap-1.5 h-8 px-3 text-[0.8rem] font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
+              <Plus className="h-3.5 w-3.5" />
+              Upload your first contract
+            </Link>
           </div>
-          {recentContracts.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-zinc-500">
-              No contracts yet.{" "}
-              <Link href="/contracts/new" className="text-zinc-900 underline underline-offset-4">
-                Upload your first
-              </Link>
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Name</TableHead>
-                  <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Counterparty</TableHead>
-                  <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Status</TableHead>
-                  <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">End Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+        ) : (
+          <div className="rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Title</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Type</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Counterparty</th>
+                </tr>
+              </thead>
+              <tbody>
                 {recentContracts.map((c) => (
-                  <TableRow key={c.id} className="hover:bg-zinc-50">
-                    <TableCell className="py-2.5">
-                      <Link
-                        href={`/contracts/${c.id}`}
-                        className="text-sm font-medium text-zinc-900 hover:underline"
-                      >
+                  <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <Link href={`/contracts/${c.id}`} className="font-medium hover:text-primary transition-colors">
                         {c.title}
                       </Link>
-                    </TableCell>
-                    <TableCell className="py-2.5 text-sm text-zinc-500">
-                      {c.counterpartyName ?? "—"}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      <StatusBadge status={c.status} />
-                    </TableCell>
-                    <TableCell className="py-2.5 text-sm text-zinc-500">
-                      {c.endDate
-                        ? new Date(c.endDate).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })
-                        : "—"}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{c.contractType}</td>
+                    <td className="px-4 py-3">
+                      <ContractStatusBadge status={c.status} />
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{c.counterpartyName ?? "—"}</td>
+                  </tr>
                 ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-4">
-          {/* Expiring Soon */}
-          <div className="rounded-lg border border-zinc-200 bg-white">
-            <div className="border-b border-zinc-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-zinc-900">Expiring Soon</h2>
-            </div>
-            <div className="divide-y divide-zinc-100">
-              {alerts.filter((a) => !a.firedAt).length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-zinc-500">
-                  No contracts expiring soon
-                </p>
-              ) : (
-                alerts
-                  .filter((a) => !a.firedAt)
-                  .slice(0, 5)
-                  .map((alert) => {
-                    const days = differenceInDays(new Date(alert.triggerDate), new Date())
-                    return (
-                      <div
-                        key={alert.id}
-                        className="flex items-center justify-between px-4 py-2.5"
-                      >
-                        <div className="min-w-0 flex-1">
-                          {alert.contract ? (
-                            <Link
-                              href={`/contracts/${alert.contract.id}`}
-                              className="block truncate text-sm font-medium text-zinc-900 hover:underline"
-                            >
-                              {alert.contract.title}
-                            </Link>
-                          ) : (
-                            <p className="truncate text-sm text-zinc-500">Unknown</p>
-                          )}
-                          <p className="truncate text-xs text-zinc-500">
-                            {alert.alertType.replace(/_/g, " ")}
-                          </p>
-                        </div>
-                        <DaysRemainingBadge days={days} />
-                      </div>
-                    )
-                  })
-              )}
-            </div>
+              </tbody>
+            </table>
           </div>
-
-          {/* Activity */}
-          <div className="rounded-lg border border-zinc-200 bg-white">
-            <div className="border-b border-zinc-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-zinc-900">Activity</h2>
-            </div>
-            <div className="divide-y divide-zinc-100">
-              {activities.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-zinc-500">
-                  No recent activity
-                </p>
-              ) : (
-                activities.map((a) => {
-                  const verb = ACTION_VERBS[a.action] ?? a.action.toLowerCase().replace(/_/g, " ")
-                  const actor = a.user?.name ?? a.actorLabel
-                  const contractTitle = a.contract?.title
-                  const contractId = a.contract?.id
-                  const ago = formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })
-                  return (
-                    <div key={a.id} className="flex items-start gap-3 px-4 py-2.5">
-                      <ActivityIcon action={a.action} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-zinc-500 leading-snug">
-                          <span className="font-medium text-zinc-900">{actor}</span>{" "}
-                          {verb}{" "}
-                          {contractTitle && contractId ? (
-                            <Link
-                              href={`/contracts/${contractId}`}
-                              className="font-medium text-zinc-900 hover:underline"
-                            >
-                              {contractTitle}
-                            </Link>
-                          ) : contractTitle ? (
-                            <span className="font-medium text-zinc-900">{contractTitle}</span>
-                          ) : null}
-                        </p>
-                        <p className="mt-0.5 text-xs text-zinc-500">{ago}</p>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   )

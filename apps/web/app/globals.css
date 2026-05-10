@@ -9,109 +9,49 @@
   }
 }
 
-/* ─── ClauseFlow — Vercel theme ───────────────────────────────────────
-   CSS variables in HSL channel format (h s% l%) for Tailwind v3 compatibility.
-   Tailwind generates hsl(var(--x)) so variables must contain channel values,
-   not complete color functions like oklch().
-   Pure neutral palette — no chroma, no hue. Same aesthetic as vercel.com.
-   ──────────────────────────────────────────────────────────────────── */
-
 @layer base {
   :root {
-    /* Geometry */
+    --background: 0 0% 99%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 221 83% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221 83% 53%;
     --radius: 0.5rem;
-
-    /* Surface */
-    --background:             0 0% 100%;
-    --foreground:             0 0% 4%;
-
-    /* Cards / popovers */
-    --card:                   0 0% 100%;
-    --card-foreground:        0 0% 4%;
-    --popover:                0 0% 100%;
-    --popover-foreground:     0 0% 4%;
-
-    /* Primary action — near-black button, white text */
-    --primary:                0 0% 9%;
-    --primary-foreground:     0 0% 98%;
-
-    /* Secondary — off-white surface, dark text */
-    --secondary:              0 0% 96%;
-    --secondary-foreground:   0 0% 9%;
-
-    /* Muted — same as secondary */
-    --muted:                  0 0% 96%;
-    --muted-foreground:       0 0% 45%;
-
-    /* Accent — same as secondary (hover states, light tint) */
-    --accent:                 0 0% 96%;
-    --accent-foreground:      0 0% 9%;
-
-    /* Destructive — standard red */
-    --destructive:            0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-
-    /* Borders / inputs */
-    --border:                 0 0% 90%;
-    --input:                  0 0% 90%;
-    --ring:                   0 0% 63%;
-
-    /* Sidebar — slight off-white separation from main canvas */
-    --sidebar:                0 0% 98%;
-    --sidebar-foreground:     0 0% 4%;
-    --sidebar-primary:        0 0% 9%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent:         0 0% 96%;
-    --sidebar-accent-foreground: 0 0% 9%;
-    --sidebar-border:         0 0% 90%;
-    --sidebar-ring:           0 0% 63%;
   }
-
   .dark {
-    /* Surface */
-    --background:             0 0% 4%;
-    --foreground:             0 0% 98%;
-
-    /* Cards / popovers */
-    --card:                   0 0% 9%;
-    --card-foreground:        0 0% 98%;
-    --popover:                0 0% 9%;
-    --popover-foreground:     0 0% 98%;
-
-    /* Primary — near-white button on dark surface */
-    --primary:                0 0% 90%;
-    --primary-foreground:     0 0% 9%;
-
-    /* Secondary */
-    --secondary:              0 0% 15%;
-    --secondary-foreground:   0 0% 98%;
-
-    /* Muted */
-    --muted:                  0 0% 15%;
-    --muted-foreground:       0 0% 63%;
-
-    /* Accent */
-    --accent:                 0 0% 25%;
-    --accent-foreground:      0 0% 98%;
-
-    /* Destructive */
-    --destructive:            0 62.8% 30.6%;
+    --background: 222 47% 7%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 221 83% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 221 83% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 98%;
-
-    /* Borders / inputs */
-    --border:                 0 0% 15%;
-    --input:                  0 0% 18%;
-    --ring:                   0 0% 45%;
-
-    /* Sidebar */
-    --sidebar:                0 0% 9%;
-    --sidebar-foreground:     0 0% 98%;
-    --sidebar-primary:        250 70% 40%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent:         0 0% 15%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border:         0 0% 15%;
-    --sidebar-ring:           0 0% 32%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 221 83% 60%;
   }
 }
 

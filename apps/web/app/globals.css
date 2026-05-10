@@ -9,64 +9,81 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98.5%;
-    --foreground: 215 35% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 215 35% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 215 35% 11%;
-    --primary: 148 58% 30%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 148 12% 94%;
+    /* ── Canopy palette — Light ─────────────────────────── */
+    --background:           0 0% 100%;          /* white page bg */
+    --foreground:           215 35% 11%;        /* dark blue-gray text */
+    --card:                 0 0% 100%;
+    --card-foreground:      215 35% 11%;
+    --popover:              0 0% 100%;
+    --popover-foreground:   215 35% 11%;
+
+    --primary:              148 58% 30%;        /* deep forest green */
+    --primary-foreground:   0 0% 100%;          /* white on green */
+
+    --secondary:            148 12% 94%;        /* very light green tint */
     --secondary-foreground: 148 35% 18%;
-    --muted: 215 16% 94%;
-    --muted-foreground: 215 10% 42%;
-    --accent: 148 12% 94%;
-    --accent-foreground: 148 35% 18%;
-    --destructive: 0 84% 60%;
+
+    --muted:                215 10% 96%;        /* sidebar bg, table headers */
+    --muted-foreground:     215 8% 45%;         /* secondary labels */
+
+    --accent:               148 12% 94%;        /* very light green tint */
+    --accent-foreground:    148 35% 18%;
+
+    --destructive:          0 84% 60%;          /* red — errors, expiring */
     --destructive-foreground: 0 0% 100%;
-    --border: 215 14% 89%;
-    --input: 215 14% 89%;
-    --ring: 148 58% 30%;
-    --radius: 0.375rem;
-    /* Semantic extras */
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-    --success: 148 58% 30%;
-    --success-foreground: 0 0% 100%;
-    --info: 200 98% 39%;
-    --info-foreground: 0 0% 100%;
-    --highlight: 38 85% 52%;
+
+    --border:               215 10% 90%;        /* subtle warm-gray borders */
+    --input:                215 10% 90%;
+    --ring:                 148 58% 30%;        /* focus ring = primary green */
+    --radius:               0.375rem;           /* 6px */
+
+    /* ── Semantic extras ────────────────────────────────── */
+    --warning:              38 92% 50%;         /* amber */
+    --warning-foreground:   0 0% 100%;
+    --success:              148 58% 30%;        /* same green as primary */
+    --success-foreground:   0 0% 100%;
+    --info:                 200 98% 39%;        /* blue */
+    --info-foreground:      0 0% 100%;
+    --highlight:            38 85% 52%;         /* amber highlight */
     --highlight-foreground: 38 90% 15%;
   }
 
   .dark {
-    --background: 215 30% 9%;
-    --foreground: 210 25% 96%;
-    --card: 215 25% 12%;
-    --card-foreground: 210 25% 96%;
-    --popover: 215 25% 12%;
-    --popover-foreground: 210 25% 96%;
-    --primary: 148 50% 42%;
-    --primary-foreground: 215 35% 7%;
-    --secondary: 215 18% 16%;
+    /* ── Canopy palette — Dark ──────────────────────────── */
+    --background:           215 35% 7%;
+    --foreground:           210 25% 96%;
+    --card:                 215 28% 11%;
+    --card-foreground:      210 25% 96%;
+    --popover:              215 28% 11%;
+    --popover-foreground:   210 25% 96%;
+
+    --primary:              148 50% 42%;
+    --primary-foreground:   215 35% 7%;
+
+    --secondary:            215 18% 16%;
     --secondary-foreground: 148 18% 82%;
-    --muted: 215 24% 7%;
-    --muted-foreground: 215 12% 60%;
-    --accent: 215 18% 16%;
-    --accent-foreground: 148 18% 82%;
-    --destructive: 0 62% 50%;
+
+    --muted:                215 18% 14%;
+    --muted-foreground:     215 12% 55%;
+
+    --accent:               215 18% 16%;
+    --accent-foreground:    148 18% 82%;
+
+    --destructive:          0 62% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 215 15% 20%;
-    --input: 215 15% 20%;
-    --ring: 148 50% 42%;
-    --warning: 38 80% 55%;
-    --warning-foreground: 38 92% 90%;
-    --success: 148 50% 42%;
-    --success-foreground: 0 0% 100%;
-    --info: 200 85% 50%;
-    --info-foreground: 0 0% 100%;
-    --highlight: 38 75% 50%;
+
+    --border:               215 15% 18%;
+    --input:                215 15% 18%;
+    --ring:                 148 50% 42%;
+
+    /* ── Semantic extras ────────────────────────────────── */
+    --warning:              38 80% 55%;
+    --warning-foreground:   38 92% 90%;
+    --success:              148 50% 42%;
+    --success-foreground:   0 0% 100%;
+    --info:                 200 85% 50%;
+    --info-foreground:      0 0% 100%;
+    --highlight:            38 75% 50%;
     --highlight-foreground: 38 90% 90%;
   }
 }

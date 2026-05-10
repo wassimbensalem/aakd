@@ -10,14 +10,19 @@ import {
   ResponsiveContainer,
 } from "recharts"
 
+// Canopy tokens as hsl() literals for Recharts SVG attrs
+const C_PRIMARY   = "hsl(148, 58%, 30%)"  // --primary (forest green)
+const C_BORDER    = "hsl(215, 10%, 90%)"  // --border
+const C_CURSOR_BG = "hsl(148 58% 30% / 0.07)"
+
 const TYPE_LABELS: Record<string, string> = {
-  NDA: "NDA",
-  MSA: "MSA",
-  SOW: "SOW",
+  NDA:        "NDA",
+  MSA:        "MSA",
+  SOW:        "SOW",
   EMPLOYMENT: "Employment",
-  VENDOR: "Vendor",
-  CUSTOMER: "Customer",
-  OTHER: "Other",
+  VENDOR:     "Vendor",
+  CUSTOMER:   "Customer",
+  OTHER:      "Other",
 }
 
 type Datum = { contractType: string; totalValue: number; count: number }
@@ -31,7 +36,7 @@ function formatValue(n: number): string {
 export function ValueByTypeWidget({ data }: { data: Datum[] }) {
   if (data.length === 0) {
     return (
-      <p className="text-sm text-zinc-500 py-12 text-center">
+      <p className="text-sm text-muted-foreground py-12 text-center">
         No contracts with a value set.
       </p>
     )
@@ -53,12 +58,12 @@ export function ValueByTypeWidget({ data }: { data: Datum[] }) {
           layout="vertical"
           margin={{ top: 8, right: 16, bottom: 4, left: 8 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" horizontal={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={C_BORDER} horizontal={false} />
           <XAxis
             type="number"
             tick={{ fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: "#e4e4e7" }}
+            axisLine={{ stroke: C_BORDER }}
             tickFormatter={(v: number) => formatValue(v)}
           />
           <YAxis
@@ -66,11 +71,11 @@ export function ValueByTypeWidget({ data }: { data: Datum[] }) {
             dataKey="type"
             tick={{ fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: "#e4e4e7" }}
+            axisLine={{ stroke: C_BORDER }}
             width={80}
           />
           <Tooltip
-            cursor={{ fill: "rgba(139, 92, 246, 0.08)" }}
+            cursor={{ fill: C_CURSOR_BG }}
             contentStyle={{ fontSize: 12 }}
             formatter={(value, _name, item) => {
               const payload = (item as { payload?: { count?: number } } | undefined)?.payload
@@ -80,7 +85,7 @@ export function ValueByTypeWidget({ data }: { data: Datum[] }) {
             }}
             labelFormatter={(label) => String(label ?? "")}
           />
-          <Bar dataKey="totalValue" fill="#8b5cf6" radius={[0, 4, 4, 0]} isAnimationActive={false} />
+          <Bar dataKey="totalValue" fill={C_PRIMARY} radius={[0, 4, 4, 0]} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </div>

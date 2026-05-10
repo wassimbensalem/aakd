@@ -15,7 +15,7 @@ function pct(n: number, total: number): string {
 export function ApprovalFunnelWidget({ data }: { data: Datum }) {
   if (data.totalRequested === 0) {
     return (
-      <p className="text-sm text-zinc-500 py-8 text-center">
+      <p className="text-sm text-muted-foreground py-8 text-center">
         No approvals have been requested yet.
       </p>
     )
@@ -25,22 +25,22 @@ export function ApprovalFunnelWidget({ data }: { data: Datum }) {
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-lg border border-border bg-background p-5">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Requested</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Requested</p>
           <p className="mt-1.5 text-3xl font-semibold tabular-nums">{data.totalRequested}</p>
         </div>
 
         <div className="rounded-lg border border-border bg-background p-5">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Approved</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Approved</p>
           <p className="mt-1.5 text-3xl font-semibold tabular-nums">{data.approved}</p>
-          <p className="mt-1 text-xs text-green-600 font-medium">
+          <p className="mt-1 text-xs text-primary font-medium">
             {pct(data.approved, data.totalRequested)}% rate
           </p>
         </div>
 
         <div className="rounded-lg border border-border bg-background p-5">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Rejected</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rejected</p>
           <p className="mt-1.5 text-3xl font-semibold tabular-nums">{data.rejected}</p>
-          <p className="mt-1 text-xs text-red-600 font-medium">
+          <p className="mt-1 text-xs text-destructive font-medium">
             {pct(data.rejected, data.totalRequested)}% rate
           </p>
         </div>

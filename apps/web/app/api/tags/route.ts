@@ -8,7 +8,7 @@ const CreateTagSchema = z.object({
   color: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
-    .default("#6366f1"),
+    .default("#2d7a4f"),  // Canopy primary green hsl(148 58% 30%) ≈ #2d7a4f
 })
 
 export async function GET(req: Request) {

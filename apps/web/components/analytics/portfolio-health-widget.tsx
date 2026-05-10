@@ -2,27 +2,30 @@
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 
+// Canopy-aligned status colors (hsl literals matching the design system)
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "#a1a1aa",
-  INTERNAL_REVIEW: "#60a5fa",
-  PENDING_APPROVAL: "#fbbf24",
-  AWAITING_SIGNATURE: "#f59e0b",
-  ACTIVE: "#22c55e",
-  EXPIRED: "#ef4444",
-  TERMINATED: "#f97316",
-  ARCHIVED: "#d4d4d8",
+  DRAFT:               "hsl(215, 10%, 72%)",   // muted gray
+  INTERNAL_REVIEW:     "hsl(200, 98%, 39%)",   // --info  (blue)
+  PENDING_APPROVAL:    "hsl(38, 92%, 50%)",    // --warning (amber)
+  AWAITING_SIGNATURE:  "hsl(38, 75%, 44%)",    // darker amber
+  ACTIVE:              "hsl(148, 58%, 30%)",   // --primary (forest green)
+  EXPIRED:             "hsl(0, 84%, 60%)",     // --destructive (red)
+  TERMINATED:          "hsl(0, 74%, 46%)",     // dark red
+  ARCHIVED:            "hsl(215, 10%, 82%)",   // light muted
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Draft",
-  INTERNAL_REVIEW: "Internal Review",
-  PENDING_APPROVAL: "Pending Approval",
-  AWAITING_SIGNATURE: "Awaiting Signature",
-  ACTIVE: "Active",
-  EXPIRED: "Expired",
-  TERMINATED: "Terminated",
-  ARCHIVED: "Archived",
+  DRAFT:               "Draft",
+  INTERNAL_REVIEW:     "Internal Review",
+  PENDING_APPROVAL:    "Pending Approval",
+  AWAITING_SIGNATURE:  "Awaiting Signature",
+  ACTIVE:              "Active",
+  EXPIRED:             "Expired",
+  TERMINATED:          "Terminated",
+  ARCHIVED:            "Archived",
 }
+
+const FALLBACK_COLOR = "hsl(215, 10%, 72%)"
 
 type Datum = { status: string; count: number }
 
@@ -32,7 +35,7 @@ export function PortfolioHealthWidget({ data }: { data: Datum[] }) {
 
   if (total === 0) {
     return (
-      <p className="text-sm text-zinc-500 py-12 text-center">
+      <p className="text-sm text-muted-foreground py-12 text-center">
         No contracts in the portfolio yet.
       </p>
     )
@@ -55,7 +58,7 @@ export function PortfolioHealthWidget({ data }: { data: Datum[] }) {
               isAnimationActive={false}
             >
               {filtered.map((d) => (
-                <Cell key={d.status} fill={STATUS_COLORS[d.status] ?? "#a1a1aa"} />
+                <Cell key={d.status} fill={STATUS_COLORS[d.status] ?? FALLBACK_COLOR} />
               ))}
             </Pie>
             <Tooltip
@@ -70,7 +73,7 @@ export function PortfolioHealthWidget({ data }: { data: Datum[] }) {
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <p className="text-3xl font-bold tabular-nums">{total}</p>
-          <p className="text-xs text-zinc-500">contracts</p>
+          <p className="text-xs text-muted-foreground">contracts</p>
         </div>
       </div>
 
@@ -79,8 +82,8 @@ export function PortfolioHealthWidget({ data }: { data: Datum[] }) {
           <li key={d.status} className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <span
-                className="inline-block w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: STATUS_COLORS[d.status] ?? "#a1a1aa" }}
+                className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: STATUS_COLORS[d.status] ?? FALLBACK_COLOR }}
               />
               <span className="text-foreground">{STATUS_LABELS[d.status] ?? d.status}</span>
             </span>

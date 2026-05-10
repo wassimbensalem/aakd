@@ -42,12 +42,12 @@ export function ExpiringSoonWidget({ data }: { data: ExpiringSoonData }) {
       <p
         className={cn(
           "text-2xl font-bold tabular-nums",
-          value > 0 && value === highlight ? "text-red-600" : "text-foreground",
+          value > 0 && value === highlight ? "text-destructive" : "text-foreground",
         )}
       >
         {value}
       </p>
-      <p className="text-sm text-zinc-500">{label}</p>
+      <p className="text-sm text-muted-foreground">{label}</p>
     </div>
   )
 
@@ -60,7 +60,7 @@ export function ExpiringSoonWidget({ data }: { data: ExpiringSoonData }) {
       </div>
 
       {data.contracts.length === 0 ? (
-        <p className="text-sm text-zinc-500 py-6 text-center">
+        <p className="text-sm text-muted-foreground py-6 text-center">
           No contracts expiring in the next 90 days.
         </p>
       ) : (
@@ -98,7 +98,7 @@ export function ExpiringSoonWidget({ data }: { data: ExpiringSoonData }) {
                   <td
                     className={cn(
                       "px-3 py-2 text-right tabular-nums whitespace-nowrap",
-                      c.daysUntilExpiry <= 30 ? "text-red-600 font-medium" : "text-muted-foreground",
+                      c.daysUntilExpiry <= 30 ? "text-destructive font-medium" : "text-muted-foreground",
                     )}
                   >
                     {c.daysUntilExpiry}d

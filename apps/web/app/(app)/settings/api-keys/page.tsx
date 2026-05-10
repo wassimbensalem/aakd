@@ -96,31 +96,31 @@ export default function ApiKeysPage() {
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">API Keys</h1>
-        <p className="text-sm text-zinc-500">Manage API keys for external integrations</p>
+        <h1 className="text-xl font-semibold text-foreground">API Keys</h1>
+        <p className="text-sm text-muted-foreground">Manage API keys for external integrations</p>
       </div>
 
       {/* Callout */}
-      <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 flex gap-3">
-        <Key className="h-5 w-5 text-indigo-600 shrink-0 mt-0.5" />
+      <div className="rounded-[var(--radius)] border border-border bg-primary/10 p-4 flex gap-3">
+        <Key className="h-5 w-5 text-primary shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-zinc-900">MCP Server Access</p>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm font-semibold text-foreground">MCP Server Access</p>
+          <p className="text-sm text-muted-foreground">
             API keys let AI agents (Claude, n8n, etc.) access your contracts via the MCP server.
           </p>
         </div>
       </div>
 
       {/* Create form */}
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-zinc-900">Create API Key</h2>
+      <div className="rounded-[var(--radius)] border border-border bg-card p-6 space-y-4">
+        <h2 className="text-sm font-semibold text-foreground">Create API Key</h2>
         <form onSubmit={createKey} className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="keyName" className="text-sm font-medium text-zinc-700">Name</Label>
+            <Label htmlFor="keyName" className="text-sm font-medium text-foreground">Name</Label>
             <Input id="keyName" placeholder="Production agent" value={keyName} onChange={(e) => setKeyName(e.target.value)} required />
           </div>
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-zinc-700">Scopes</Label>
+            <Label className="text-sm font-medium text-foreground">Scopes</Label>
             <div className="flex gap-3">
               {SCOPES.map((scope) => (
                 <label key={scope} className="flex items-center gap-1.5 cursor-pointer">
@@ -128,14 +128,14 @@ export default function ApiKeysPage() {
                     type="checkbox"
                     checked={scopes.includes(scope)}
                     onChange={() => toggleScope(scope)}
-                    className="h-4 w-4 rounded accent-indigo-600"
+                    className="h-4 w-4 rounded accent-primary"
                   />
-                  <span className="text-sm text-zinc-700">{scope}</span>
+                  <span className="text-sm text-foreground">{scope}</span>
                 </label>
               ))}
             </div>
           </div>
-          <div className="border-t border-zinc-200 pt-3">
+          <div className="border-t border-border pt-3">
             <Button type="submit" size="sm" disabled={creating || scopes.length === 0}>
               {creating ? "Creating..." : "Create Key"}
             </Button>
@@ -144,7 +144,7 @@ export default function ApiKeysPage() {
       </div>
 
       {/* Keys table */}
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -166,15 +166,15 @@ export default function ApiKeysPage() {
               ))
             ) : keys.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-sm text-zinc-500">
+                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
                   No API keys yet
                 </TableCell>
               </TableRow>
             ) : (
               keys.map((k) => (
                 <TableRow key={k.id} className={k.revokedAt ? "opacity-50" : ""}>
-                  <TableCell className="font-medium text-zinc-900">{k.name}</TableCell>
-                  <TableCell className="font-mono text-xs text-zinc-500">{k.prefix}...</TableCell>
+                  <TableCell className="font-medium text-foreground">{k.name}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{k.prefix}...</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       {k.scopes.map((s) => (
@@ -182,7 +182,7 @@ export default function ApiKeysPage() {
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className="text-zinc-500">
+                  <TableCell className="text-muted-foreground">
                     {k.lastUsedAt ? format(new Date(k.lastUsedAt), "MMM d, yyyy") : "Never"}
                   </TableCell>
                   <TableCell>
@@ -190,7 +190,7 @@ export default function ApiKeysPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-zinc-400 hover:text-destructive"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
                         onClick={() => revokeKey(k.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />

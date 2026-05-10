@@ -54,65 +54,65 @@ export default function OrgSettingsPage() {
   return (
     <div className="p-6 max-w-lg">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-zinc-900">Organization</h1>
-        <p className="text-sm text-zinc-500">Manage your organization settings</p>
+        <h1 className="text-xl font-semibold text-foreground">Organization</h1>
+        <p className="text-sm text-muted-foreground">Manage your organization settings</p>
       </div>
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-zinc-900 mb-4">General</h2>
+      <div className="rounded-[var(--radius)] border border-border bg-card p-6">
+        <h2 className="text-sm font-semibold text-foreground mb-4">General</h2>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="orgName" className="text-sm font-medium text-zinc-700">Name</Label>
+            <Label htmlFor="orgName" className="text-sm font-medium text-foreground">Name</Label>
             <Input id="orgName" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm font-medium text-zinc-700">Slug</Label>
-            <Input value={activeOrg?.slug ?? ""} readOnly className="bg-zinc-50 text-zinc-500 cursor-not-allowed" />
-            <p className="text-xs text-zinc-500">Slug cannot be changed after creation</p>
+            <Label className="text-sm font-medium text-foreground">Slug</Label>
+            <Input value={activeOrg?.slug ?? ""} readOnly className="bg-muted/40 text-muted-foreground cursor-not-allowed" />
+            <p className="text-xs text-muted-foreground">Slug cannot be changed after creation</p>
           </div>
           {activeOrg?.createdAt && (
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-zinc-700">Created</Label>
-              <p className="text-sm text-zinc-500">{format(new Date(activeOrg.createdAt), "MMMM d, yyyy")}</p>
+              <Label className="text-sm font-medium text-foreground">Created</Label>
+              <p className="text-sm text-muted-foreground">{format(new Date(activeOrg.createdAt), "MMMM d, yyyy")}</p>
             </div>
           )}
-          <div className="border-t border-zinc-200 pt-4">
+          <div className="border-t border-border pt-4">
             <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button>
           </div>
         </form>
       </div>
 
       {/* AI Configuration */}
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 mt-6">
-        <h2 className="text-sm font-semibold text-zinc-900 mb-4">AI Configuration</h2>
+      <div className="rounded-[var(--radius)] border border-border bg-card p-6 mt-6">
+        <h2 className="text-sm font-semibold text-foreground mb-4">AI Configuration</h2>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-600">Provider</span>
+            <span className="text-sm text-foreground/80">Provider</span>
             {aiStatus === null ? (
-              <span className="text-sm text-zinc-400">Loading…</span>
+              <span className="text-sm text-muted-foreground">Loading…</span>
             ) : aiStatus.provider ? (
-              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-900">
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
                 {PROVIDER_LABELS[aiStatus.provider] ?? aiStatus.provider}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-sm text-zinc-400">
-                <span className="inline-block w-2 h-2 rounded-full bg-zinc-300" />
+              <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                <span className="inline-block w-2 h-2 rounded-full bg-border" />
                 Not configured
               </span>
             )}
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-600">Model</span>
+            <span className="text-sm text-foreground/80">Model</span>
             {aiStatus?.model ? (
-              <span className="text-sm font-mono text-zinc-700">{aiStatus.model}</span>
+              <span className="text-sm font-mono text-foreground">{aiStatus.model}</span>
             ) : (
-              <span className="text-sm text-zinc-400">—</span>
+              <span className="text-sm text-muted-foreground">—</span>
             )}
           </div>
         </div>
         {!aiStatus?.provider && aiStatus !== null && (
-          <p className="mt-3 text-xs text-zinc-500">
-            Set <code className="bg-zinc-100 px-1 rounded">AI_PROVIDER</code> and the corresponding API key in your environment to enable AI extraction and Q&amp;A.
+          <p className="mt-3 text-xs text-muted-foreground">
+            Set <code className="bg-muted px-1 rounded">AI_PROVIDER</code> and the corresponding API key in your environment to enable AI extraction and Q&amp;A.
           </p>
         )}
       </div>

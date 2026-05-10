@@ -36,8 +36,8 @@ export default async function AnalyticsPage() {
           <h1 className="text-xl font-semibold">Analytics</h1>
           <p className="text-sm text-muted-foreground">Contract portfolio overview</p>
         </div>
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-10 text-center">
-          <p className="text-sm text-zinc-500">
+        <div className="rounded-[var(--radius)] border border-dashed border-border bg-card p-10 text-center">
+          <p className="text-sm text-muted-foreground">
             Failed to load analytics data. Please refresh the page.
           </p>
         </div>

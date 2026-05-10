@@ -1,16 +1,72 @@
+import { headers, cookies } from "next/headers"
 import Link from "next/link"
-import { cookies } from "next/headers"
-import { FileText, Clock, CheckSquare, PenSquare, Plus } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Bell, Plus, ArrowUpRight, FileText } from "lucide-react"
+import { auth } from "@/lib/auth/config"
 import { ContractStatusBadge } from "@/components/contract-status-badge"
-import { Contract } from "@/lib/types"
+import type { Contract } from "@/lib/types"
+import type { AnalyticsSummary } from "@/app/api/analytics/summary/route"
 
-async function fetchContracts(params: string): Promise<Contract[]> {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getGreeting(hour: number) {
+  if (hour < 12) return "Good morning"
+  if (hour < 17) return "Good afternoon"
+  return "Good evening"
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—"
+  try {
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    })
+  } catch {
+    return "—"
+  }
+}
+
+function formatValue(value: number | null | undefined, currency = "USD"): string {
+  if (!value) return "—"
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+// ─── Data fetching ────────────────────────────────────────────────────────────
+
+async function fetchAnalytics(): Promise<AnalyticsSummary | null> {
   try {
     const cookieStore = await cookies()
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/contracts?${params}`,
-      { headers: { cookie: cookieStore.toString() }, cache: "no-store" }
+      `${process.env.INTERNAL_APP_URL ?? "http://localhost:3000"}/api/analytics/summary`,
+      { headers: { cookie: cookieStore.toString() }, cache: "no-store" },
+    )
+    if (!res.ok) return null
+    return (await res.json()) as AnalyticsSummary
+  } catch {
+    return null
+  }
+}
+
+async function fetchRecentContracts(): Promise<Contract[]> {
+  try {
+    const cookieStore = await cookies()
+    const res = await fetch(
+      `${process.env.INTERNAL_APP_URL ?? "http://localhost:3000"}/api/contracts?limit=5`,
+      { headers: { cookie: cookieStore.toString() }, cache: "no-store" },
     )
     if (!res.ok) return []
     const data = await res.json()
@@ -20,105 +76,316 @@ async function fetchContracts(params: string): Promise<Contract[]> {
   }
 }
 
-function StatCard({ title, value, Icon, gradient, iconColor }: {
+// ─── Stat card ────────────────────────────────────────────────────────────────
+
+function StatCard({
+  title,
+  value,
+  sub,
+}: {
   title: string
   value: number
-  Icon: React.ComponentType<{ className?: string }>
-  gradient: string
-  iconColor: string
+  sub: string
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <div className={`flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br ${gradient}`}>
-          <Icon className={`h-4 w-4 ${iconColor}`} />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-semibold">{value}</p>
-      </CardContent>
-    </Card>
+    <div
+      className="rounded-[var(--radius)] border border-border bg-card px-5 py-4"
+    >
+      <p
+        className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground mb-1"
+      >
+        {title}
+      </p>
+      <p className="text-[28px] font-extrabold leading-none tabular-nums text-foreground">
+        {value}
+      </p>
+      <p className="text-[11.5px] text-muted-foreground mt-1.5">{sub}</p>
+    </div>
   )
 }
 
-export default async function DashboardPage() {
-  const [active, recent, pendingApproval, awaitingSig] = await Promise.all([
-    fetchContracts("status=ACTIVE&limit=1"),
-    fetchContracts("limit=5"),
-    fetchContracts("status=PENDING_APPROVAL&limit=1"),
-    fetchContracts("status=AWAITING_SIGNATURE&limit=1"),
-  ])
+// ─── Renewal bar chart ────────────────────────────────────────────────────────
 
-  const activeCount = Array.isArray(active) ? active.length : 0
-  const pendingCount = Array.isArray(pendingApproval) ? pendingApproval.length : 0
-  const awaitingCount = Array.isArray(awaitingSig) ? awaitingSig.length : 0
+function RenewalChart({
+  monthlyVolume,
+}: {
+  monthlyVolume: Array<{ month: string; count: number }>
+}) {
+  // Show last 8 months
+  const slice = monthlyVolume.slice(-8)
+  if (slice.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
+        No data yet
+      </div>
+    )
+  }
 
-  const recentContracts: Contract[] = Array.isArray(recent) ? recent : []
+  const max = Math.max(...slice.map((d) => d.count), 1)
+  const barW = 28
+  const gap = 10
+  const chartH = 100
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Dashboard</h1>
-        <Link href="/contracts/new" className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[0.8rem] font-medium rounded-[min(var(--radius-md),12px)] bg-primary text-primary-foreground transition-colors hover:opacity-90">
-          <Plus className="h-3.5 w-3.5" />
-          New Contract
-        </Link>
+    <div>
+      <svg
+        width="100%"
+        viewBox={`0 0 ${slice.length * (barW + gap) - gap} ${chartH + 28}`}
+        className="block"
+      >
+        {slice.map((d, i) => {
+          const barH = Math.max(4, (d.count / max) * chartH)
+          const x = i * (barW + gap)
+          // Format "YYYY-MM" → "Jan"
+          let label = d.month
+          try {
+            label = new Date(d.month + "-01").toLocaleDateString("en-US", {
+              month: "short",
+            })
+          } catch {}
+
+          const isHigh = d.count === max && d.count > 0
+
+          return (
+            <g key={i}>
+              <rect
+                x={x}
+                y={chartH - barH}
+                width={barW}
+                height={barH}
+                rx={3}
+                fill={isHigh ? "hsl(38 85% 52%)" : "hsl(148 58% 30%)"}
+                opacity={isHigh ? 1 : 0.75}
+              />
+              {d.count > 0 && (
+                <text
+                  x={x + barW / 2}
+                  y={chartH - barH - 5}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fontWeight={600}
+                  fill="hsl(215 35% 11%)"
+                  className="dark:fill-[hsl(210_25%_96%)]"
+                >
+                  {d.count}
+                </text>
+              )}
+              <text
+                x={x + barW / 2}
+                y={chartH + 16}
+                textAnchor="middle"
+                fontSize={10}
+                fill="hsl(215 8% 45%)"
+              >
+                {label}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+      <div className="flex gap-4 mt-1 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span
+            className="inline-block w-2 h-2 rounded-sm"
+            style={{ background: "hsl(148 58% 30%)", opacity: 0.75 }}
+          />
+          Standard
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span
+            className="inline-block w-2 h-2 rounded-sm"
+            style={{ background: "hsl(38 85% 52%)" }}
+          />
+          High volume
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default async function DashboardPage() {
+  const [sessionData, analytics, recentContracts] = await Promise.all([
+    auth.api.getSession({ headers: await headers() }),
+    fetchAnalytics(),
+    fetchRecentContracts(),
+  ])
+
+  const hour = new Date().getHours()
+  const greeting = getGreeting(hour)
+  const fullName = sessionData?.user?.name ?? sessionData?.user?.email ?? "there"
+  const firstName = fullName.split(" ")[0]
+
+  const activeCount =
+    analytics?.byStatus.find((s) => s.status === "ACTIVE")?.count ?? 0
+  const expiringCount = analytics?.expiringSoon.next30 ?? 0
+  const pendingCount = analytics?.approvalFunnel.pending ?? 0
+  const contracts: Contract[] = Array.isArray(recentContracts) ? recentContracts : []
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* ── Page header ──────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-7 py-4 border-b border-border shrink-0">
+        <div>
+          <h1 className="text-[18px] font-bold tracking-tight leading-snug">
+            {greeting}, {firstName}
+          </h1>
+          <p className="text-[12.5px] text-muted-foreground mt-0.5">
+            Here&apos;s what&apos;s happening with your contracts.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Bell */}
+          <button
+            type="button"
+            className="flex h-[34px] w-[34px] items-center justify-center rounded-[var(--radius)] border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Bell className="h-[15px] w-[15px]" />
+          </button>
+          {/* New Contract */}
+          <Link
+            href="/contracts/new"
+            className="inline-flex items-center gap-1.5 h-[34px] px-3 text-[13px] font-medium rounded-[var(--radius)] bg-primary text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New Contract
+          </Link>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Contracts" value={activeCount} Icon={FileText} gradient="from-emerald-400 to-emerald-600" iconColor="text-white" />
-        <StatCard title="Expiring in 30 days" value={0} Icon={Clock} gradient="from-amber-400 to-orange-500" iconColor="text-white" />
-        <StatCard title="Pending Approval" value={pendingCount} Icon={CheckSquare} gradient="from-blue-400 to-blue-600" iconColor="text-white" />
-        <StatCard title="Awaiting Signature" value={awaitingCount} Icon={PenSquare} gradient="from-violet-400 to-violet-600" iconColor="text-white" />
+      {/* ── Stat cards ───────────────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-3 px-7 pt-4 shrink-0">
+        <StatCard
+          title="Active Contracts"
+          value={activeCount}
+          sub="Total in portfolio"
+        />
+        <StatCard
+          title="Expiring Soon"
+          value={expiringCount}
+          sub="Within 30 days"
+        />
+        <StatCard
+          title="Pending Approvals"
+          value={pendingCount}
+          sub="Awaiting review"
+        />
       </div>
 
-      <div>
-        <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Contracts</h2>
-        {recentContracts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 py-16 gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
-              <FileText className="h-6 w-6 text-primary" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-medium">No contracts yet</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Upload your first contract to get started</p>
-            </div>
-            <Link href="/contracts/new" className="inline-flex items-center gap-1.5 h-8 px-3 text-[0.8rem] font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
-              <Plus className="h-3.5 w-3.5" />
-              Upload your first contract
+      {/* ── Main grid ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-[1fr_340px] gap-4 px-7 py-4 flex-1 min-h-0">
+        {/* Recent contracts table */}
+        <div className="flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-[14px] font-semibold">Recent Contracts</h2>
+            <Link
+              href="/contracts"
+              className="flex items-center gap-1 text-[12px] font-medium text-primary hover:opacity-80 transition-opacity"
+            >
+              View all
+              <ArrowUpRight className="h-3 w-3" />
             </Link>
           </div>
-        ) : (
-          <div className="rounded-xl border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Title</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Type</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Counterparty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentContracts.map((c) => (
-                  <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <Link href={`/contracts/${c.id}`} className="font-medium hover:text-primary transition-colors">
-                        {c.title}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{c.contractType}</td>
-                    <td className="px-4 py-3">
-                      <ContractStatusBadge status={c.status} />
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{c.counterpartyName ?? "—"}</td>
+
+          {contracts.length === 0 ? (
+            /* Empty state */
+            <div className="flex flex-col items-center justify-center rounded-[var(--radius)] border border-dashed border-border bg-muted/20 py-14 gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius)] bg-primary/10">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium">No contracts yet</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Upload your first contract to get started
+                </p>
+              </div>
+              <Link
+                href="/contracts/new"
+                className="inline-flex items-center gap-1.5 h-8 px-3 text-[0.8rem] font-medium rounded-[var(--radius)] bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Upload contract
+              </Link>
+            </div>
+          ) : (
+            <div className="rounded-[var(--radius)] border border-border overflow-hidden bg-card">
+              <table className="w-full border-collapse" style={{ fontSize: "12.5px" }}>
+                <thead>
+                  <tr>
+                    {["Contract", "Counterparty", "Value", "Due", "Status", ""].map(
+                      (h, i) => (
+                        <th
+                          key={i}
+                          className="px-3 py-[7px] text-left text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground bg-muted border-b border-border"
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {contracts.map((c, i) => (
+                    <tr
+                      key={c.id}
+                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer"
+                    >
+                      {/* Contract name */}
+                      <td className="px-3 py-2.5 font-medium">
+                        <Link
+                          href={`/contracts/${c.id}`}
+                          className="hover:text-primary transition-colors"
+                        >
+                          {c.title}
+                        </Link>
+                      </td>
+                      {/* Counterparty */}
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {c.counterpartyName ?? "—"}
+                      </td>
+                      {/* Value */}
+                      <td className="px-3 py-2.5 tabular-nums">
+                        {formatValue(c.value, c.currency ?? undefined)}
+                      </td>
+                      {/* Due */}
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {formatDate(c.endDate)}
+                      </td>
+                      {/* Status */}
+                      <td className="px-3 py-2.5">
+                        <ContractStatusBadge status={c.status} />
+                      </td>
+                      {/* Owner avatar */}
+                      <td className="px-3 py-2.5">
+                        {c.owner && (
+                          <div
+                            title={c.owner.name || c.owner.email}
+                            className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-primary/12 text-primary shrink-0"
+                            style={{ fontSize: "9px", fontWeight: 700 }}
+                          >
+                            {getInitials(c.owner.name || c.owner.email)}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Renewal timeline */}
+        <div className="rounded-[var(--radius)] border border-border bg-card px-5 py-4 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-[13px] font-semibold">Renewal Timeline</h3>
+            <span className="text-[11px] text-muted-foreground">
+              Last {(analytics?.monthlyVolume ?? []).slice(-8).length} months
+            </span>
           </div>
-        )}
+          <RenewalChart monthlyVolume={analytics?.monthlyVolume ?? []} />
+        </div>
       </div>
     </div>
   )

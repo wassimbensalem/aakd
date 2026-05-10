@@ -195,15 +195,15 @@ export default function SearchPage() {
   return (
     <div className="flex h-full">
       {/* Left filter panel */}
-      <aside className="flex h-full w-60 shrink-0 flex-col border-r border-zinc-200 bg-white overflow-y-auto">
-        <div className="border-b border-zinc-200 px-4 py-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Filters</span>
+      <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card overflow-y-auto">
+        <div className="border-b border-border px-4 py-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Filters</span>
         </div>
 
         <div className="p-4 space-y-6">
           {/* Type */}
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Type</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Type</p>
             <div className="space-y-1.5">
               {CONTRACT_TYPES.map((t) => (
                 <label key={t} className="flex items-center gap-2 cursor-pointer">
@@ -211,9 +211,9 @@ export default function SearchPage() {
                     type="checkbox"
                     checked={selectedTypes.has(t)}
                     onChange={() => toggleType(t)}
-                    className="size-4 rounded border-zinc-300 accent-indigo-600"
+                    className="size-4 rounded border-border accent-primary"
                   />
-                  <span className="text-sm text-zinc-600">
+                  <span className="text-sm text-foreground/80">
                     {t}
                   </span>
                 </label>
@@ -223,7 +223,7 @@ export default function SearchPage() {
 
           {/* Status */}
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Status</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</p>
             <div className="space-y-1.5">
               {STATUS_OPTIONS.map((s) => (
                 <label key={s} className="flex items-center gap-2 cursor-pointer">
@@ -231,9 +231,9 @@ export default function SearchPage() {
                     type="checkbox"
                     checked={selectedStatuses.has(s)}
                     onChange={() => toggleStatus(s)}
-                    className="size-4 rounded border-zinc-300 accent-indigo-600"
+                    className="size-4 rounded border-border accent-primary"
                   />
-                  <span className="text-sm text-zinc-600">
+                  <span className="text-sm text-foreground/80">
                     {s.charAt(0) + s.slice(1).toLowerCase()}
                   </span>
                 </label>
@@ -243,10 +243,10 @@ export default function SearchPage() {
 
           {/* End Date */}
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">End Date</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">End Date</p>
             <div className="space-y-2">
               <div>
-                <p className="mb-1 text-xs text-zinc-500">From</p>
+                <p className="mb-1 text-xs text-muted-foreground">From</p>
                 <Input
                   type="date"
                   value={endDateFrom}
@@ -255,7 +255,7 @@ export default function SearchPage() {
                 />
               </div>
               <div>
-                <p className="mb-1 text-xs text-zinc-500">To</p>
+                <p className="mb-1 text-xs text-muted-foreground">To</p>
                 <Input
                   type="date"
                   value={endDateTo}
@@ -268,10 +268,10 @@ export default function SearchPage() {
 
           {/* Value */}
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Value</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Value</p>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="mb-1 text-xs text-zinc-500">Min</p>
+                <p className="mb-1 text-xs text-muted-foreground">Min</p>
                 <Input
                   type="number"
                   min="0"
@@ -282,7 +282,7 @@ export default function SearchPage() {
                 />
               </div>
               <div>
-                <p className="mb-1 text-xs text-zinc-500">Max</p>
+                <p className="mb-1 text-xs text-muted-foreground">Max</p>
                 <Input
                   type="number"
                   min="0"
@@ -300,10 +300,10 @@ export default function SearchPage() {
       {/* Main content */}
       <div className="flex h-full flex-1 flex-col overflow-auto">
         {/* Search input */}
-        <div className="border-b border-zinc-200 px-6 py-3">
+        <div className="border-b border-border px-6 py-3">
           <div className="relative flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 autoFocus
                 placeholder={semanticMode ? "Ask a semantic question..." : "Search contracts, counterparties..."}
@@ -317,8 +317,8 @@ export default function SearchPage() {
               onClick={() => setSemanticMode((s) => !s)}
               title={semanticMode ? "Switch to keyword search" : "Switch to semantic search"}
               className={cn(
-                "flex items-center justify-center rounded-md p-2 transition-colors hover:bg-zinc-100",
-                semanticMode ? "text-zinc-900 bg-zinc-100" : "text-zinc-400",
+                "flex items-center justify-center rounded-md p-2 transition-colors hover:bg-muted",
+                semanticMode ? "text-foreground bg-muted" : "text-muted-foreground",
               )}
             >
               <Sparkles className="size-4" />
@@ -329,15 +329,15 @@ export default function SearchPage() {
         {/* Results */}
         <div className="flex-1 p-6">
           {loading ? (
-            <div className="rounded-lg border border-zinc-200 bg-white">
+            <div className="rounded-[var(--radius)] border border-border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Name</TableHead>
-                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Counterparty</TableHead>
-                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Type</TableHead>
-                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Status</TableHead>
-                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Created</TableHead>
+                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</TableHead>
+                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Counterparty</TableHead>
+                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Type</TableHead>
+                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</TableHead>
+                    <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Created</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -356,40 +356,40 @@ export default function SearchPage() {
           ) : results.length > 0 ? (
             <>
               <div className="mb-3 flex items-center gap-2">
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-muted-foreground">
                   {total} result{total !== 1 ? "s" : ""}
                   {debouncedQuery ? ` for "${debouncedQuery}"` : ""}
                   {hasFilters ? " (filtered)" : ""}
                 </p>
                 {semanticMode && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                     <Sparkles className="size-3" />
                     AI-powered
                   </span>
                 )}
               </div>
-              <div className="rounded-lg border border-zinc-200 bg-white">
+              <div className="rounded-[var(--radius)] border border-border bg-card">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Name</TableHead>
-                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Counterparty</TableHead>
-                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Type</TableHead>
-                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Status</TableHead>
-                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-zinc-500">Created</TableHead>
+                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</TableHead>
+                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Counterparty</TableHead>
+                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Type</TableHead>
+                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</TableHead>
+                      <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Created</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {results.map((r) => (
                       <TableRow
                         key={r.id}
-                        className="cursor-pointer hover:bg-zinc-50"
+                        className="cursor-pointer hover:bg-muted-foreground/[0.08]"
                         onClick={() => router.push(`/contracts/${r.id}`)}
                       >
-                        <TableCell className="py-2.5 text-sm font-medium text-zinc-900">
+                        <TableCell className="py-2.5 text-sm font-medium text-foreground">
                           <span className="line-clamp-1">{r.title}</span>
                         </TableCell>
-                        <TableCell className="py-2.5 text-sm text-zinc-500">
+                        <TableCell className="py-2.5 text-sm text-muted-foreground">
                           {r.counterpartyName ?? "—"}
                         </TableCell>
                         <TableCell className="py-2.5">
@@ -398,7 +398,7 @@ export default function SearchPage() {
                         <TableCell className="py-2.5">
                           <StatusBadge status={r.status} />
                         </TableCell>
-                        <TableCell className="py-2.5 text-sm text-zinc-500">
+                        <TableCell className="py-2.5 text-sm text-muted-foreground">
                           {new Date(r.createdAt).toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",
@@ -413,21 +413,21 @@ export default function SearchPage() {
             </>
           ) : searched ? (
             <div className="flex flex-col items-center justify-center pt-20">
-              <div className="flex size-12 items-center justify-center rounded-full bg-zinc-100">
-                <FileText className="size-6 text-zinc-400" />
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <FileText className="size-6 text-muted-foreground" />
               </div>
-              <p className="mt-3 text-sm font-medium text-zinc-900">No results</p>
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-3 text-sm font-medium text-foreground">No results</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Try adjusting your search or filters
               </p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center pt-20">
-              <div className="flex size-12 items-center justify-center rounded-full bg-zinc-100">
-                <FileText className="size-6 text-zinc-400" />
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <FileText className="size-6 text-muted-foreground" />
               </div>
-              <h3 className="mt-3 text-sm font-medium text-zinc-900">Search your contracts</h3>
-              <p className="mt-1 text-sm text-zinc-500">
+              <h3 className="mt-3 text-sm font-medium text-foreground">Search your contracts</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Search across titles, counterparties, notes, and extracted text
               </p>
             </div>

@@ -102,15 +102,15 @@ export default function ProfileNotificationsPage() {
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">
+        <h1 className="text-xl font-semibold text-foreground">
           My email notifications
         </h1>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-muted-foreground">
           Choose which contract events trigger an email to you in this organization
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -134,10 +134,10 @@ export default function ProfileNotificationsPage() {
               prefs.map((p) => (
                 <TableRow key={p.eventName}>
                   <TableCell>
-                    <div className="font-medium text-zinc-900">
+                    <div className="font-medium text-foreground">
                       {EVENT_LABELS[p.eventName]}
                     </div>
-                    <div className="font-mono text-xs text-zinc-400">
+                    <div className="font-mono text-xs text-muted-foreground">
                       {p.eventName}
                     </div>
                   </TableCell>

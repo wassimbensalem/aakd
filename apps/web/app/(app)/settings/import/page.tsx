@@ -39,8 +39,8 @@ function ImportPageBody() {
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Import contracts</h1>
-        <p className="text-sm text-zinc-500">
+        <h1 className="text-xl font-semibold text-foreground">Import contracts</h1>
+        <p className="text-sm text-muted-foreground">
           Migrate your existing contracts into ClauseFlow from spreadsheets, PandaDoc, ContractBook, DocuSign CLM, or any tool that can export files.
         </p>
       </div>
@@ -55,31 +55,31 @@ function ImportPageBody() {
         </TabsList>
 
         <TabsContent value="csv" className="mt-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6">
+          <div className="rounded-[var(--radius)] border border-border bg-card p-6">
             <CsvImportTab onJobCreated={refreshHistory} />
           </div>
         </TabsContent>
 
         <TabsContent value="batch" className="mt-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6">
+          <div className="rounded-[var(--radius)] border border-border bg-card p-6">
             <BatchImportTab onJobCreated={refreshHistory} />
           </div>
         </TabsContent>
 
         <TabsContent value="gdrive" className="mt-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6">
+          <div className="rounded-[var(--radius)] border border-border bg-card p-6">
             <GoogleDriveTab onJobCreated={refreshHistory} />
           </div>
         </TabsContent>
 
         <TabsContent value="pandadoc" className="mt-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6">
+          <div className="rounded-[var(--radius)] border border-border bg-card p-6">
             <PandaDocTab onJobCreated={refreshHistory} />
           </div>
         </TabsContent>
 
         <TabsContent value="clm" className="mt-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6">
+          <div className="rounded-[var(--radius)] border border-border bg-card p-6">
             <ClmExportTab onJobCreated={refreshHistory} />
           </div>
         </TabsContent>

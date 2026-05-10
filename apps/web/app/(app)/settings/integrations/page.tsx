@@ -87,8 +87,8 @@ export default function IntegrationsPage() {
   if (roleLoaded && role !== "admin" && role !== "legal") {
     return (
       <div className="p-6">
-        <h1 className="text-xl font-semibold text-zinc-900">Integrations</h1>
-        <p className="mt-4 text-sm text-zinc-500">
+        <h1 className="text-xl font-semibold text-foreground">Integrations</h1>
+        <p className="mt-4 text-sm text-muted-foreground">
           You don&apos;t have permission to view this page.
         </p>
       </div>
@@ -164,8 +164,8 @@ export default function IntegrationsPage() {
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Integrations</h1>
-        <p className="text-sm text-zinc-500">
+        <h1 className="text-xl font-semibold text-foreground">Integrations</h1>
+        <p className="text-sm text-muted-foreground">
           Connect ClauseFlow to your CRM to link contracts to deals and keep stages in sync.
         </p>
       </div>
@@ -173,7 +173,7 @@ export default function IntegrationsPage() {
       {loading ? (
         <div className="space-y-4">
           {CRM_PROVIDERS.map((p) => (
-            <div key={p.id} className="rounded-lg border border-zinc-200 bg-white p-6">
+            <div key={p.id} className="rounded-[var(--radius)] border border-border bg-card p-6">
               <Skeleton className="h-5 w-32" />
               <Skeleton className="mt-2 h-4 w-72" />
               <Skeleton className="mt-4 h-9 w-28" />
@@ -190,35 +190,35 @@ export default function IntegrationsPage() {
               syncOnActiveStage: "",
             }
             return (
-              <div key={meta.id} className="rounded-lg border border-zinc-200 bg-white p-6">
+              <div key={meta.id} className="rounded-[var(--radius)] border border-border bg-card p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       {connected ? (
                         <Plug2 className="h-4 w-4 text-emerald-600" />
                       ) : (
-                        <PlugZap className="h-4 w-4 text-zinc-400" />
+                        <PlugZap className="h-4 w-4 text-muted-foreground" />
                       )}
-                      <h2 className="text-sm font-semibold text-zinc-900">{meta.name}</h2>
+                      <h2 className="text-sm font-semibold text-foreground">{meta.name}</h2>
                       <span
                         className={
                           connected
                             ? "inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200"
-                            : "inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 ring-1 ring-zinc-200"
+                            : "inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/80 ring-1 ring-border"
                         }
                       >
                         {connected ? "Connected" : "Not connected"}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-zinc-500">{meta.description}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
                     {connected && integration && (
-                      <p className="mt-2 text-xs text-zinc-500">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         Connected by{" "}
-                        <span className="text-zinc-700">{integration.connectedBy.name}</span>
+                        <span className="text-foreground">{integration.connectedBy.name}</span>
                         {integration.connectedAt && (
                           <>
                             {" "}on{" "}
-                            <span className="text-zinc-700">
+                            <span className="text-foreground">
                               {format(new Date(integration.connectedAt), "MMM d, yyyy")}
                             </span>
                           </>
@@ -250,11 +250,11 @@ export default function IntegrationsPage() {
                 </div>
 
                 {connected && (
-                  <div className="mt-5 grid grid-cols-1 gap-3 border-t border-zinc-200 pt-4 sm:grid-cols-2">
+                  <div className="mt-5 grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label
                         htmlFor={`${meta.id}-auto`}
-                        className="text-xs font-medium text-zinc-700"
+                        className="text-xs font-medium text-foreground"
                       >
                         Auto-create stage
                       </Label>
@@ -266,14 +266,14 @@ export default function IntegrationsPage() {
                           updateSetting(meta.id, "autoCreateStage", e.target.value)
                         }
                       />
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-muted-foreground">
                         When a deal reaches this stage, a draft contract is created.
                       </p>
                     </div>
                     <div className="space-y-1.5">
                       <Label
                         htmlFor={`${meta.id}-sync`}
-                        className="text-xs font-medium text-zinc-700"
+                        className="text-xs font-medium text-foreground"
                       >
                         Sync target stage
                       </Label>
@@ -285,7 +285,7 @@ export default function IntegrationsPage() {
                           updateSetting(meta.id, "syncOnActiveStage", e.target.value)
                         }
                       />
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-muted-foreground">
                         Stage to set on the deal when the contract becomes active.
                       </p>
                     </div>

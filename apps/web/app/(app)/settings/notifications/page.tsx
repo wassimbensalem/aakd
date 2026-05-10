@@ -242,8 +242,8 @@ export default function NotificationsSettingsPage() {
   return (
     <div className="p-6 space-y-8 max-w-3xl">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Notifications</h1>
-        <p className="text-sm text-zinc-500">
+        <h1 className="text-xl font-semibold text-foreground">Notifications</h1>
+        <p className="text-sm text-muted-foreground">
           Configure how your organization receives contract lifecycle events
         </p>
       </div>
@@ -251,25 +251,25 @@ export default function NotificationsSettingsPage() {
       <section className="space-y-3">
         <div className="flex items-end justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900">Slack &amp; Teams</h2>
-            <p className="text-xs text-zinc-500">
+            <h2 className="text-sm font-semibold text-foreground">Slack &amp; Teams</h2>
+            <p className="text-xs text-muted-foreground">
               Receive contract events in your team chat channels
             </p>
           </div>
-          <div className="text-xs text-zinc-500">
+          <div className="text-xs text-muted-foreground">
             Slack: {slackChannels.length} of {MAX_PER_TYPE} · Teams:{" "}
             {teamsChannels.length} of {MAX_PER_TYPE}
           </div>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="rounded-[var(--radius)] border border-border bg-card">
           {loading ? (
             <div className="p-4 space-y-2">
               <Skeleton className="h-8 w-full" />
               <Skeleton className="h-8 w-full" />
             </div>
           ) : channels.length === 0 ? (
-            <div className="p-6 text-center text-sm text-zinc-500">
+            <div className="p-6 text-center text-sm text-muted-foreground">
               No channels configured yet
             </div>
           ) : (
@@ -292,7 +292,7 @@ export default function NotificationsSettingsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium">{c.label}</TableCell>
-                    <TableCell className="text-zinc-500">
+                    <TableCell className="text-muted-foreground">
                       {format(new Date(c.createdAt), "MMM d, yyyy")}
                     </TableCell>
                     <TableCell>
@@ -311,7 +311,7 @@ export default function NotificationsSettingsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-zinc-400 hover:text-destructive"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
                           onClick={() => deleteChannel(c.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -385,26 +385,26 @@ export default function NotificationsSettingsPage() {
       <section className="space-y-3">
         <div className="flex items-end justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900">
+            <h2 className="text-sm font-semibold text-foreground">
               Outbound Webhooks
             </h2>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               Send signed events to your own systems (Zapier, Make, internal APIs)
             </p>
           </div>
-          <div className="text-xs text-zinc-500">
+          <div className="text-xs text-muted-foreground">
             {webhooks.length} of {MAX_WEBHOOKS} configured
           </div>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="rounded-[var(--radius)] border border-border bg-card">
           {loading ? (
             <div className="p-4 space-y-2">
               <Skeleton className="h-8 w-full" />
               <Skeleton className="h-8 w-full" />
             </div>
           ) : webhooks.length === 0 ? (
-            <div className="p-6 text-center text-sm text-zinc-500">
+            <div className="p-6 text-center text-sm text-muted-foreground">
               No webhooks configured yet
             </div>
           ) : (
@@ -422,16 +422,16 @@ export default function NotificationsSettingsPage() {
                 {webhooks.map((w) => (
                   <TableRow key={w.id}>
                     <TableCell className="font-medium">{w.label}</TableCell>
-                    <TableCell className="font-mono text-xs text-zinc-500">
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {w.urlPreview}
                     </TableCell>
-                    <TableCell className="text-zinc-500">
+                    <TableCell className="text-muted-foreground">
                       {format(new Date(w.createdAt), "MMM d, yyyy")}
                     </TableCell>
                     <TableCell>
                       <Link
                         href={`/settings/notifications/webhooks/${w.id}/deliveries`}
-                        className="text-xs text-indigo-600 hover:underline"
+                        className="text-xs text-primary hover:underline"
                       >
                         View deliveries
                       </Link>
@@ -441,7 +441,7 @@ export default function NotificationsSettingsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-zinc-400 hover:text-destructive"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
                           onClick={() => deleteWebhook(w.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -470,7 +470,7 @@ export default function NotificationsSettingsPage() {
         {showWebhookForm && isAdmin && (
           <form
             onSubmit={createWebhook}
-            className="rounded-lg border border-zinc-200 bg-white p-4 space-y-3"
+            className="rounded-[var(--radius)] border border-border bg-card p-4 space-y-3"
           >
             <div className="space-y-1.5">
               <Label htmlFor="wh-label">Label</Label>
@@ -582,7 +582,7 @@ function ChannelForm({
         e.preventDefault()
         onSubmit()
       }}
-      className="rounded-lg border border-zinc-200 bg-white p-4 space-y-3"
+      className="rounded-[var(--radius)] border border-border bg-card p-4 space-y-3"
     >
       <div className="space-y-1.5">
         <Label htmlFor={`${kind}-label`}>Label</Label>

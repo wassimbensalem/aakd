@@ -56,7 +56,7 @@ function StatusBadge({ status }: { status: Delivery["status"] }) {
     )
   }
   return (
-    <Badge className="bg-zinc-100 text-zinc-700 hover:bg-zinc-100">
+    <Badge className="bg-muted text-foreground hover:bg-muted">
       pending
     </Badge>
   )
@@ -115,35 +115,35 @@ export default function WebhookDeliveriesPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
-      <nav className="flex items-center gap-1.5 text-sm text-zinc-500">
-        <Link href="/settings/org" className="hover:text-zinc-900">
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Link href="/settings/org" className="hover:text-foreground">
           Settings
         </Link>
         <Chevron className="h-3.5 w-3.5" />
         <Link
           href="/settings/notifications"
-          className="hover:text-zinc-900"
+          className="hover:text-foreground"
         >
           Notifications
         </Link>
         <Chevron className="h-3.5 w-3.5" />
-        <span className="text-zinc-900 font-medium">
+        <span className="text-foreground font-medium">
           {webhook?.label ?? "Webhook"}
         </span>
         <Chevron className="h-3.5 w-3.5" />
-        <span className="text-zinc-900 font-medium">Deliveries</span>
+        <span className="text-foreground font-medium">Deliveries</span>
       </nav>
 
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">
+        <h1 className="text-xl font-semibold text-foreground">
           Delivery log{webhook ? ` — ${webhook.label}` : ""}
         </h1>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-muted-foreground">
           {total} total {total === 1 ? "delivery" : "deliveries"} (newest first)
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -170,7 +170,7 @@ export default function WebhookDeliveriesPage() {
               <TableRow>
                 <TableCell
                   colSpan={6}
-                  className="py-10 text-center text-sm text-zinc-500"
+                  className="py-10 text-center text-sm text-muted-foreground"
                 >
                   No deliveries yet
                 </TableCell>
@@ -178,17 +178,17 @@ export default function WebhookDeliveriesPage() {
             ) : (
               deliveries.map((d) => (
                 <TableRow key={d.id}>
-                  <TableCell className="font-mono text-xs text-zinc-700">
+                  <TableCell className="font-mono text-xs text-foreground">
                     {d.eventName}
                   </TableCell>
                   <TableCell>{d.attempt}</TableCell>
-                  <TableCell className="text-zinc-500">
+                  <TableCell className="text-muted-foreground">
                     {d.httpStatus ?? "—"}
                   </TableCell>
-                  <TableCell className="text-zinc-500">
+                  <TableCell className="text-muted-foreground">
                     {d.durationMs != null ? `${d.durationMs} ms` : "—"}
                   </TableCell>
-                  <TableCell className="text-zinc-500">
+                  <TableCell className="text-muted-foreground">
                     {d.deliveredAt
                       ? format(new Date(d.deliveredAt), "MMM d, yyyy HH:mm")
                       : format(new Date(d.createdAt), "MMM d, yyyy HH:mm")}
@@ -203,7 +203,7 @@ export default function WebhookDeliveriesPage() {
         </Table>
       </div>
 
-      <div className="flex items-center justify-between text-sm text-zinc-500">
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
         <div>
           Page {page} of {totalPages}
         </div>

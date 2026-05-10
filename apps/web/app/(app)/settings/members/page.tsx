@@ -107,14 +107,14 @@ export default function MembersPage() {
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Members</h1>
-        <p className="text-sm text-zinc-500">Manage who has access to your organization</p>
+        <h1 className="text-xl font-semibold text-foreground">Members</h1>
+        <p className="text-sm text-muted-foreground">Manage who has access to your organization</p>
       </div>
 
       {/* Invite form — admins only */}
       {canManageMembers && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-zinc-900">Invite Member</h2>
+        <div className="rounded-[var(--radius)] border border-border bg-card p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-foreground">Invite Member</h2>
           <form onSubmit={invite} className="flex gap-2">
             <Input
               type="email"
@@ -140,7 +140,7 @@ export default function MembersPage() {
       )}
 
       {/* Members table */}
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -168,8 +168,8 @@ export default function MembersPage() {
                       <AvatarFallback>{getInitials(m.user.name)}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium text-zinc-900">{m.user.name}</p>
-                      <p className="text-xs text-zinc-500">{m.user.email}</p>
+                      <p className="font-medium text-foreground">{m.user.name}</p>
+                      <p className="text-xs text-muted-foreground">{m.user.email}</p>
                     </div>
                   </div>
                 </TableCell>
@@ -188,10 +188,10 @@ export default function MembersPage() {
                       </SelectContent>
                     </Select>
                   ) : (
-                    <span className="text-xs text-zinc-700">{m.role}</span>
+                    <span className="text-xs text-foreground">{m.role}</span>
                   )}
                 </TableCell>
-                <TableCell className="text-zinc-500">
+                <TableCell className="text-muted-foreground">
                   {format(new Date(m.createdAt), "MMM d, yyyy")}
                 </TableCell>
                 <TableCell>
@@ -199,7 +199,7 @@ export default function MembersPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-zinc-400 hover:text-destructive"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
                       onClick={() => removeMember(m.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />

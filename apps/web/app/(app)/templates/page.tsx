@@ -107,8 +107,8 @@ export default function TemplatesPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900">Templates</h1>
-          <p className="text-sm text-zinc-500">Create reusable contract templates with variable placeholders.</p>
+          <h1 className="text-xl font-semibold text-foreground">Templates</h1>
+          <p className="text-sm text-muted-foreground">Create reusable contract templates with variable placeholders.</p>
         </div>
         {canManage && (
           <Button onClick={() => router.push("/templates/new")}>
@@ -144,8 +144,8 @@ export default function TemplatesPage() {
           ))}
         </div>
       ) : templates.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-10 text-center">
-          <p className="text-sm text-zinc-500">
+        <div className="rounded-[var(--radius)] border border-dashed border-border bg-card p-10 text-center">
+          <p className="text-sm text-muted-foreground">
             No templates yet. Create your first template to start drafting contracts faster.
           </p>
         </div>
@@ -153,19 +153,19 @@ export default function TemplatesPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {templates.map((t) => (
-              <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-4 space-y-3">
+              <div key={t.id} className="rounded-[var(--radius)] border border-border bg-card p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-zinc-900 truncate">{t.name}</p>
+                    <p className="font-medium text-foreground truncate">{t.name}</p>
                     {t.description && (
-                      <p className="text-xs text-zinc-500 line-clamp-2 mt-0.5">{t.description}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{t.description}</p>
                     )}
                   </div>
                   {t.contractType && (
                     <TypeBadge type={t.contractType as never} />
                   )}
                 </div>
-                <div className="text-xs text-zinc-500 space-y-0.5">
+                <div className="text-xs text-muted-foreground space-y-0.5">
                   <p>{t.wordCount.toLocaleString()} words</p>
                   <p>By {t.createdBy.name}</p>
                   <p>Updated <RelativeTime date={t.updatedAt} /></p>
@@ -202,7 +202,7 @@ export default function TemplatesPage() {
               >
                 Previous
               </Button>
-              <span className="text-sm text-zinc-500">
+              <span className="text-sm text-muted-foreground">
                 Page {page} of {totalPages}
               </span>
               <Button

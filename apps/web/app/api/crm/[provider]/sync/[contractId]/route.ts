@@ -90,8 +90,7 @@ export async function POST(
       targetStage &&
       deal.stage &&
       deal.stage.toLowerCase() === targetStage.toLowerCase() &&
-      contract.status !== "ACTIVE" &&
-      contract.status !== "ARCHIVED"
+      contract.status === "AWAITING_SIGNATURE"
     ) {
       await prisma.contract.update({
         where: { id: contract.id },

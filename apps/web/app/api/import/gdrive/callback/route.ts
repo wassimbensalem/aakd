@@ -1,4 +1,5 @@
 import { resolveAuth } from "@/lib/auth/middleware"
+import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { encrypt } from "@/lib/notifications/crypto"
@@ -48,6 +49,9 @@ export async function GET(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) {
     return settingsRedirect(`error=${encodeURIComponent("unauthenticated")}`)
+  }
+  if (!hasRole(ctx.role, "admin")) {
+    return settingsRedirect(`error=${encodeURIComponent("forbidden")}`)
   }
 
   const url = new URL(req.url)

@@ -1,0 +1,186 @@
+{
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "contracts": "العقود",
+    "templates": "القوالب",
+    "analytics": "التحليلات",
+    "settings": "الإعدادات",
+    "profile": "الملف الشخصي",
+    "members": "الأعضاء",
+    "integrations": "التكاملات",
+    "import": "استيراد",
+    "apiKeys": "مفاتيح API"
+  },
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "create": "إنشاء",
+    "loading": "جارٍ التحميل...",
+    "error": "حدث خطأ ما",
+    "success": "تم بنجاح",
+    "confirm": "تأكيد",
+    "back": "رجوع",
+    "next": "التالي",
+    "search": "بحث",
+    "filter": "تصفية",
+    "noResults": "لا توجد نتائج",
+    "required": "مطلوب",
+    "optional": "اختياري",
+    "actions": "الإجراءات",
+    "status": "الحالة",
+    "name": "الاسم",
+    "email": "البريد الإلكتروني",
+    "date": "التاريخ",
+    "value": "القيمة",
+    "type": "النوع",
+    "notes": "ملاحظات",
+    "download": "تنزيل",
+    "upload": "رفع",
+    "view": "عرض",
+    "refresh": "تحديث",
+    "retry": "إعادة المحاولة",
+    "close": "إغلاق",
+    "yes": "نعم",
+    "no": "لا"
+  },
+  "contract": {
+    "title": "عنوان العقد",
+    "counterparty": "الطرف المقابل",
+    "status": "الحالة",
+    "startDate": "تاريخ البدء",
+    "endDate": "تاريخ الانتهاء",
+    "renewalDate": "تاريخ التجديد",
+    "value": "قيمة العقد",
+    "currency": "العملة",
+    "type": "نوع العقد",
+    "notes": "ملاحظات",
+    "autoRenewal": "تجديد تلقائي",
+    "noticePeriod": "مدة الإشعار",
+    "statuses": {
+      "DRAFT": "مسودة",
+      "ACTIVE": "نشط",
+      "EXPIRED": "منتهي",
+      "TERMINATED": "منهَى",
+      "AWAITING_SIGNATURE": "في انتظار التوقيع",
+      "ARCHIVED": "مؤرشف"
+    },
+    "tabs": {
+      "overview": "نظرة عامة",
+      "documents": "المستندات",
+      "obligations": "الالتزامات",
+      "activity": "النشاط",
+      "signing": "التوقيع",
+      "ai": "مساعد الذكاء الاصطناعي",
+      "authoring": "الصياغة",
+      "crm": "CRM"
+    },
+    "actions": {
+      "new": "عقد جديد",
+      "archive": "أرشفة",
+      "restore": "استعادة",
+      "sign": "إرسال للتوقيع",
+      "extract": "تشغيل استخراج الذكاء الاصطناعي",
+      "upload": "رفع مستند"
+    }
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "register": "إنشاء حساب",
+    "email": "عنوان البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "forgotPassword": "هل نسيت كلمة المرور؟",
+    "noAccount": "ليس لديك حساب؟",
+    "hasAccount": "هل لديك حساب بالفعل؟"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "language": "اللغة",
+    "languageDescription": "اختر لغة الواجهة",
+    "profile": "الملف الشخصي",
+    "security": "الأمان",
+    "notifications": "الإشعارات",
+    "members": {
+      "title": "الأعضاء",
+      "invite": "دعوة عضو",
+      "role": "الدور",
+      "roles": {
+        "admin": "مسؤول",
+        "legal": "قانوني",
+        "viewer": "مشاهد"
+      }
+    },
+    "apiKeys": {
+      "title": "مفاتيح API",
+      "create": "إنشاء مفتاح API",
+      "name": "اسم المفتاح",
+      "created": "تاريخ الإنشاء",
+      "lastUsed": "آخر استخدام",
+      "revoke": "إلغاء"
+    }
+  },
+  "analytics": {
+    "title": "التحليلات",
+    "totalContracts": "إجمالي العقود",
+    "activeContracts": "العقود النشطة",
+    "expiringContracts": "تنتهي قريبًا",
+    "contractValue": "إجمالي قيمة العقود",
+    "byStatus": "حسب الحالة",
+    "byType": "حسب النوع",
+    "renewalTimeline": "الجدول الزمني للتجديدات",
+    "obligations": "الالتزامات"
+  },
+  "import": {
+    "title": "استيراد العقود",
+    "tabs": {
+      "csv": "جدول بيانات",
+      "batch": "ملفات دفعية",
+      "gdrive": "Google Drive",
+      "pandadoc": "PandaDoc",
+      "clm": "تصدير CLM"
+    },
+    "history": "سجل الاستيراد",
+    "status": {
+      "PENDING": "قيد الانتظار",
+      "PROCESSING": "قيد المعالجة",
+      "COMPLETED": "مكتمل",
+      "FAILED": "فشل"
+    },
+    "source": {
+      "CSV": "جدول بيانات",
+      "BATCH_FILES": "ملفات دفعية",
+      "GOOGLE_DRIVE": "Google Drive",
+      "PANDADOC": "PandaDoc",
+      "CLM_EXPORT": "تصدير CLM"
+    }
+  },
+  "obligations": {
+    "title": "الالتزامات",
+    "new": "التزام جديد",
+    "status": {
+      "PENDING": "قيد الانتظار",
+      "IN_PROGRESS": "قيد التنفيذ",
+      "COMPLETED": "مكتمل",
+      "OVERDUE": "متأخر"
+    },
+    "priority": {
+      "LOW": "منخفضة",
+      "MEDIUM": "متوسطة",
+      "HIGH": "عالية",
+      "CRITICAL": "حرجة"
+    },
+    "dueDate": "تاريخ الاستحقاق",
+    "assignee": "المُكلَّف",
+    "description": "الوصف"
+  },
+  "errors": {
+    "unauthorized": "ليس لديك صلاحية القيام بهذا الإجراء",
+    "notFound": "غير موجود",
+    "serverError": "خطأ في الخادم — يُرجى إعادة المحاولة",
+    "validation": "يُرجى التحقق من أخطاء النموذج",
+    "fileTooLarge": "حجم الملف كبير جدًا (الحد الأقصى 50 ميجابايت)",
+    "invalidFileType": "يُقبل فقط ملفات PDF و DOCX"
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "nav": {
+    "dashboard": "Übersicht",
+    "contracts": "Verträge",
+    "templates": "Vorlagen",
+    "analytics": "Analysen",
+    "settings": "Einstellungen",
+    "profile": "Profil",
+    "members": "Mitglieder",
+    "integrations": "Integrationen",
+    "import": "Import",
+    "apiKeys": "API-Schlüssel"
+  },
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "create": "Erstellen",
+    "loading": "Wird geladen...",
+    "error": "Etwas ist schiefgelaufen",
+    "success": "Erfolg",
+    "confirm": "Bestätigen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "noResults": "Keine Ergebnisse",
+    "required": "Pflichtfeld",
+    "optional": "Optional",
+    "actions": "Aktionen",
+    "status": "Status",
+    "name": "Name",
+    "email": "E-Mail",
+    "date": "Datum",
+    "value": "Wert",
+    "type": "Typ",
+    "notes": "Notizen",
+    "download": "Herunterladen",
+    "upload": "Hochladen",
+    "view": "Anzeigen",
+    "refresh": "Aktualisieren",
+    "retry": "Erneut versuchen",
+    "close": "Schließen",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "contract": {
+    "title": "Vertragstitel",
+    "counterparty": "Vertragspartei",
+    "status": "Status",
+    "startDate": "Startdatum",
+    "endDate": "Enddatum",
+    "renewalDate": "Verlängerungsdatum",
+    "value": "Vertragswert",
+    "currency": "Währung",
+    "type": "Vertragsart",
+    "notes": "Notizen",
+    "autoRenewal": "Automatische Verlängerung",
+    "noticePeriod": "Kündigungsfrist",
+    "statuses": {
+      "DRAFT": "Entwurf",
+      "ACTIVE": "Aktiv",
+      "EXPIRED": "Abgelaufen",
+      "TERMINATED": "Gekündigt",
+      "AWAITING_SIGNATURE": "Wartet auf Unterschrift",
+      "ARCHIVED": "Archiviert"
+    },
+    "tabs": {
+      "overview": "Übersicht",
+      "documents": "Dokumente",
+      "obligations": "Verpflichtungen",
+      "activity": "Aktivität",
+      "signing": "Unterzeichnung",
+      "ai": "KI-Assistent",
+      "authoring": "Erstellung",
+      "crm": "CRM"
+    },
+    "actions": {
+      "new": "Neuer Vertrag",
+      "archive": "Archivieren",
+      "restore": "Wiederherstellen",
+      "sign": "Zur Unterschrift senden",
+      "extract": "KI-Extraktion ausführen",
+      "upload": "Dokument hochladen"
+    }
+  },
+  "auth": {
+    "login": "Anmelden",
+    "logout": "Abmelden",
+    "register": "Konto erstellen",
+    "email": "E-Mail-Adresse",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "noAccount": "Sie haben noch kein Konto?",
+    "hasAccount": "Sie haben bereits ein Konto?"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "languageDescription": "Wählen Sie die Sprache Ihrer Benutzeroberfläche",
+    "profile": "Profil",
+    "security": "Sicherheit",
+    "notifications": "Benachrichtigungen",
+    "members": {
+      "title": "Mitglieder",
+      "invite": "Mitglied einladen",
+      "role": "Rolle",
+      "roles": {
+        "admin": "Administrator",
+        "legal": "Recht",
+        "viewer": "Betrachter"
+      }
+    },
+    "apiKeys": {
+      "title": "API-Schlüssel",
+      "create": "API-Schlüssel erstellen",
+      "name": "Schlüsselname",
+      "created": "Erstellt",
+      "lastUsed": "Zuletzt verwendet",
+      "revoke": "Widerrufen"
+    }
+  },
+  "analytics": {
+    "title": "Analysen",
+    "totalContracts": "Verträge gesamt",
+    "activeContracts": "Aktive Verträge",
+    "expiringContracts": "Bald auslaufend",
+    "contractValue": "Gesamtvertragswert",
+    "byStatus": "Nach Status",
+    "byType": "Nach Typ",
+    "renewalTimeline": "Verlängerungs-Zeitleiste",
+    "obligations": "Verpflichtungen"
+  },
+  "import": {
+    "title": "Verträge importieren",
+    "tabs": {
+      "csv": "Tabelle",
+      "batch": "Stapeldateien",
+      "gdrive": "Google Drive",
+      "pandadoc": "PandaDoc",
+      "clm": "CLM-Export"
+    },
+    "history": "Importverlauf",
+    "status": {
+      "PENDING": "Ausstehend",
+      "PROCESSING": "In Bearbeitung",
+      "COMPLETED": "Abgeschlossen",
+      "FAILED": "Fehlgeschlagen"
+    },
+    "source": {
+      "CSV": "Tabelle",
+      "BATCH_FILES": "Stapeldateien",
+      "GOOGLE_DRIVE": "Google Drive",
+      "PANDADOC": "PandaDoc",
+      "CLM_EXPORT": "CLM-Export"
+    }
+  },
+  "obligations": {
+    "title": "Verpflichtungen",
+    "new": "Neue Verpflichtung",
+    "status": {
+      "PENDING": "Ausstehend",
+      "IN_PROGRESS": "In Bearbeitung",
+      "COMPLETED": "Erledigt",
+      "OVERDUE": "Überfällig"
+    },
+    "priority": {
+      "LOW": "Niedrig",
+      "MEDIUM": "Mittel",
+      "HIGH": "Hoch",
+      "CRITICAL": "Kritisch"
+    },
+    "dueDate": "Fälligkeitsdatum",
+    "assignee": "Zuständig",
+    "description": "Beschreibung"
+  },
+  "errors": {
+    "unauthorized": "Sie sind nicht berechtigt, diese Aktion durchzuführen",
+    "notFound": "Nicht gefunden",
+    "serverError": "Serverfehler — bitte erneut versuchen",
+    "validation": "Bitte prüfen Sie das Formular auf Fehler",
+    "fileTooLarge": "Datei ist zu groß (max. 50 MB)",
+    "invalidFileType": "Nur PDF- und DOCX-Dateien werden akzeptiert"
+  }
+}

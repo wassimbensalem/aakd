@@ -1,0 +1,186 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "contracts": "Contracts",
+    "templates": "Templates",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "profile": "Profile",
+    "members": "Members",
+    "integrations": "Integrations",
+    "import": "Import",
+    "apiKeys": "API Keys"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "success": "Success",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "filter": "Filter",
+    "noResults": "No results",
+    "required": "Required",
+    "optional": "Optional",
+    "actions": "Actions",
+    "status": "Status",
+    "name": "Name",
+    "email": "Email",
+    "date": "Date",
+    "value": "Value",
+    "type": "Type",
+    "notes": "Notes",
+    "download": "Download",
+    "upload": "Upload",
+    "view": "View",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "contract": {
+    "title": "Contract title",
+    "counterparty": "Counterparty",
+    "status": "Status",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "renewalDate": "Renewal date",
+    "value": "Contract value",
+    "currency": "Currency",
+    "type": "Contract type",
+    "notes": "Notes",
+    "autoRenewal": "Auto-renewal",
+    "noticePeriod": "Notice period",
+    "statuses": {
+      "DRAFT": "Draft",
+      "ACTIVE": "Active",
+      "EXPIRED": "Expired",
+      "TERMINATED": "Terminated",
+      "AWAITING_SIGNATURE": "Awaiting signature",
+      "ARCHIVED": "Archived"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "documents": "Documents",
+      "obligations": "Obligations",
+      "activity": "Activity",
+      "signing": "Signing",
+      "ai": "AI Assistant",
+      "authoring": "Authoring",
+      "crm": "CRM"
+    },
+    "actions": {
+      "new": "New contract",
+      "archive": "Archive",
+      "restore": "Restore",
+      "sign": "Send for signature",
+      "extract": "Run AI extraction",
+      "upload": "Upload document"
+    }
+  },
+  "auth": {
+    "login": "Sign in",
+    "logout": "Sign out",
+    "register": "Create account",
+    "email": "Email address",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "languageDescription": "Choose the language for your interface",
+    "profile": "Profile",
+    "security": "Security",
+    "notifications": "Notifications",
+    "members": {
+      "title": "Members",
+      "invite": "Invite member",
+      "role": "Role",
+      "roles": {
+        "admin": "Admin",
+        "legal": "Legal",
+        "viewer": "Viewer"
+      }
+    },
+    "apiKeys": {
+      "title": "API Keys",
+      "create": "Create API key",
+      "name": "Key name",
+      "created": "Created",
+      "lastUsed": "Last used",
+      "revoke": "Revoke"
+    }
+  },
+  "analytics": {
+    "title": "Analytics",
+    "totalContracts": "Total contracts",
+    "activeContracts": "Active contracts",
+    "expiringContracts": "Expiring soon",
+    "contractValue": "Total contract value",
+    "byStatus": "By status",
+    "byType": "By type",
+    "renewalTimeline": "Renewal timeline",
+    "obligations": "Obligations"
+  },
+  "import": {
+    "title": "Import contracts",
+    "tabs": {
+      "csv": "Spreadsheet",
+      "batch": "Batch files",
+      "gdrive": "Google Drive",
+      "pandadoc": "PandaDoc",
+      "clm": "CLM Export"
+    },
+    "history": "Import history",
+    "status": {
+      "PENDING": "Pending",
+      "PROCESSING": "Processing",
+      "COMPLETED": "Completed",
+      "FAILED": "Failed"
+    },
+    "source": {
+      "CSV": "Spreadsheet",
+      "BATCH_FILES": "Batch files",
+      "GOOGLE_DRIVE": "Google Drive",
+      "PANDADOC": "PandaDoc",
+      "CLM_EXPORT": "CLM Export"
+    }
+  },
+  "obligations": {
+    "title": "Obligations",
+    "new": "New obligation",
+    "status": {
+      "PENDING": "Pending",
+      "IN_PROGRESS": "In progress",
+      "COMPLETED": "Completed",
+      "OVERDUE": "Overdue"
+    },
+    "priority": {
+      "LOW": "Low",
+      "MEDIUM": "Medium",
+      "HIGH": "High",
+      "CRITICAL": "Critical"
+    },
+    "dueDate": "Due date",
+    "assignee": "Assignee",
+    "description": "Description"
+  },
+  "errors": {
+    "unauthorized": "You don't have permission to do this",
+    "notFound": "Not found",
+    "serverError": "Server error — please try again",
+    "validation": "Please check the form for errors",
+    "fileTooLarge": "File is too large (max 50 MB)",
+    "invalidFileType": "Only PDF and DOCX files are accepted"
+  }
+}

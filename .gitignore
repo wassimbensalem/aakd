@@ -7,8 +7,11 @@ dist/
 .DS_Store
 prisma/migrations/*/migration.sql
 
-# Agent memory — personal, machine-local, never commit
+# Agent memory + session files — personal, machine-local, never commit
 .claude/agent-memory/
+.claude/session-handoff.md
+.codex/
+apps/web/.claude/
 
 # Python artifacts
 .pytest_cache/

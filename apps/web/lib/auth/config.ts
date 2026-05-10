@@ -9,7 +9,7 @@ const publicAppOrigin = process.env.NEXT_PUBLIC_APP_URL ?? authOrigin
 const devOrigins =
   process.env.NODE_ENV === "production"
     ? []
-    : ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003"]
+    : Array.from({ length: 10 }, (_, i) => `http://localhost:${3000 + i}`)
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),

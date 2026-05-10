@@ -4,12 +4,15 @@
     "contracts": "Verträge",
     "templates": "Vorlagen",
     "analytics": "Analysen",
+    "folders": "Ordner",
     "settings": "Einstellungen",
     "profile": "Profil",
     "members": "Mitglieder",
     "integrations": "Integrationen",
     "import": "Import",
-    "apiKeys": "API-Schlüssel"
+    "apiKeys": "API-Schlüssel",
+    "signOut": "Abmelden",
+    "organization": "Organisation"
   },
   "common": {
     "save": "Speichern",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { LOCALES, DEFAULT_LOCALE } from "@/lib/i18n/config"
 
 // Routes that don't require authentication
 const PUBLIC_PATHS = [
@@ -11,6 +12,21 @@ const PUBLIC_PATHS = [
   "/api/webhooks",
 ]
 
+// Locale resolution is cookie-based with no URL prefix — `i18n.ts` reads the
+// `NEXT_LOCALE` cookie at request time. This middleware ensures a default
+// cookie exists so first-time visitors see English instead of an empty value
+// hitting the messages loader.
+function ensureLocaleCookie(req: NextRequest, res: NextResponse) {
+  const current = req.cookies.get("NEXT_LOCALE")?.value
+  if (current && (LOCALES as readonly string[]).includes(current)) return res
+  res.cookies.set("NEXT_LOCALE", DEFAULT_LOCALE, {
+    path: "/",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 365,
+  })
+  return res
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
@@ -20,7 +36,7 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
 
-  if (isPublic) return NextResponse.next()
+  if (isPublic) return ensureLocaleCookie(req, NextResponse.next())
 
   // Check for Better Auth session cookie
   const sessionToken =
@@ -30,10 +46,10 @@ export function middleware(req: NextRequest) {
   if (!sessionToken) {
     const loginUrl = new URL("/login", req.url)
     loginUrl.searchParams.set("callbackUrl", pathname)
-    return NextResponse.redirect(loginUrl)
+    return ensureLocaleCookie(req, NextResponse.redirect(loginUrl))
   }
 
-  return NextResponse.next()
+  return ensureLocaleCookie(req, NextResponse.next())
 }
 
 export const config = {

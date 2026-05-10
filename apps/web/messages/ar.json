@@ -4,12 +4,15 @@
     "contracts": "العقود",
     "templates": "القوالب",
     "analytics": "التحليلات",
+    "folders": "المجلدات",
     "settings": "الإعدادات",
     "profile": "الملف الشخصي",
     "members": "الأعضاء",
     "integrations": "التكاملات",
     "import": "استيراد",
-    "apiKeys": "مفاتيح API"
+    "apiKeys": "مفاتيح API",
+    "signOut": "تسجيل الخروج",
+    "organization": "المؤسسة"
   },
   "common": {
     "save": "حفظ",

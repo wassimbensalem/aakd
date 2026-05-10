@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import {
   LayoutDashboard, FileText, Folder, Settings, Bell, BarChart2, FileEdit,
   ChevronRight, PanelLeftClose, PanelLeftOpen, LogOut, FileText as LogoIcon
@@ -16,13 +17,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard", Icon: LayoutDashboard },
-  { label: "Contracts", href: "/contracts", Icon: FileText },
-  { label: "Templates", href: "/templates", Icon: FileEdit },
-  { label: "Analytics", href: "/analytics", Icon: BarChart2 },
-  { label: "Folders", href: "/contracts?view=folders", Icon: Folder },
-  { label: "Settings", href: "/settings/org", Icon: Settings },
-]
+  { key: "dashboard", href: "/dashboard", Icon: LayoutDashboard },
+  { key: "contracts", href: "/contracts", Icon: FileText },
+  { key: "templates", href: "/templates", Icon: FileEdit },
+  { key: "analytics", href: "/analytics", Icon: BarChart2 },
+  { key: "folders", href: "/contracts?view=folders", Icon: Folder },
+  { key: "settings", href: "/settings/org", Icon: Settings },
+] as const
 
 function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -55,6 +56,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession()
   const { data: activeOrg, isPending: orgPending } = useActiveOrganization()
   const [collapsed, setCollapsed] = useState(false)
+  const tNav = useTranslations("nav")
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -103,7 +105,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-          {navItems.map(({ label, href, Icon }) => {
+          {navItems.map(({ key, href, Icon }) => {
+            const label = tNav(key)
             const isActive = href === "/contracts?view=folders"
               ? pathname === "/contracts" && false
               : pathname.startsWith(href.split("?")[0]) && (href === "/dashboard" ? pathname === "/dashboard" : true)
@@ -132,7 +135,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!collapsed && activeOrg && (
             <div className="px-2 py-1.5 rounded-md bg-white/5">
               <p className="text-xs font-medium truncate text-slate-300">{activeOrg.name}</p>
-              <p className="text-xs text-slate-400">Organization</p>
+              <p className="text-xs text-slate-400">{tNav("organization")}</p>
             </div>
           )}
           <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
@@ -152,7 +155,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 size="icon"
                 className="h-7 w-7 shrink-0 text-slate-400 hover:text-white hover:bg-white/5"
                 onClick={() => signOut({ fetchOptions: { onSuccess: () => router.push("/login") } })}
-                title="Sign out"
+                title={tNav("signOut")}
               >
                 <LogOut className="h-3.5 w-3.5" />
               </Button>

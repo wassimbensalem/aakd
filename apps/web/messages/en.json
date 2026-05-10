@@ -4,12 +4,15 @@
     "contracts": "Contracts",
     "templates": "Templates",
     "analytics": "Analytics",
+    "folders": "Folders",
     "settings": "Settings",
     "profile": "Profile",
     "members": "Members",
     "integrations": "Integrations",
     "import": "Import",
-    "apiKeys": "API Keys"
+    "apiKeys": "API Keys",
+    "signOut": "Sign out",
+    "organization": "Organization"
   },
   "common": {
     "save": "Save",

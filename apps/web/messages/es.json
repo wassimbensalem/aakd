@@ -4,12 +4,15 @@
     "contracts": "Contratos",
     "templates": "Plantillas",
     "analytics": "Analíticas",
+    "folders": "Carpetas",
     "settings": "Ajustes",
     "profile": "Perfil",
     "members": "Miembros",
     "integrations": "Integraciones",
     "import": "Importar",
-    "apiKeys": "Claves API"
+    "apiKeys": "Claves API",
+    "signOut": "Cerrar sesión",
+    "organization": "Organización"
   },
   "common": {
     "save": "Guardar",

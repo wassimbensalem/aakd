@@ -1732,7 +1732,7 @@ documentExportWorker.on("failed", (job, err) =>
 alertsCheckQueue.add(
   "daily-check",
   { triggeredAt: new Date().toISOString() },
-  { repeat: { pattern: "0 9 * * *" } },
+  { repeat: { pattern: "0 9 * * *" }, jobId: "alerts-daily" },
 ).then(() => console.log("[alerts] Daily cron registered (0 9 * * *)"))
   .catch((err) => console.error("[alerts] Failed to register cron:", err))
 
@@ -1746,10 +1746,13 @@ signingSyncQueue.add(
   .catch((err) => console.error("[signing] Failed to register sync cron:", err))
 
 // Daily obligation sweep — auto-mark overdue + send reminders.
+// jobId: "obligations-daily" prevents a second run from being enqueued while
+// one is already in the queue, eliminating duplicate overdue notifications
+// from concurrent cron fires within the same 60-second window.
 obligationsCheckQueue.add(
   "daily-check",
   { triggeredAt: new Date().toISOString() },
-  { repeat: { pattern: "0 9 * * *" } },
+  { repeat: { pattern: "0 9 * * *" }, jobId: "obligations-daily" },
 ).then(() => console.log("[obligations] Daily cron registered (0 9 * * *)"))
   .catch((err) => console.error("[obligations] Failed to register cron:", err))
 

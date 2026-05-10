@@ -25,6 +25,10 @@ export interface ObligationsCheckJobData {
   triggeredAt: string
 }
 
+export interface SalesforcePollJobData {
+  triggeredAt: string
+}
+
 export interface ContractEmbedJobData {
   contractId: string
   extractedText: string
@@ -122,6 +126,7 @@ let _notificationDeliverQueue: Queue<NotificationDeliverJobData> | null = null
 let _documentConvertQueue: Queue<DocumentConvertJobData> | null = null
 let _documentExportQueue: Queue<DocumentExportJobData> | null = null
 let _obligationsCheckQueue: Queue<ObligationsCheckJobData> | null = null
+let _salesforcePollQueue: Queue<SalesforcePollJobData> | null = null
 
 export function getContractExtractQueue(): Queue<ContractExtractJobData> {
   return (_contractExtractQueue ??= new Queue<ContractExtractJobData>("contract.extract", { connection }))
@@ -194,6 +199,13 @@ export function getObligationsCheckQueue(): Queue<ObligationsCheckJobData> {
   ))
 }
 
+export function getSalesforcePollQueue(): Queue<SalesforcePollJobData> {
+  return (_salesforcePollQueue ??= new Queue<SalesforcePollJobData>(
+    "salesforce.poll",
+    { connection },
+  ))
+}
+
 // ─── Legacy named exports (kept for backward compat) ─────────────────────────
 // These are getters so the Queue is still created lazily. We proxy both `add`
 // (used by API routes / worker handlers) and `close` (used by graceful shutdown).
@@ -245,4 +257,9 @@ export const obligationsCheckQueue = {
   add: (...a: Parameters<Queue<ObligationsCheckJobData>["add"]>) =>
     getObligationsCheckQueue().add(...a),
   close: () => _obligationsCheckQueue?.close() ?? Promise.resolve(),
+}
+export const salesforcePollQueue = {
+  add: (...a: Parameters<Queue<SalesforcePollJobData>["add"]>) =>
+    getSalesforcePollQueue().add(...a),
+  close: () => _salesforcePollQueue?.close() ?? Promise.resolve(),
 }

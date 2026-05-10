@@ -61,7 +61,11 @@ import {
   documentConvertQueue,
   documentExportQueue,
   obligationsCheckQueue,
+  salesforcePollQueue,
 } from "@/lib/jobs/queues"
+import type { SalesforcePollJobData } from "@/lib/jobs/queues"
+import { getCrmProvider } from "@/lib/crm"
+import { encryptToken } from "@/lib/crm/crypto"
 import { htmlToPlateNodes } from "@/lib/editor/html-to-plate"
 import { plateToPlaintext, countWords } from "@/lib/editor/plate-to-plaintext"
 import { plateToDocxBuffer } from "@/lib/editor/plate-to-docx"
@@ -1450,6 +1454,137 @@ documentConvertWorker.on("failed", (job, err) =>
   console.error(`[document.convert] Job ${job?.id} failed:`, err),
 )
 
+// ─── Worker: salesforce.poll (M9 — periodic CRM sync) ────────────────────────
+
+const salesforcePollWorker = new Worker<SalesforcePollJobData>(
+  "salesforce.poll",
+  async (job: Job<SalesforcePollJobData>) => {
+    console.log(`[salesforce.poll] Job ${job.id} (triggered: ${job.data.triggeredAt})`)
+
+    const db = getWorkerPrisma()
+    const integrations = await db.crmIntegration.findMany({
+      where: { provider: "SALESFORCE" },
+    })
+    if (integrations.length === 0) {
+      console.log("[salesforce.poll] No Salesforce integrations connected")
+      return
+    }
+
+    const sf = getCrmProvider("SALESFORCE")
+
+    for (const integration of integrations) {
+      // Refresh tokens up front so a single expiring access token doesn't
+      // cascade into N failed getDeal calls below.
+      let active = integration
+      const expiresAt = integration.tokenExpiresAt
+      if (expiresAt && expiresAt.getTime() - Date.now() < 60_000 && integration.refreshToken) {
+        try {
+          const fresh = await sf.refreshAccessToken(integration)
+          active = await db.crmIntegration.update({
+            where: { id: integration.id },
+            data: {
+              accessToken: encryptToken(fresh.accessToken),
+              refreshToken: fresh.refreshToken
+                ? encryptToken(fresh.refreshToken)
+                : integration.refreshToken,
+              tokenExpiresAt: fresh.expiresAt ?? integration.tokenExpiresAt,
+              instanceUrl: fresh.instanceUrl ?? integration.instanceUrl,
+            },
+          })
+        } catch (err) {
+          console.error(
+            `[salesforce.poll] Refresh failed for integration ${integration.id}:`,
+            err,
+          )
+          continue
+        }
+      }
+
+      const links = await db.crmLink.findMany({
+        where: { integrationId: active.id, provider: "SALESFORCE" },
+        select: {
+          id: true,
+          contractId: true,
+          externalDealId: true,
+          contract: { select: { id: true, status: true } },
+        },
+      })
+
+      for (const link of links) {
+        let deal
+        try {
+          deal = await sf.getDeal(active, link.externalDealId)
+        } catch (err) {
+          console.error(
+            `[salesforce.poll] getDeal failed for link ${link.id}:`,
+            err,
+          )
+          await db.crmLink.update({
+            where: { id: link.id },
+            data: { lastSyncedAt: new Date(), lastSyncStatus: "fetch_failed" },
+          })
+          continue
+        }
+
+        if (!deal) {
+          await db.crmLink.update({
+            where: { id: link.id },
+            data: { lastSyncedAt: new Date(), lastSyncStatus: "deal_not_found" },
+          })
+          continue
+        }
+
+        await db.crmLink.update({
+          where: { id: link.id },
+          data: {
+            lastSyncedAt: new Date(),
+            lastSyncStatus: "success",
+            externalDealName: deal.name,
+            externalDealUrl: deal.url,
+          },
+        })
+
+        const targetStage = active.syncOnActiveStage
+        if (
+          targetStage &&
+          deal.stage &&
+          deal.stage.toLowerCase() === targetStage.toLowerCase() &&
+          link.contract.status !== "ACTIVE" &&
+          link.contract.status !== "ARCHIVED"
+        ) {
+          await db.contract.update({
+            where: { id: link.contractId },
+            data: { status: "ACTIVE" },
+          })
+
+          await db.activity.create({
+            data: {
+              contractId: link.contractId,
+              userId: null,
+              actorLabel: "System",
+              action: "CRM_SYNCED",
+              detail: `Status set to ACTIVE from Salesforce stage "${deal.stage}"`,
+              metadata: { provider: "SALESFORCE", dealId: deal.id, newStage: deal.stage },
+            },
+          })
+        }
+      }
+    }
+
+    console.log(
+      `[salesforce.poll] Polled ${integrations.length} integration(s)`,
+    )
+  },
+  { connection, defaultJobOptions: { attempts: 1, removeOnComplete: 50, removeOnFail: 100 } },
+)
+
+salesforcePollWorker.on("completed", (job) =>
+  console.log(`[salesforce.poll] Job ${job.id} completed`),
+)
+salesforcePollWorker.on("failed", (job, err) =>
+  console.error(`[salesforce.poll] Job ${job?.id} failed:`, err),
+)
+
 // ─── Worker: document.export (M6 — Plate JSON → DOCX or PDF) ──────────────────
 
 const documentExportWorker = new Worker<DocumentExportJobData>(
@@ -1531,6 +1666,14 @@ obligationsCheckQueue.add(
 ).then(() => console.log("[obligations] Daily cron registered (0 9 * * *)"))
   .catch((err) => console.error("[obligations] Failed to register cron:", err))
 
+// Salesforce uses polling (no webhooks). Sweep linked deals every 15 minutes.
+salesforcePollQueue.add(
+  "poll-salesforce",
+  { triggeredAt: new Date().toISOString() },
+  { repeat: { pattern: "*/15 * * * *" } },
+).then(() => console.log("[salesforce.poll] Sync cron registered (*/15 * * * *)"))
+  .catch((err) => console.error("[salesforce.poll] Failed to register cron:", err))
+
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 
 async function shutdown() {
@@ -1546,6 +1689,7 @@ async function shutdown() {
   await deliverWorker.close()
   await documentConvertWorker.close()
   await documentExportWorker.close()
+  await salesforcePollWorker.close()
   await contractAiExtractQueue.close()
   await contractEmbedQueue.close()
   await alertsCheckQueue.close()
@@ -1556,6 +1700,7 @@ async function shutdown() {
   await notificationDeliverQueue.close()
   await documentConvertQueue.close()
   await documentExportQueue.close()
+  await salesforcePollQueue.close()
   await getWorkerPrisma().$disconnect()
   process.exit(0)
 }

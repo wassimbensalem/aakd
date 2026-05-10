@@ -39,9 +39,9 @@ export default function IntegrationsPage() {
   const [role, setRole] = useState<string | null>(null)
   const [roleLoaded, setRoleLoaded] = useState(false)
 
-  async function fetchStatus() {
+  async function fetchStatus(signal?: AbortSignal) {
     try {
-      const res = await fetch("/api/crm/status")
+      const res = await fetch("/api/crm/status", { signal })
       if (!res.ok) throw new Error("status")
       const data: CrmStatusResponse = await res.json()
       const list = data.integrations ?? []
@@ -54,7 +54,8 @@ export default function IntegrationsPage() {
         }
       }
       setSettings(next)
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return
       toast.error("Failed to load integrations")
     } finally {
       setLoading(false)
@@ -62,7 +63,9 @@ export default function IntegrationsPage() {
   }
 
   useEffect(() => {
-    fetchStatus()
+    const controller = new AbortController()
+    fetchStatus(controller.signal)
+    return () => controller.abort()
   }, [])
 
   useEffect(() => {

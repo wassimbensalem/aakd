@@ -12,7 +12,7 @@ async function fetchSummary(): Promise<AnalyticsSummary | null> {
   try {
     const cookieStore = await cookies()
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/analytics/summary`,
+      `${process.env.INTERNAL_APP_URL ?? "http://localhost:3000"}/api/analytics/summary`,
       { headers: { cookie: cookieStore.toString() }, cache: "no-store" },
     )
     if (!res.ok) return null

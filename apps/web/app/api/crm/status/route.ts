@@ -1,10 +1,14 @@
 import { resolveAuth } from "@/lib/auth/middleware"
+import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 
 export async function GET(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  if (!hasRole(ctx.role, "member")) {
+    return Response.json({ error: "Forbidden" }, { status: 403 })
+  }
 
   return requestContext.run(ctx, async () => {
     const rows = await prisma.crmIntegration.findMany({

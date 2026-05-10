@@ -444,7 +444,7 @@ function LinkDialog({
                       <div className="p-6 text-center text-sm text-zinc-500">
                         {query
                           ? "No deals match your search."
-                          : "Type to search, or browse recent deals above."}
+                          : "Type to search for deals."}
                       </div>
                     ) : (
                       <ul className="divide-y divide-zinc-200">

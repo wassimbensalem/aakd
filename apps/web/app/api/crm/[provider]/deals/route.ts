@@ -1,4 +1,5 @@
 import { resolveAuth } from "@/lib/auth/middleware"
+import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { getCrmProvider } from "@/lib/crm"
@@ -7,6 +8,9 @@ import { ensureFreshToken, normalizeProvider } from "@/lib/crm/route-helpers"
 export async function GET(req: Request, { params }: { params: { provider: string } }) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  if (!hasRole(ctx.role, "member")) {
+    return Response.json({ error: "Forbidden" }, { status: 403 })
+  }
 
   const provider = normalizeProvider(params.provider)
   if (!provider) return Response.json({ error: "invalid_provider" }, { status: 400 })

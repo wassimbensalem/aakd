@@ -153,7 +153,7 @@ export default function ContractDetailPage() {
   const [approvalAssigneeId, setApprovalAssigneeId] = useState("")
   const [approvalMessage, setApprovalMessage] = useState("")
   const [requestingApproval, setRequestingApproval] = useState(false)
-  const [decidingId, setDecidingId] = useState<string | null>(null)
+  const [deciding, setDeciding] = useState<{ id: string; intent: "approve" | "reject" } | null>(null)
   const [decideComment, setDecideComment] = useState("")
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(searchParams.get("edit") === "true")
@@ -361,11 +361,12 @@ export default function ContractDetailPage() {
 
   async function handleAcceptAll() {
     try {
-      await fetch(`/api/contracts/${id}/extractions`, {
+      const res = await fetch(`/api/contracts/${id}/extractions`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "accept_all" }),
       })
+      if (!res.ok) { toast.error("Failed to accept all extractions"); return }
       setExtractions((prev) => prev.map((e) => ({ ...e, status: "accepted" as const })))
       toast.success("All extractions accepted")
     } catch {
@@ -466,7 +467,7 @@ export default function ContractDetailPage() {
       })
       if (!res.ok) throw new Error("Failed")
       toast.success(decision === "approved" ? "Approved" : "Rejected")
-      setDecidingId(null)
+      setDeciding(null)
       setDecideComment("")
       fetchContract()
     } catch {
@@ -998,7 +999,7 @@ export default function ContractDetailPage() {
                     {approvals.map((approval) => {
                       const isPending = approval.status === "pending"
                       const isMyApproval = approval.assignedToId === session?.user?.id && isPending
-                      const isDeciding = decidingId === approval.id
+                      const isDeciding = deciding?.id === approval.id
 
                       return (
                         <div
@@ -1063,7 +1064,7 @@ export default function ContractDetailPage() {
                                 size="sm"
                                 variant="outline"
                                 className="h-7 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
-                                onClick={() => setDecidingId(approval.id)}
+                                onClick={() => setDeciding({ id: approval.id, intent: "approve" })}
                               >
                                 <Check className="size-3.5" />
                                 Approve
@@ -1072,7 +1073,7 @@ export default function ContractDetailPage() {
                                 size="sm"
                                 variant="outline"
                                 className="h-7 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400"
-                                onClick={() => setDecidingId(approval.id)}
+                                onClick={() => setDeciding({ id: approval.id, intent: "reject" })}
                               >
                                 <X className="size-3.5" />
                                 Reject
@@ -1091,26 +1092,30 @@ export default function ContractDetailPage() {
                                 className="text-sm"
                               />
                               <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                  onClick={() => decideApproval(approval.id, "approved", decideComment || undefined)}
-                                >
-                                  Confirm Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400"
-                                  onClick={() => decideApproval(approval.id, "rejected", decideComment || undefined)}
-                                >
-                                  Confirm Reject
-                                </Button>
+                                {deciding?.intent === "approve" && (
+                                  <Button
+                                    size="sm"
+                                    className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    onClick={() => decideApproval(approval.id, "approved", decideComment || undefined)}
+                                  >
+                                    Confirm Approve
+                                  </Button>
+                                )}
+                                {deciding?.intent === "reject" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400"
+                                    onClick={() => decideApproval(approval.id, "rejected", decideComment || undefined)}
+                                  >
+                                    Confirm Reject
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   className="h-7"
-                                  onClick={() => { setDecidingId(null); setDecideComment("") }}
+                                  onClick={() => { setDeciding(null); setDecideComment("") }}
                                 >
                                   Cancel
                                 </Button>

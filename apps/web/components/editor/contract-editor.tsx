@@ -267,6 +267,8 @@ export function ContractEditor({
   )
   const [version, setVersion] = useState<number>(initialVersion)
   const [pendingSave, setPendingSave] = useState(false)
+  const pendingSaveRef = useRef(false)
+  const pendingRetryRef = useRef(false)
   const [isReadOnly, setIsReadOnly] = useState(readOnly)
   const [saveStatus, setSaveStatus] = useState<
     "saved" | "unsaved" | "saving" | "conflict" | "error"
@@ -285,9 +287,10 @@ export function ContractEditor({
 
   const triggerSave = useCallback(async () => {
     if (!contractId || !enableAutoSave) return
-    if (pendingSave) return
+    if (pendingSaveRef.current) { pendingRetryRef.current = true; return }
     if (isReadOnly) return
     setPendingSave(true)
+    pendingSaveRef.current = true
     setSaveStatus("saving")
     try {
       const res = await fetch(`/api/contracts/${contractId}/document`, {
@@ -331,8 +334,13 @@ export function ContractEditor({
       toast.error("Auto-save failed. Your changes are not saved.")
     } finally {
       setPendingSave(false)
+      pendingSaveRef.current = false
+      if (pendingRetryRef.current) {
+        pendingRetryRef.current = false
+        triggerSave()
+      }
     }
-  }, [contractId, enableAutoSave, isReadOnly, pendingSave])
+  }, [contractId, enableAutoSave, isReadOnly])
 
   useEffect(() => {
     return () => {

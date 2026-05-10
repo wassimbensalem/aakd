@@ -72,6 +72,7 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
     loadDocument()
   }, [loadDocument])
 
+  const MAX_POLL_ATTEMPTS = 120
   const importPollHandle = useRef<ReturnType<typeof setTimeout> | null>(null)
   const exportPollHandle = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => {
@@ -106,7 +107,12 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
       const { jobId } = await res.json()
       setImportBusy("converting")
 
-      const poll = async (): Promise<void> => {
+      const poll = async (attempts = 0): Promise<void> => {
+        if (attempts >= MAX_POLL_ATTEMPTS) {
+          toast.error("Import timed out. Please check back later.")
+          setImportBusy("idle")
+          return
+        }
         const r = await fetch(`/api/contracts/${contractId}/document/import/${jobId}`)
         if (!r.ok) {
           toast.error("Import failed.")
@@ -124,7 +130,7 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
           toast.error(`Import failed: ${status.error ?? "unknown error"}`)
           setImportBusy("idle")
         } else {
-          importPollHandle.current = setTimeout(poll, 1000)
+          importPollHandle.current = setTimeout(() => poll(attempts + 1), 1000)
         }
       }
       poll()
@@ -156,7 +162,13 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
         return
       }
       const { jobId } = await res.json()
-      const poll = async (): Promise<void> => {
+      const poll = async (attempts = 0): Promise<void> => {
+        if (attempts >= MAX_POLL_ATTEMPTS) {
+          toast.error("Export timed out. Please check back later.")
+          setExportBusy(false)
+          setExportFormat(null)
+          return
+        }
         const r = await fetch(`/api/contracts/${contractId}/document/export/${jobId}`)
         if (!r.ok) {
           if (exportPollHandle.current) clearTimeout(exportPollHandle.current)
@@ -183,7 +195,7 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
           setExportFormat(null)
           return
         }
-        exportPollHandle.current = setTimeout(poll, 1000)
+        exportPollHandle.current = setTimeout(() => poll(attempts + 1), 1000)
       }
       poll()
     } catch (err) {

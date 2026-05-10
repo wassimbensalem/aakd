@@ -54,7 +54,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Dashboard",   href: "/dashboard",    icon: LayoutDashboard, exact: true },
       { label: "Contracts",   href: "/contracts",    icon: FileText },
       { label: "Templates",   href: "/templates",    icon: Layers },
-      { label: "Obligations", href: "/obligations",  icon: Target,       disabled: true },
+      { label: "Obligations", href: "/obligations",  icon: Target },
       { label: "Analytics",   href: "/analytics",    icon: BarChart2 },
     ],
   },

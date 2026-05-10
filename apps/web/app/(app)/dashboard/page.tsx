@@ -237,12 +237,12 @@ export default async function DashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* Bell */}
-          <button
-            type="button"
+          <Link
+            href="/settings/notifications"
             className="flex h-[34px] w-[34px] items-center justify-center rounded-[var(--radius)] border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
           >
             <Bell className="h-[15px] w-[15px]" />
-          </button>
+          </Link>
           {/* New Contract */}
           <Link
             href="/contracts/new"

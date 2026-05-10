@@ -288,7 +288,7 @@ export default function ContractDetailPage() {
     try {
       const fd = new FormData()
       fd.append("file", uploadFile)
-      const res = await fetch(`/api/contracts/${id}/upload`, { method: "POST", body: fd })
+      const res = await fetch(`/api/contracts/${id}/upload`, { method: "POST", body: fd, credentials: "include" })
       if (!res.ok) throw new Error("Upload failed")
       toast.success("File uploaded")
       setUploadOpen(false)

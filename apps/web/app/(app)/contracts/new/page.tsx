@@ -557,6 +557,7 @@ export default function NewContractPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        credentials: "include",
       })
 
       if (!res.ok) {
@@ -572,6 +573,7 @@ export default function NewContractPage() {
         await fetch(`/api/contracts/${contract.id}/upload`, {
           method: "POST",
           body: fd,
+          credentials: "include",
         })
       }
 

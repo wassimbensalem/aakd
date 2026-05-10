@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { resolveAuth } from "@/lib/auth/middleware"
+import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { requireRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
@@ -19,6 +19,9 @@ export async function PATCH(
 ) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+  const writeCheck = requireWriteScope(ctx)
+  if (writeCheck) return writeCheck
 
   const roleErr = requireRole(ctx.role, "admin")
   if (roleErr) return roleErr
@@ -71,6 +74,9 @@ export async function DELETE(
 ) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+  const writeCheck = requireWriteScope(ctx)
+  if (writeCheck) return writeCheck
 
   const roleErr = requireRole(ctx.role, "admin")
   if (roleErr) return roleErr

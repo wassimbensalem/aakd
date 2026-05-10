@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     req.headers.get("x-real-ip") ??
     "unknown"
 
-  const rl = rateLimit(`ip:auth:${ip}`, 10, 60_000)
+  const rl = await rateLimit(`ip:auth:${ip}`, 10, 60_000)
   if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   return handler.POST(req)

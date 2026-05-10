@@ -33,10 +33,24 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const member = await prisma.member.findUnique({
       where: { id: params.id },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true, role: true },
     })
     if (!member || member.organizationId !== ctx.organizationId) {
       return new Response("Not Found", { status: 404 })
+    }
+
+    // Don't let the org demote its last admin — that would lock everyone
+    // out of admin-only operations (members, api keys, integrations).
+    if (member.role === "admin" && parsed.data.role !== "admin") {
+      const adminCount = await prisma.member.count({
+        where: { organizationId: ctx.organizationId, role: "admin" },
+      })
+      if (adminCount <= 1) {
+        return Response.json(
+          { error: "cannot_demote_last_admin" },
+          { status: 409 },
+        )
+      }
     }
 
     const updated = await prisma.member.update({

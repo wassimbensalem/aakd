@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   if (!ctx) return new Response("Unauthorized", { status: 401 })
 
   // Rate limit: 30 requests/min per org
-  const rl = rateLimit(`${ctx.organizationId}:semantic-search`, 30, 60_000)
+  const rl = await rateLimit(`${ctx.organizationId}:semantic-search`, 30, 60_000)
   if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   let body: unknown

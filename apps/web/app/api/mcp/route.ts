@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { generateEmbedding } from "@/lib/embedding"
 import { QA_SYSTEM_PROMPT } from "@/lib/ai/prompts"
+import { rateLimit } from "@/lib/rate-limit"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -376,6 +377,16 @@ async function toolCreateContract(
   userId: string,
   id: string | number,
 ): Promise<Response> {
+  // Mirror the rate limit on POST /api/contracts so MCP clients can't
+  // bypass it by going through the JSON-RPC endpoint.
+  const rl = await rateLimit(`${orgId}:create-contract`, 20, 60_000)
+  if (!rl.allowed) {
+    return toolError(
+      id,
+      `Rate limit exceeded — retry after ${rl.retryAfter}s`,
+    )
+  }
+
   const parsed = CreateContractSchema.safeParse(args)
   if (!parsed.success) {
     return toolError(id, `Invalid arguments: ${JSON.stringify(parsed.error.flatten())}`)
@@ -414,7 +425,12 @@ async function toolListContracts(
   const { status, contractType, limit, page } = parsed.data
 
   const where: Record<string, unknown> = { organizationId: orgId }
-  if (status) where.status = status
+  if (status) {
+    where.status = status
+  } else {
+    // Hide soft-deleted contracts unless the caller explicitly asks for them.
+    where.status = { not: "ARCHIVED" }
+  }
   if (contractType) where.contractType = contractType
 
   const [contracts, total] = await Promise.all([

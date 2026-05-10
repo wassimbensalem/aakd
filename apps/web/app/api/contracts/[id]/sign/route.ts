@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   // Rate limit: 5 requests/min per org (signing is expensive + irreversible)
-  const rl = rateLimit(`${ctx.organizationId}:sign`, 5, 60_000)
+  const rl = await rateLimit(`${ctx.organizationId}:sign`, 5, 60_000)
   if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   return requestContext.run(ctx, async () => {
@@ -86,18 +86,21 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
 
     // ── determine signer ──────────────────────────────────────────────────────
-    let signerEmail = contract.counterpartyContact ?? null
-    let signerName = contract.counterpartyName ?? "Signer"
-
-    if (!signerEmail) {
-      // Fall back to org admin email
-      const adminMember = await prisma.member.findFirst({
-        where: { organizationId: ctx.organizationId, role: "admin" },
-        select: { user: { select: { email: true, name: true } } },
-      })
-      signerEmail = adminMember?.user.email ?? ""
-      signerName = adminMember?.user.name ?? "Signer"
+    // Require an explicit counterparty email. The previous behavior silently
+    // fell back to the org admin's email — which would route the signing
+    // request to the wrong person, bypassing the intended signer flow.
+    if (!contract.counterpartyContact) {
+      return Response.json(
+        {
+          error: "missing_counterparty_contact",
+          message:
+            "Cannot initiate signing: counterparty email is not set on this contract.",
+        },
+        { status: 400 },
+      )
     }
+    const signerEmail = contract.counterpartyContact
+    const signerName = contract.counterpartyName ?? "Signer"
 
     // ── create submission ─────────────────────────────────────────────────────
     const submission = await createSubmission(template.id, [

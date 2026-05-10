@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { resolveAuth } from "@/lib/auth/middleware"
+import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { normalizeProvider } from "@/lib/crm/route-helpers"
@@ -16,7 +17,7 @@ export async function PATCH(req: Request, { params }: { params: { provider: stri
   const provider = normalizeProvider(params.provider)
   if (!provider) return Response.json({ error: "invalid_provider" }, { status: 400 })
 
-  if (ctx.role !== "admin" && ctx.role !== "legal") {
+  if (!hasRole(ctx.role, "legal")) {
     return Response.json({ error: "Forbidden" }, { status: 403 })
   }
 

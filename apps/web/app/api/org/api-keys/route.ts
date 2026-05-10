@@ -58,6 +58,17 @@ export async function POST(req: Request) {
       return Response.json({ error: parsed.error.flatten() }, { status: 422 })
     }
 
+    // Cap keys per org so a compromised admin can't mint unlimited keys.
+    const keyCount = await prisma.apiKey.count({
+      where: { organizationId: ctx.organizationId },
+    })
+    if (keyCount >= 20) {
+      return Response.json(
+        { error: "api_key_limit_reached", limit: 20 },
+        { status: 422 },
+      )
+    }
+
     const { raw, keyHash, lookupHash, prefix } = await generateApiKey()
 
     const apiKey = await prisma.apiKey.create({

@@ -1,5 +1,6 @@
 import crypto from "node:crypto"
 import { resolveAuth } from "@/lib/auth/middleware"
+import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { getCrmProvider } from "@/lib/crm"
@@ -14,7 +15,7 @@ export async function GET(req: Request, { params }: { params: { provider: string
   const provider = normalizeProvider(params.provider)
   if (!provider) return Response.json({ error: "invalid_provider" }, { status: 400 })
 
-  if (ctx.role !== "admin" && ctx.role !== "legal") {
+  if (!hasRole(ctx.role, "legal")) {
     return Response.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -58,7 +59,7 @@ export async function DELETE(req: Request, { params }: { params: { provider: str
   const provider = normalizeProvider(params.provider)
   if (!provider) return Response.json({ error: "invalid_provider" }, { status: 400 })
 
-  if (ctx.role !== "admin" && ctx.role !== "legal") {
+  if (!hasRole(ctx.role, "legal")) {
     return Response.json({ error: "Forbidden" }, { status: 403 })
   }
 

@@ -1,6 +1,6 @@
-import { resolveAuth } from "@/lib/auth/middleware"
+import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { auth } from "@/lib/auth/config"
-import { hasRole } from "@/lib/auth/roles"
+import { hasRole, type Role } from "@/lib/auth/roles"
 import { z } from "zod"
 
 const InviteSchema = z.object({
@@ -8,11 +8,22 @@ const InviteSchema = z.object({
   role: z.enum(["admin", "legal", "member", "viewer"]).default("member"),
 })
 
+const ROLE_RANK: Record<Role, number> = {
+  owner: 5,
+  admin: 4,
+  legal: 3,
+  member: 2,
+  viewer: 1,
+}
+
 export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
-  if (!hasRole(ctx.role, "legal")) {
+  const writeCheck = requireWriteScope(ctx)
+  if (writeCheck) return writeCheck
+
+  if (!hasRole(ctx.role, "admin")) {
     return new Response("Forbidden", { status: 403 })
   }
 
@@ -26,6 +37,17 @@ export async function POST(req: Request) {
   const parsed = InviteSchema.safeParse(body)
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 422 })
+  }
+
+  // The invited role cannot exceed the inviter's role. Without this an
+  // admin could mint an owner, escalating beyond their own privileges.
+  const inviterRank = ROLE_RANK[ctx.role as Role] ?? 0
+  const invitedRank = ROLE_RANK[parsed.data.role as Role] ?? 0
+  if (invitedRank > inviterRank) {
+    return Response.json(
+      { error: "cannot_invite_higher_role" },
+      { status: 403 },
+    )
   }
 
   // Delegate to Better Auth: it generates the invitation row + token, sets the

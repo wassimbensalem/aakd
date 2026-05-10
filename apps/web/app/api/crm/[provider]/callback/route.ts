@@ -1,4 +1,5 @@
 import { resolveAuth } from "@/lib/auth/middleware"
+import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { getCrmProvider } from "@/lib/crm"
@@ -53,7 +54,7 @@ export async function GET(req: Request, { params }: { params: { provider: string
   const provider = normalizeProvider(params.provider)
   if (!provider) return Response.json({ error: "invalid_provider" }, { status: 400 })
 
-  if (ctx.role !== "admin" && ctx.role !== "legal") {
+  if (!hasRole(ctx.role, "legal")) {
     return Response.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -80,13 +81,20 @@ export async function GET(req: Request, { params }: { params: { provider: string
   }
 
   return requestContext.run(ctx, async () => {
+    // Store null when no refresh token was returned. Encrypting "" produces
+    // a non-empty ciphertext that ensureFreshToken would later try to decrypt
+    // and refresh with — which the provider rejects with 4xx.
+    const encryptedRefreshToken = tokenSet.refreshToken
+      ? encryptToken(tokenSet.refreshToken)
+      : null
+
     const integration = await prisma.crmIntegration.upsert({
       where: { organizationId_provider: { organizationId: ctx.organizationId, provider } },
       create: {
         organizationId: ctx.organizationId,
         provider,
         accessToken: encryptToken(tokenSet.accessToken),
-        refreshToken: encryptToken(tokenSet.refreshToken ?? ""),
+        refreshToken: encryptedRefreshToken,
         tokenExpiresAt: tokenSet.expiresAt ?? null,
         instanceUrl: tokenSet.instanceUrl ?? null,
         portalId: tokenSet.portalId ?? null,
@@ -94,7 +102,7 @@ export async function GET(req: Request, { params }: { params: { provider: string
       },
       update: {
         accessToken: encryptToken(tokenSet.accessToken),
-        refreshToken: encryptToken(tokenSet.refreshToken ?? ""),
+        refreshToken: encryptedRefreshToken,
         tokenExpiresAt: tokenSet.expiresAt ?? null,
         instanceUrl: tokenSet.instanceUrl ?? null,
         portalId: tokenSet.portalId ?? null,

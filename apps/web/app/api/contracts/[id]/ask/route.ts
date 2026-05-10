@@ -145,7 +145,7 @@ export async function POST(
   if (!ctx) return new Response("Unauthorized", { status: 401 })
 
   // Rate limit: 20 requests/min per org (AI inference is costly)
-  const rl = rateLimit(`${ctx.organizationId}:ask`, 20, 60_000)
+  const rl = await rateLimit(`${ctx.organizationId}:ask`, 20, 60_000)
   if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   const { id } = await params

@@ -47,7 +47,13 @@ export async function GET(req: Request) {
     })()
 
     const where: Record<string, unknown> = {}
-    if (status) where.status = status
+    if (status) {
+      where.status = status
+    } else {
+      // ARCHIVED is a soft-delete state — exclude it from the default listing.
+      // Callers that explicitly want archived contracts can pass ?status=ARCHIVED.
+      where.status = { not: "ARCHIVED" }
+    }
     if (contractType) where.contractType = contractType
     if (ownerId) where.ownerId = ownerId
     if (folderId) where.folderId = folderId
@@ -81,7 +87,7 @@ export async function POST(req: Request) {
   if (scopeError) return scopeError
 
   // Rate limit: 20 requests/min per org
-  const rl = rateLimit(`${ctx.organizationId}:create-contract`, 20, 60_000)
+  const rl = await rateLimit(`${ctx.organizationId}:create-contract`, 20, 60_000)
   if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   return requestContext.run(ctx, async () => {

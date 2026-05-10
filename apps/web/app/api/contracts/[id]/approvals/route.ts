@@ -1,4 +1,5 @@
 import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
+import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
@@ -57,8 +58,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (scopeError) return scopeError
 
   return requestContext.run(ctx, async () => {
-    // Role gate: only admin or legal can request approvals
-    if (ctx.role !== "admin" && ctx.role !== "legal") {
+    // Role gate: only legal+ (legal, admin, owner) can request approvals
+    if (!hasRole(ctx.role, "legal")) {
       return Response.json({ error: "Forbidden" }, { status: 403 })
     }
 

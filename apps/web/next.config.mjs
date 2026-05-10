@@ -14,6 +14,9 @@ const nextConfig = {
   // root so the standalone bundle includes packages like 'next' itself.
   experimental: {
     outputFileTracingRoot: path.join(__dirname, "../../"),
+    // pdf-parse v1 runs a test file on import — keep it out of the Next.js
+    // bundle so it loads at runtime via Node.js require, not at build time.
+    serverComponentsExternalPackages: ["pdf-parse"],
   },
 }
 

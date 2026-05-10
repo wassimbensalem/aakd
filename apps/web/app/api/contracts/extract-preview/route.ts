@@ -1,6 +1,6 @@
 import { resolveAuth } from "@/lib/auth/middleware"
 import OpenAI from "openai"
-import { PDFParse } from "pdf-parse"
+import pdfParse from "pdf-parse"
 import mammoth from "mammoth"
 
 const MAX_SIZE = 50 * 1024 * 1024 // 50 MB
@@ -27,8 +27,7 @@ function detectFileType(buffer: Buffer): "pdf" | "docx" | null {
 
 async function extractText(buffer: Buffer, fileType: "pdf" | "docx"): Promise<string> {
   if (fileType === "pdf") {
-    const parser = new PDFParse({ data: new Uint8Array(buffer) })
-    const result = await parser.getText()
+    const result = await pdfParse(buffer)
     return result.text
   }
   // DOCX

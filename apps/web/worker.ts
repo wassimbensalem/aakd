@@ -14,7 +14,7 @@ dotenv.config({ path: path.resolve(__dirname, ".env.local") })
 
 import crypto from "node:crypto"
 import { Worker, Job } from "bullmq"
-import PDFParse from "pdf-parse"
+import pdfParse from "pdf-parse"
 import mammoth from "mammoth"
 import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
@@ -197,9 +197,8 @@ const extractWorker = new Worker<ContractExtractJobData>(
 
     if (contractFile.mimeType === "application/pdf") {
       try {
-        const parser = new PDFParse({ data: new Uint8Array(buffer) })
-        const result = await parser.getText()
-        extractedText = result?.trim() ?? null
+        const result = await pdfParse(buffer)
+        extractedText = result.text?.trim() ?? null
         console.log(`[extract] PDF text extracted: ${extractedText?.length ?? 0} chars`)
       } catch (err) {
         console.error(`[extract] pdf-parse failed for file ${fileId}:`, err)

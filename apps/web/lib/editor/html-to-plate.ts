@@ -245,9 +245,11 @@ function processBlock(
   if (tag === "br") {
     return
   }
-  // body, div, section, article, etc — recurse children as siblings
+  // body, div, section, article, root wrapper, etc — recurse children as siblings
   if (
+    tag === "root" ||
     tag === "body" ||
+    tag === "html" ||
     tag === "div" ||
     tag === "section" ||
     tag === "article" ||
@@ -335,8 +337,7 @@ export function htmlToPlateNodes(html: string): PlateNode[] {
   let doc: ReturnType<DOMParser["parseFromString"]>
   try {
     doc = new DOMParser({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      errorHandler: { warning: () => {}, error: () => {}, fatalError: () => {} } as any,
+      onError: () => {},
     }).parseFromString(wrapped, "text/html")
   } catch {
     return emptyDocument()

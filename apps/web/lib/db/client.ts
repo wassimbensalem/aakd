@@ -15,6 +15,8 @@ const ORG_SCOPED_MODELS = new Set([
   "ContractTemplate",
   // M7: obligation tracking
   "ContractObligation",
+  // M9: CRM integrations
+  "CrmIntegration",
 ])
 
 type ScopedQueryArgs = {

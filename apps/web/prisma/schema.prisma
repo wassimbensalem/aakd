@@ -37,6 +37,8 @@ model User {
   obligationsCompleted        ContractObligation[]     @relation("ObligationCompleter")
   obligationsCreated          ContractObligation[]     @relation("ObligationCreator")
   subTasksCompleted           ObligationSubTask[]      @relation("SubTaskCompleter")
+  crmIntegrationsConnected    CrmIntegration[]         @relation("CrmIntegrationConnectedBy")
+  crmLinksCreated             CrmLink[]                @relation("CrmLinkCreator")
 }
 
 model Session {
@@ -97,6 +99,7 @@ model Organization {
   notificationPreferences UserNotificationPreference[]
   templates               ContractTemplate[]
   obligations             ContractObligation[]
+  crmIntegrations         CrmIntegration[]
 }
 
 model Member {
@@ -175,6 +178,7 @@ model Contract {
   embedding           ContractEmbedding?
   document              ContractDocument?
   obligations           ContractObligation[]
+  crmLinks              CrmLink[]
   extractedText         String?
   docusealSubmissionId  String?
   signingUrl            String?
@@ -270,6 +274,9 @@ enum ActivityAction {
   OBLIGATION_UPDATED
   OBLIGATION_COMPLETED
   OBLIGATION_DELETED
+  CRM_LINKED
+  CRM_UNLINKED
+  CRM_SYNCED
 }
 
 model Folder {
@@ -528,4 +535,65 @@ enum ObligationPriority {
   LOW
   MEDIUM
   HIGH
+}
+
+// ─── M9: CRM Integrations ─────────────────────────────────────────────────────
+
+model CrmIntegration {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  provider       CrmProvider
+  accessToken    String
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  instanceUrl    String?
+  portalId       String?
+
+  autoCreateStage   String?
+  syncOnActiveStage String?
+
+  connectedById  String
+  connectedBy    User         @relation("CrmIntegrationConnectedBy", fields: [connectedById], references: [id])
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  links          CrmLink[]
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
+}
+
+model CrmLink {
+  id               String         @id @default(cuid())
+  contractId       String
+  contract         Contract       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  integrationId    String
+  integration      CrmIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  provider         CrmProvider
+  externalDealId   String
+  externalDealName String
+  externalDealUrl  String?
+
+  lastSyncedAt     DateTime?
+  lastSyncStatus   String?
+
+  createdById      String
+  createdBy        User           @relation("CrmLinkCreator", fields: [createdById], references: [id])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([contractId, integrationId])
+  @@index([contractId])
+  @@index([integrationId])
+  @@index([provider, externalDealId])
+}
+
+enum CrmProvider {
+  HUBSPOT
+  SALESFORCE
+  PIPEDRIVE
 }

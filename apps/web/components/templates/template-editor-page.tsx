@@ -27,10 +27,6 @@ interface Variable {
   defaultValue?: string
 }
 
-interface CountedDescendant {
-  count: number
-  nodes: Descendant[]
-}
 
 export function TemplateEditorPage({ templateId }: { templateId?: string }) {
   const router = useRouter()

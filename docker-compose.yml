@@ -64,7 +64,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/clauseflow
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set in .env (generate with: openssl rand -base64 32)}
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set in .env (generate with: openssl rand -base64 32)}"
       BETTER_AUTH_URL: http://localhost:3000
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       STORAGE_ENDPOINT: http://minio:9000

@@ -214,7 +214,7 @@ export function CsvImportTab({ onJobCreated }: { onJobCreated?: () => void }) {
         <div className="flex items-center justify-end gap-2">
           {!titleMapped && (
             <p className="text-xs text-amber-600">
-              Map a column to "Contract title" to continue.
+              Map a column to &quot;Contract title&quot; to continue.
             </p>
           )}
           <Button onClick={startImport} disabled={!titleMapped || submitting}>

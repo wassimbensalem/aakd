@@ -32,7 +32,7 @@ const MAX_SELECTION = 50
 
 export function GoogleDriveTab({ onJobCreated }: { onJobCreated?: () => void }) {
   const [conn, setConn] = useState<ConnectionStatus>({ state: "loading" })
-  const [folderId, setFolderId] = useState<string | null>(null)
+  const [, setFolderId] = useState<string | null>(null)
   const [breadcrumb, setBreadcrumb] = useState<{ id: string | null; name: string }[]>([
     { id: null, name: "My Drive" },
   ])

@@ -38,8 +38,7 @@ export const EMPTY_DOC: Descendant[] = [
   { type: "p", children: [{ text: "" }] } as unknown as Descendant,
 ]
 
-const FORMAT_KEYS = ["bold", "italic", "underline"] as const
-type FormatKey = (typeof FORMAT_KEYS)[number]
+type FormatKey = "bold" | "italic" | "underline"
 
 function isMarkActive(editor: Editor, format: FormatKey): boolean {
   const marks = Editor.marks(editor) as Partial<Record<FormatKey, boolean>> | null
@@ -266,7 +265,6 @@ export function ContractEditor({
     initialContent.length > 0 ? initialContent : EMPTY_DOC,
   )
   const [version, setVersion] = useState<number>(initialVersion)
-  const [pendingSave, setPendingSave] = useState(false)
   const pendingSaveRef = useRef(false)
   const pendingRetryRef = useRef(false)
   const [isReadOnly, setIsReadOnly] = useState(readOnly)
@@ -289,7 +287,6 @@ export function ContractEditor({
     if (!contractId || !enableAutoSave) return
     if (pendingSaveRef.current) { pendingRetryRef.current = true; return }
     if (isReadOnly) return
-    setPendingSave(true)
     pendingSaveRef.current = true
     setSaveStatus("saving")
     try {
@@ -333,7 +330,6 @@ export function ContractEditor({
       setSaveStatus("error")
       toast.error("Auto-save failed. Your changes are not saved.")
     } finally {
-      setPendingSave(false)
       pendingSaveRef.current = false
       if (pendingRetryRef.current) {
         pendingRetryRef.current = false

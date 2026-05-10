@@ -2,7 +2,7 @@
  * Batch file import handler — covers BATCH_FILES (ZIP or multi-upload via S3
  * manifest) and GOOGLE_DRIVE (download from Drive API, otherwise identical).
  */
-import { unzipSync, strFromU8 } from "fflate"
+import { unzipSync } from "fflate"
 import type { ImportJob } from "@prisma/client"
 
 import { getWorkerPrisma } from "@/lib/db/worker-client"

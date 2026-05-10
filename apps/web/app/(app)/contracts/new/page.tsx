@@ -29,7 +29,7 @@ export default function NewContractPage() {
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState("")
   const [showDetails, setShowDetails] = useState(false)
-  const [folders, setFolders] = useState<Folder[]>([])
+  const [, setFolders] = useState<Folder[]>([])
 
   const [details, setDetails] = useState({
     contractType: "",

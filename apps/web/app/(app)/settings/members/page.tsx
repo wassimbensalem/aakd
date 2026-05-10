@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { Trash2 } from "lucide-react"
+import { UserPlus, MoreHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Table,
   TableBody,
@@ -30,6 +32,7 @@ export default function MembersPage() {
   const { data: session } = useSession()
   const [members, setMembers] = useState<OrgMember[]>([])
   const [loading, setLoading] = useState(true)
+  const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState("member")
   const [inviting, setInviting] = useState(false)
@@ -70,6 +73,7 @@ export default function MembersPage() {
       if (!res.ok) throw new Error("Failed to invite")
       toast.success(`Invitation sent to ${inviteEmail}`)
       setInviteEmail("")
+      setShowInviteModal(false)
     } catch {
       toast.error("Failed to send invitation")
     } finally {
@@ -92,52 +96,21 @@ export default function MembersPage() {
     }
   }
 
-  async function removeMember(memberId: string) {
-    if (!confirm("Remove this member?")) return
-    try {
-      const res = await fetch(`/api/org/members/${memberId}`, { method: "DELETE" })
-      if (!res.ok) throw new Error()
-      toast.success("Member removed")
-      fetchMembers()
-    } catch {
-      toast.error("Failed to remove member")
-    }
-  }
-
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Members</h1>
-        <p className="text-sm text-muted-foreground">Manage who has access to your organization</p>
-      </div>
-
-      {/* Invite form — admins only */}
-      {canManageMembers && (
-        <div className="rounded-[var(--radius)] border border-border bg-card p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-foreground">Invite Member</h2>
-          <form onSubmit={invite} className="flex gap-2">
-            <Input
-              type="email"
-              placeholder="colleague@example.com"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              required
-              className="flex-1"
-            />
-            <Select value={inviteRole} onValueChange={(v) => v != null && setInviteRole(v)}>
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button type="submit" size="sm" disabled={inviting}>
-              {inviting ? "Sending..." : "Invite"}
-            </Button>
-          </form>
+    <div className="p-6 space-y-6 max-w-3xl">
+      {/* Page header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Team Members</h1>
+          <p className="text-sm text-muted-foreground">Manage who has access to your organization</p>
         </div>
-      )}
+        {canManageMembers && (
+          <Button onClick={() => setShowInviteModal(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Invite Member
+          </Button>
+        )}
+      </div>
 
       {/* Members table */}
       <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
@@ -146,6 +119,7 @@ export default function MembersPage() {
             <TableRow className="hover:bg-transparent">
               <TableHead>Member</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Joined</TableHead>
               <TableHead className="w-12" />
             </TableRow>
@@ -154,7 +128,7 @@ export default function MembersPage() {
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 4 }).map((_, j) => (
+                  {Array.from({ length: 5 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
@@ -165,7 +139,9 @@ export default function MembersPage() {
                   <div className="flex items-center gap-2.5">
                     <Avatar size="sm">
                       {m.user.image && <AvatarImage src={m.user.image} />}
-                      <AvatarFallback>{getInitials(m.user.name)}</AvatarFallback>
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                        {getInitials(m.user.name)}
+                      </AvatarFallback>
                     </Avatar>
                     <div>
                       <p className="font-medium text-foreground">{m.user.name}</p>
@@ -184,33 +160,88 @@ export default function MembersPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        {ROLES.map((r) => (
+                          <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   ) : (
-                    <span className="text-xs text-foreground">{m.role}</span>
+                    <span className="text-xs text-foreground capitalize">{m.role}</span>
                   )}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell>
+                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-green-100 text-green-700">
+                    Active
+                  </span>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
                   {format(new Date(m.createdAt), "MMM d, yyyy")}
                 </TableCell>
                 <TableCell>
-                  {canManageMembers && m.userId !== session?.user?.id && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeMember(m.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      {/* Invite Member modal */}
+      <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite Member</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={invite} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="inviteEmail" className="text-sm font-medium text-foreground">
+                Email Address
+              </Label>
+              <Input
+                id="inviteEmail"
+                type="email"
+                placeholder="colleague@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inviteRole" className="text-sm font-medium text-foreground">
+                Role
+              </Label>
+              <Select value={inviteRole} onValueChange={(v) => v != null && setInviteRole(v)}>
+                <SelectTrigger id="inviteRole">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((r) => (
+                    <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowInviteModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={inviting}>
+                {inviting ? "Sending..." : "Send Invite"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

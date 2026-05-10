@@ -22,6 +22,9 @@ import {
   UserCheck,
   Send,
   ExternalLink,
+  Trash2,
+  RefreshCw,
+  MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,15 +46,6 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Progress } from "@/components/ui/progress"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { StatusBadge, TypeBadge } from "@/components/contract-badges"
 import { ActivityTimeline } from "@/components/activity-timeline"
 import { FileUploadZone } from "@/components/file-upload-zone"
@@ -170,6 +164,14 @@ export default function ContractDetailPage() {
   const [aiAnswer, setAiAnswer] = useState("")
   const [aiCitations, setAiCitations] = useState<AskCitation[]>([])
   const [askingAI, setAskingAI] = useState(false)
+  const [qaInput, setQaInput] = useState("")
+  const [qaThreads, setQaThreads] = useState<Array<{ id: string; question: string; answers: Array<{ name: string; text: string }> }>>([
+    {
+      id: "demo-1",
+      question: "What is the notice period for termination?",
+      answers: [{ name: "AI", text: "Based on the contract, the notice period for termination is 90 days written notice to the other party." }],
+    },
+  ])
 
   const fetchContract = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -310,6 +312,18 @@ export default function ContractDetailPage() {
       a.click()
     } catch {
       toast.error("Download failed")
+    }
+  }
+
+  async function deleteFile(fileId: string) {
+    if (!confirm("Delete this file? This cannot be undone.")) return
+    try {
+      const res = await fetch(`/api/contracts/${id}/upload?fileId=${fileId}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Delete failed")
+      toast.success("File deleted")
+      fetchContract()
+    } catch {
+      toast.error("Failed to delete file")
     }
   }
 
@@ -616,7 +630,7 @@ export default function ContractDetailPage() {
         {/* Left Column — Tabs */}
         <div className="col-span-12 lg:col-span-8">
           <Tabs defaultValue={searchParams.get("tab") === "editor" ? "editor" : "overview"}>
-            <TabsList className="h-auto rounded-none border-b border-border bg-transparent p-0">
+            <TabsList className="h-auto rounded-none border-b border-border bg-transparent p-0 flex-wrap">
               <TabsTrigger
                 value="overview"
                 className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:shadow-none hover:text-foreground"
@@ -627,7 +641,7 @@ export default function ContractDetailPage() {
                 value="documents"
                 className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:shadow-none hover:text-foreground"
               >
-                Documents{files.length > 0 && ` (${files.length})`}
+                Files{files.length > 0 && ` (${files.length})`}
               </TabsTrigger>
               <TabsTrigger
                 value="editor"
@@ -656,6 +670,18 @@ export default function ContractDetailPage() {
                     {pendingApprovals.length}
                   </span>
                 )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="qa"
+                className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:shadow-none hover:text-foreground"
+              >
+                Q&amp;A
+              </TabsTrigger>
+              <TabsTrigger
+                value="signing"
+                className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:shadow-none hover:text-foreground"
+              >
+                Signing
               </TabsTrigger>
               <TabsTrigger
                 value="obligations"
@@ -814,44 +840,90 @@ export default function ContractDetailPage() {
               )}
             </TabsContent>
 
-            {/* Documents */}
+            {/* Files */}
             <TabsContent value="documents" className="mt-4">
               <div className="rounded-[var(--radius)] border border-border bg-card p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-foreground">Documents</h3>
+                  <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
+                    <Upload className="size-4" />
+                    Upload File
+                  </Button>
+                </div>
                 {files.length === 0 ? (
                   <div className="flex flex-col items-center py-8 gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                      <FileText className="size-5 text-muted-foreground" />
+                    </div>
                     <p className="text-sm text-muted-foreground">No files uploaded yet</p>
-                    <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
-                      <Upload className="size-4" />
-                      Upload File
-                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {files.map((f) => (
-                      <div
-                        key={f.id}
-                        className="flex items-center gap-3 rounded-[var(--radius)] border border-border p-3"
-                      >
-                        <div className="flex size-10 items-center justify-center rounded bg-muted">
-                          <FileText className="size-5 text-muted-foreground" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{f.filename}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatBytes(f.sizeBytes)} · <RelativeTime date={f.createdAt} />
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-border text-foreground hover:bg-muted-foreground/[0.08]"
-                          onClick={() => downloadFile(f.id, f.filename)}
+                    {files.map((f) => {
+                      const ext = f.filename.split(".").pop()?.toUpperCase() ?? "FILE"
+                      const isPdf = ext === "PDF"
+                      const isDocx = ext === "DOCX"
+                      return (
+                        <div
+                          key={f.id}
+                          className="flex items-center gap-3 rounded-[var(--radius)] border border-border p-3"
                         >
-                          <Download className="size-4" />
-                          Download
-                        </Button>
-                      </div>
-                    ))}
+                          {/* Type badge */}
+                          <div
+                            className={cn(
+                              "flex h-9 w-14 shrink-0 items-center justify-center rounded text-xs font-bold",
+                              isPdf && "bg-red-100 text-red-700",
+                              isDocx && "bg-blue-100 text-blue-700",
+                              !isPdf && !isDocx && "bg-emerald-100 text-emerald-700",
+                            )}
+                          >
+                            {ext}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="truncate text-sm font-medium text-foreground">{f.filename}</p>
+                              {f.isLatest && (
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                  Current
+                                </span>
+                              )}
+                              {!f.isLatest && f.version && (
+                                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                  v{f.version}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {formatBytes(f.sizeBytes)} · Uploaded{" "}
+                              <RelativeTime date={f.createdAt} />
+                              {f.uploadedBy && (
+                                <span> by {f.uploadedBy.name.charAt(0).toUpperCase()}{f.uploadedBy.name.split(" ")[1]?.charAt(0).toUpperCase() ?? ""}</span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="size-8 p-0 text-muted-foreground hover:text-foreground"
+                              onClick={() => downloadFile(f.id, f.filename)}
+                              title="Download"
+                            >
+                              <Download className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="size-8 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => deleteFile(f.id)}
+                              title="Delete"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -876,101 +948,90 @@ export default function ContractDetailPage() {
                 </div>
               ) : (
                 <>
-                  <div className="mb-4 flex items-center justify-between rounded-[var(--radius)] border border-border bg-muted/40 px-4 py-2.5">
+                  <div className="mb-4 flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
                       <span className="font-medium text-foreground">{extractions.length} fields</span>{" "}
                       extracted by AI
-                      {pendingExtractions.length > 0 && ` · ${pendingExtractions.length} pending`}
+                      {pendingExtractions.length > 0 && ` · ${pendingExtractions.length} pending review`}
                     </p>
-                    {pendingExtractions.length > 0 && (
-                      <Button size="sm" onClick={handleAcceptAll}>
-                        Accept All
+                    <div className="flex items-center gap-2">
+                      {pendingExtractions.length > 0 && (
+                        <Button size="sm" onClick={handleAcceptAll}>
+                          Accept All
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline">
+                        <RefreshCw className="size-3.5" />
+                        Re-run Extraction
                       </Button>
-                    )}
+                    </div>
                   </div>
-                  <div className="rounded-[var(--radius)] border border-border bg-card">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Field</TableHead>
-                          <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Value</TableHead>
-                          <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Confidence</TableHead>
-                          <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</TableHead>
-                          <TableHead className="h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {extractions.map((e) => {
-                          const accepted = e.status === "accepted"
-                          const rejected = e.status === "rejected"
-                          return (
-                            <TableRow
-                              key={e.id}
+                  <div className="grid grid-cols-2 gap-3">
+                    {extractions.map((e) => {
+                      const accepted = e.status === "accepted"
+                      const rejected = e.status === "rejected"
+                      const confidencePct = Math.round(e.confidence * 100)
+                      return (
+                        <div
+                          key={e.id}
+                          className={cn(
+                            "rounded-[var(--radius)] border border-border bg-card p-4",
+                            (accepted || rejected) && "opacity-60",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{e.field}</p>
+                            <span
                               className={cn(
-                                "hover:bg-muted-foreground/[0.08]",
-                                (accepted || rejected) && "opacity-60",
+                                "rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0",
+                                confidencePct >= 90
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-amber-100 text-amber-700",
                               )}
                             >
-                              <TableCell className="py-2.5">
-                                <div className="flex items-center gap-1.5">
-                                  {accepted && <Check className="size-3.5 text-emerald-600" />}
-                                  <span className="text-sm font-medium text-foreground">{e.field}</span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="py-2.5 text-sm text-muted-foreground">
-                                {e.rawValue ?? "—"}
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                <div className="flex items-center gap-2">
-                                  <Progress
-                                    value={Math.round(e.confidence * 100)}
-                                    className="h-1.5 w-12 [&>div]:bg-primary"
-                                  />
-                                  <span className="text-xs tabular-nums text-muted-foreground">
-                                    {Math.round(e.confidence * 100)}%
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="max-w-[200px] py-2.5">
-                                {e.sourceText && (
-                                  <p className="truncate text-xs italic text-muted-foreground">
-                                    &quot;{e.sourceText}&quot;
-                                  </p>
-                                )}
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                {!accepted && !rejected && (
-                                  <div className="flex gap-1">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-7"
-                                      onClick={() => handleExtraction(e.id, "accept")}
-                                    >
-                                      Accept
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-7"
-                                      onClick={() => handleExtraction(e.id, "reject")}
-                                    >
-                                      Reject
-                                    </Button>
-                                  </div>
-                                )}
-                                {accepted && (
-                                  <span className="text-xs text-emerald-600">Accepted</span>
-                                )}
-                                {rejected && (
-                                  <span className="text-xs text-muted-foreground">Rejected</span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
+                              {confidencePct}%
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground mb-3 min-h-[1.25rem]">
+                            {e.rawValue ?? "—"}
+                          </p>
+                          {e.sourceText && (
+                            <p className="mb-3 truncate text-xs italic text-muted-foreground">
+                              &quot;{e.sourceText}&quot;
+                            </p>
+                          )}
+                          {!accepted && !rejected && (
+                            <div className="flex gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-xs flex-1"
+                                onClick={() => handleExtraction(e.id, "accept")}
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-xs flex-1"
+                                onClick={() => handleExtraction(e.id, "reject")}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                          {accepted && (
+                            <div className="flex items-center gap-1 text-xs text-emerald-600">
+                              <Check className="size-3" />
+                              Accepted
+                            </div>
+                          )}
+                          {rejected && (
+                            <span className="text-xs text-muted-foreground">Rejected</span>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </>
               )}
@@ -980,8 +1041,8 @@ export default function ContractDetailPage() {
             <TabsContent value="approvals" className="mt-4">
               <div className="rounded-[var(--radius)] border border-border bg-card p-5">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-medium text-foreground">Approval Requests</h3>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-sm font-medium text-foreground">Approval Workflow</h3>
                   {canRequestApproval && (
                     <Button size="sm" onClick={() => setApprovalOpen(true)}>
                       <UserCheck className="size-4" />
@@ -995,137 +1056,321 @@ export default function ContractDetailPage() {
                     No approvals requested yet
                   </p>
                 ) : (
-                  <div className="space-y-3">
-                    {approvals.map((approval) => {
+                  <div className="relative">
+                    {approvals.map((approval, idx) => {
                       const isPending = approval.status === "pending"
+                      const isDone = approval.status === "approved"
                       const isMyApproval = approval.assignedToId === session?.user?.id && isPending
                       const isDeciding = deciding?.id === approval.id
+                      const isLast = idx === approvals.length - 1
 
                       return (
-                        <div
-                          key={approval.id}
-                          className="rounded-[var(--radius)] border border-border p-4 space-y-2"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="flex size-7 items-center justify-center rounded-full bg-muted shrink-0">
-                                <span className="text-xs font-medium text-muted-foreground">
-                                  {approval.assignedTo.name.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">
-                                  {approval.assignedTo.name}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Requested by {approval.requestedBy.name} &middot;{" "}
-                                  <RelativeTime date={approval.createdAt} />
-                                </p>
-                              </div>
+                        <div key={approval.id} className="relative flex gap-4">
+                          {/* Timeline column */}
+                          <div className="flex flex-col items-center shrink-0">
+                            <div
+                              className={cn(
+                                "flex size-8 items-center justify-center rounded-full text-xs font-semibold z-10",
+                                isDone && "bg-emerald-100 text-emerald-700",
+                                isPending && "bg-amber-100 text-amber-700",
+                                !isDone && !isPending && "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {isDone ? (
+                                <Check className="size-4" />
+                              ) : (
+                                approval.assignedTo.name.charAt(0).toUpperCase()
+                              )}
                             </div>
-
-                            {/* Status badge */}
-                            {approval.status === "pending" && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 shrink-0">
-                                <Clock className="size-3" />
-                                Pending
-                              </span>
-                            )}
-                            {approval.status === "approved" && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">
-                                <CheckCircle className="size-3" />
-                                Approved
-                              </span>
-                            )}
-                            {approval.status === "rejected" && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400 shrink-0">
-                                <XCircle className="size-3" />
-                                Rejected
-                              </span>
+                            {!isLast && (
+                              <div
+                                className={cn(
+                                  "w-px flex-1 my-1",
+                                  isDone ? "bg-emerald-200" : "bg-border",
+                                )}
+                                style={{ minHeight: "2rem" }}
+                              />
                             )}
                           </div>
 
-                          {/* Comment */}
-                          {approval.comment && (
-                            <p className="text-sm text-muted-foreground pl-9">{approval.comment}</p>
-                          )}
-
-                          {/* Decided at */}
-                          {approval.decidedAt && (
-                            <p className="text-xs text-muted-foreground pl-9">
-                              Decided <RelativeTime date={approval.decidedAt} />
-                            </p>
-                          )}
-
-                          {/* Action buttons for assigned user */}
-                          {isMyApproval && !isDeciding && (
-                            <div className="flex gap-2 pl-9 pt-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
-                                onClick={() => setDeciding({ id: approval.id, intent: "approve" })}
-                              >
-                                <Check className="size-3.5" />
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400"
-                                onClick={() => setDeciding({ id: approval.id, intent: "reject" })}
-                              >
-                                <X className="size-3.5" />
-                                Reject
-                              </Button>
+                          {/* Content */}
+                          <div className={cn("flex-1 pb-5", isLast && "pb-0")}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-foreground">{approval.assignedTo.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {isDone ? "Approved" : isPending ? "Waiting for review" : "Rejected"} · Requested by{" "}
+                                  {approval.requestedBy.name} · <RelativeTime date={approval.createdAt} />
+                                </p>
+                              </div>
+                              {approval.status === "pending" && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 shrink-0">
+                                  <Clock className="size-3" />
+                                  Pending
+                                </span>
+                              )}
+                              {approval.status === "approved" && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 shrink-0">
+                                  <CheckCircle className="size-3" />
+                                  Approved
+                                </span>
+                              )}
+                              {approval.status === "rejected" && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 shrink-0">
+                                  <XCircle className="size-3" />
+                                  Rejected
+                                </span>
+                              )}
                             </div>
-                          )}
 
-                          {/* Inline decision form */}
-                          {isMyApproval && isDeciding && (
-                            <div className="pl-9 pt-1 space-y-2">
-                              <Textarea
-                                rows={2}
-                                placeholder="Optional comment..."
-                                value={decideComment}
-                                onChange={(e) => setDecideComment(e.target.value)}
-                                className="text-sm"
-                              />
-                              <div className="flex gap-2">
-                                {deciding?.intent === "approve" && (
-                                  <Button
-                                    size="sm"
-                                    className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                    onClick={() => decideApproval(approval.id, "approved", decideComment || undefined)}
-                                  >
-                                    Confirm Approve
-                                  </Button>
-                                )}
-                                {deciding?.intent === "reject" && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400"
-                                    onClick={() => decideApproval(approval.id, "rejected", decideComment || undefined)}
-                                  >
-                                    Confirm Reject
-                                  </Button>
-                                )}
+                            {approval.comment && (
+                              <p className="mt-1.5 text-sm text-muted-foreground">{approval.comment}</p>
+                            )}
+                            {approval.decidedAt && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Decided <RelativeTime date={approval.decidedAt} />
+                              </p>
+                            )}
+
+                            {isMyApproval && !isDeciding && (
+                              <div className="flex gap-2 mt-2">
                                 <Button
                                   size="sm"
-                                  variant="ghost"
-                                  className="h-7"
-                                  onClick={() => { setDeciding(null); setDecideComment("") }}
+                                  variant="outline"
+                                  className="h-7 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
+                                  onClick={() => setDeciding({ id: approval.id, intent: "approve" })}
                                 >
-                                  Cancel
+                                  <Check className="size-3.5" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400"
+                                  onClick={() => setDeciding({ id: approval.id, intent: "reject" })}
+                                >
+                                  <X className="size-3.5" />
+                                  Reject
                                 </Button>
                               </div>
-                            </div>
-                          )}
+                            )}
+
+                            {isMyApproval && isDeciding && (
+                              <div className="mt-2 space-y-2">
+                                <Textarea
+                                  rows={2}
+                                  placeholder="Optional comment..."
+                                  value={decideComment}
+                                  onChange={(e) => setDecideComment(e.target.value)}
+                                  className="text-sm"
+                                />
+                                <div className="flex gap-2">
+                                  {deciding?.intent === "approve" && (
+                                    <Button
+                                      size="sm"
+                                      className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      onClick={() => decideApproval(approval.id, "approved", decideComment || undefined)}
+                                    >
+                                      Confirm Approve
+                                    </Button>
+                                  )}
+                                  {deciding?.intent === "reject" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400"
+                                      onClick={() => decideApproval(approval.id, "rejected", decideComment || undefined)}
+                                    >
+                                      Confirm Reject
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7"
+                                    onClick={() => { setDeciding(null); setDecideComment("") }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
                   </div>
+                )}
+
+                <div className="mt-5 pt-4 border-t border-border">
+                  <Link href={`/contracts/${id}/approval`}>
+                    <Button size="sm" className="w-full sm:w-auto">
+                      View Full Workflow
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Q&A */}
+            <TabsContent value="qa" className="mt-4">
+              <div className="rounded-[var(--radius)] border border-border bg-card p-5 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-foreground">Questions &amp; Answers</h3>
+                  <span className="text-xs text-muted-foreground">{qaThreads.length} thread{qaThreads.length !== 1 ? "s" : ""}</span>
+                </div>
+
+                {/* Thread list */}
+                <div className="space-y-4">
+                  {qaThreads.map((thread) => (
+                    <div key={thread.id} className="rounded-[var(--radius)] border border-border overflow-hidden">
+                      {/* Question header */}
+                      <div className="bg-muted/40 px-4 py-2.5">
+                        <p className="text-sm font-medium text-foreground">{thread.question}</p>
+                      </div>
+                      {/* Answers */}
+                      <div className="divide-y divide-border">
+                        {thread.answers.map((answer, idx) => (
+                          <div key={idx} className="flex gap-3 px-4 py-3">
+                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+                              {answer.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground mb-0.5">{answer.name}</p>
+                              <p className="text-sm text-muted-foreground">{answer.text}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  {qaThreads.length === 0 && (
+                    <div className="flex flex-col items-center py-8 gap-2">
+                      <MessageSquare className="size-8 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">No questions yet</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Ask input */}
+                <div className="flex gap-2 pt-2 border-t border-border">
+                  <Input
+                    placeholder="Ask a question about this contract..."
+                    value={qaInput}
+                    onChange={(e) => setQaInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && qaInput.trim()) {
+                        setQaThreads((prev) => [
+                          ...prev,
+                          { id: `q-${Date.now()}`, question: qaInput.trim(), answers: [] },
+                        ])
+                        setQaInput("")
+                      }
+                    }}
+                    className="flex-1 text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!qaInput.trim()}
+                    onClick={() => {
+                      if (!qaInput.trim()) return
+                      setQaThreads((prev) => [
+                        ...prev,
+                        { id: `q-${Date.now()}`, question: qaInput.trim(), answers: [] },
+                      ])
+                      setQaInput("")
+                    }}
+                  >
+                    Ask
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Signing */}
+            <TabsContent value="signing" className="mt-4">
+              <div className="rounded-[var(--radius)] border border-border bg-card p-5 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                      DocuSeal
+                    </span>
+                    <p className="text-sm font-medium text-foreground">
+                      {contract.signingStatus === "completed"
+                        ? "All signatures collected"
+                        : contract.signingStatus === "sent"
+                        ? "Awaiting signatures"
+                        : "Signing not started"}
+                    </p>
+                  </div>
+                  <Link href={`/contracts/${id}/signing`}>
+                    <Button size="sm" variant="outline">
+                      Manage Signing
+                    </Button>
+                  </Link>
+                </div>
+
+                {contract.signingStatus && (
+                  <>
+                    {/* Progress bar */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs text-muted-foreground">Signature progress</p>
+                        <p className="text-xs font-medium text-foreground">
+                          {contract.signingStatus === "completed" ? "100%" : contract.signingStatus === "sent" ? "In progress" : "0%"}
+                        </p>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all"
+                          style={{ width: contract.signingStatus === "completed" ? "100%" : contract.signingStatus === "sent" ? "33%" : "0%" }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Signing status detail */}
+                    <div className="rounded-[var(--radius)] border border-border divide-y divide-border">
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                            {contract.owner?.name.charAt(0).toUpperCase() ?? "?"}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{contract.owner?.name ?? "Owner"}</p>
+                            <p className="text-xs text-muted-foreground">{contract.owner?.email ?? ""}</p>
+                          </div>
+                        </div>
+                        <SigningStatusBadge status={contract.signingStatus} />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {!contract.signingStatus && (
+                  <div className="flex flex-col items-center py-8 gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      This contract has not been sent for signature yet.
+                    </p>
+                    {canSendForSignature && (
+                      <Button size="sm" disabled={sendingForSignature} onClick={sendForSignature}>
+                        <Send className="size-4" />
+                        {sendingForSignature ? "Sending..." : "Send for Signature"}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {contract.signingUrl && contract.signingStatus === "sent" && (
+                  <a
+                    href={contract.signingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                  >
+                    Open signing link <ExternalLink className="size-3.5" />
+                  </a>
                 )}
               </div>
             </TabsContent>

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Plug2, Upload } from "lucide-react"
+import { ClipboardList, Plug2, Upload, User } from "lucide-react"
 import { LocaleSwitcher } from "@/components/locale-switcher"
 import { cn } from "@/lib/utils"
 
@@ -11,9 +11,12 @@ const settingsLinks = [
   { label: "Members", href: "/settings/members" },
   { label: "Integrations", href: "/settings/integrations", icon: Plug2 },
   { label: "Import", href: "/settings/import", icon: Upload },
+  { label: "Billing", href: "/settings/billing" },
   { label: "API Keys", href: "/settings/api-keys" },
+  { label: "Audit Log", href: "/settings/audit-log", icon: ClipboardList },
   { label: "Notifications", href: "/settings/notifications" },
   { label: "My Notifications", href: "/settings/profile/notifications" },
+  { label: "My Profile", href: "/settings/profile", icon: User },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

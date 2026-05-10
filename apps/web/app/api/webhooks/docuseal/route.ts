@@ -116,7 +116,7 @@ export async function POST(req: Request) {
 
   if (signingStatus !== "completed") {
     await prisma.contract.update({
-      where: { id: contract.id, organizationId: contract.organizationId },
+      where: { id: contract.id, organizationId: contract.organizationId, status: "AWAITING_SIGNATURE" },
       data: { signingStatus },
     })
 
@@ -195,7 +195,7 @@ export async function POST(req: Request) {
       },
     }),
     prisma.contract.update({
-      where: { id: contract.id, organizationId: contract.organizationId },
+      where: { id: contract.id, organizationId: contract.organizationId, status: "AWAITING_SIGNATURE" },
       data: {
         status: "ACTIVE",
         signingStatus: "completed",

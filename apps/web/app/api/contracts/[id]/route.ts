@@ -127,11 +127,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return Response.json({ error: parsed.error.flatten() }, { status: 422 })
     }
 
-    let existing: { status: string; endDate: Date | null; renewalDate: Date | null; noticePeriodDays: number | null } | null
+    let existing: { id: string; status: string; endDate: Date | null; renewalDate: Date | null; noticePeriodDays: number | null } | null
     try {
       existing = await prisma.contract.findUnique({
         where: { id: params.id },
-        select: { status: true, endDate: true, renewalDate: true, noticePeriodDays: true },
+        select: { id: true, status: true, endDate: true, renewalDate: true, noticePeriodDays: true },
       })
     } catch (err) {
       console.error("[PATCH /contracts/:id] findUnique error:", err)
@@ -148,6 +148,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           { error: `Invalid transition: ${existing.status} → ${status}. Allowed: ${allowed.join(", ") || "none"}` },
           { status: 422 }
         )
+      }
+
+      // Guard: PENDING_APPROVAL → AWAITING_SIGNATURE only if all approvals resolved
+      if (existing.status === "PENDING_APPROVAL" && status === "AWAITING_SIGNATURE") {
+        const openApprovals = await prisma.approval.count({
+          where: { contractId: existing.id, status: { in: ["pending", "rejected"] } },
+        })
+        if (openApprovals > 0) {
+          return Response.json(
+            { error: "Cannot advance to signing while approvals are pending or rejected" },
+            { status: 422 }
+          )
+        }
       }
     }
 

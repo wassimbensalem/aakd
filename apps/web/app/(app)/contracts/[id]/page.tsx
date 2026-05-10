@@ -56,6 +56,8 @@ import { StatusBadge, TypeBadge } from "@/components/contract-badges"
 import { ActivityTimeline } from "@/components/activity-timeline"
 import { FileUploadZone } from "@/components/file-upload-zone"
 import { RelativeTime } from "@/components/relative-time"
+import { ObligationList } from "@/components/obligations/obligation-list"
+import type { Obligation } from "@/components/obligations/types"
 import { Contract, ContractFile, Activity, ContractStatus, ContractAlert, Tag, Approval, OrgMember, SigningStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -143,6 +145,7 @@ export default function ContractDetailPage() {
   const [alerts, setAlerts] = useState<ContractAlert[]>([])
   const [extractions, setExtractions] = useState<AIExtraction[]>([])
   const [approvals, setApprovals] = useState<Approval[]>([])
+  const [obligations, setObligations] = useState<Obligation[]>([])
   const [members, setMembers] = useState<OrgMember[]>([])
   const [approvalOpen, setApprovalOpen] = useState(false)
   const [approvalAssigneeId, setApprovalAssigneeId] = useState("")
@@ -168,11 +171,12 @@ export default function ContractDetailPage() {
 
   const fetchContract = useCallback(async () => {
     try {
-      const [contractRes, alertsRes, extractionsRes, approvalsRes] = await Promise.all([
+      const [contractRes, alertsRes, extractionsRes, approvalsRes, obligationsRes] = await Promise.all([
         fetch(`/api/contracts/${id}`),
         fetch(`/api/alerts?contractId=${id}`),
         fetch(`/api/contracts/${id}/extractions`),
         fetch(`/api/contracts/${id}/approvals`),
+        fetch(`/api/contracts/${id}/obligations`),
       ])
       if (!contractRes.ok) {
         toast.error("Contract not found")
@@ -195,6 +199,10 @@ export default function ContractDetailPage() {
       if (approvalsRes.ok) {
         const approvalData = await approvalsRes.json()
         setApprovals(approvalData.approvals ?? [])
+      }
+      if (obligationsRes.ok) {
+        const obligationData = await obligationsRes.json()
+        setObligations(obligationData.obligations ?? [])
       }
     } catch {
       toast.error("Failed to load contract")
@@ -509,6 +517,9 @@ export default function ContractDetailPage() {
   const latestFile = files.find((f) => f.isLatest) ?? files[0]
   const pendingExtractions = extractions.filter((e) => e.status === "pending")
   const pendingApprovals = approvals.filter((a) => a.status === "pending")
+  const activeObligations = obligations.filter(
+    (o) => o.status === "PENDING" || o.status === "IN_PROGRESS",
+  )
   const canSendForSignature =
     contract.status === "AWAITING_SIGNATURE" &&
     (!contract.signingStatus || ["declined", "expired", "failed"].includes(contract.signingStatus))
@@ -612,6 +623,17 @@ export default function ContractDetailPage() {
                 {pendingApprovals.length > 0 && (
                   <span className="ml-1.5 rounded bg-amber-600 px-1.5 py-0.5 text-xs font-medium text-white">
                     {pendingApprovals.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="obligations"
+                className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-zinc-500 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 data-[state=active]:shadow-none hover:text-zinc-700"
+              >
+                Obligations
+                {activeObligations.length > 0 && (
+                  <span className="ml-1.5 rounded bg-indigo-600 px-1.5 py-0.5 text-xs font-medium text-white">
+                    {activeObligations.length}
                   </span>
                 )}
               </TabsTrigger>
@@ -1062,6 +1084,18 @@ export default function ContractDetailPage() {
                   </div>
                 )}
               </div>
+            </TabsContent>
+
+            {/* Obligations */}
+            <TabsContent value="obligations" className="mt-4">
+              <ObligationList
+                contractId={contract.id}
+                obligations={obligations}
+                members={members}
+                contractArchived={contract.status === "ARCHIVED"}
+                role={currentMember?.role}
+                onChange={setObligations}
+              />
             </TabsContent>
 
             {/* Activity */}

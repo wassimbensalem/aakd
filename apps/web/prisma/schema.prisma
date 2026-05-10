@@ -30,6 +30,13 @@ model User {
   createdNotificationChannels OrgNotificationChannel[] @relation("NotificationChannelCreatedBy")
   createdOutboundWebhooks     OutboundWebhook[]        @relation("OutboundWebhookCreatedBy")
   notificationPreferences     UserNotificationPreference[]
+  savedDocuments              ContractDocument[]       @relation("DocumentSaver")
+  createdTemplates            ContractTemplate[]       @relation("TemplateCreator")
+  updatedTemplates            ContractTemplate[]       @relation("TemplateUpdater")
+  obligationsAssigned         ContractObligation[]     @relation("ObligationAssignee")
+  obligationsCompleted        ContractObligation[]     @relation("ObligationCompleter")
+  obligationsCreated          ContractObligation[]     @relation("ObligationCreator")
+  subTasksCompleted           ObligationSubTask[]      @relation("SubTaskCompleter")
 }
 
 model Session {
@@ -88,6 +95,8 @@ model Organization {
   notificationChannels    OrgNotificationChannel[]
   outboundWebhooks        OutboundWebhook[]
   notificationPreferences UserNotificationPreference[]
+  templates               ContractTemplate[]
+  obligations             ContractObligation[]
 }
 
 model Member {
@@ -164,6 +173,8 @@ model Contract {
   alerts              ContractAlert[]
   approvals           Approval[]
   embedding           ContractEmbedding?
+  document              ContractDocument?
+  obligations           ContractObligation[]
   extractedText         String?
   docusealSubmissionId  String?
   signingUrl            String?
@@ -252,6 +263,13 @@ enum ActivityAction {
   DELETED
   ARCHIVED
   TAGGED
+  DOCUMENT_SAVED
+  DOCUMENT_IMPORTED
+  DOCUMENT_EXPORTED
+  OBLIGATION_CREATED
+  OBLIGATION_UPDATED
+  OBLIGATION_COMPLETED
+  OBLIGATION_DELETED
 }
 
 model Folder {
@@ -405,4 +423,109 @@ model UserNotificationPreference {
   updatedAt      DateTime     @updatedAt
 
   @@unique([userId, organizationId, eventName])
+}
+
+// ─── M6: Authoring ────────────────────────────────────────────────────────────
+
+model ContractDocument {
+  id           String   @id @default(cuid())
+  contractId   String   @unique
+  contract     Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  content      Json     // Plate JSON — array of top-level Plate nodes
+  wordCount    Int      @default(0)
+  version      Int      @default(1)
+  savedById    String
+  savedBy      User     @relation("DocumentSaver", fields: [savedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ContractTemplate {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  contractType   ContractType?
+  content        Json
+  variables      Json
+  wordCount      Int           @default(0)
+  createdById    String
+  createdBy      User          @relation("TemplateCreator", fields: [createdById], references: [id])
+  updatedById    String
+  updatedBy      User          @relation("TemplateUpdater", fields: [updatedById], references: [id])
+  isArchived     Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId, isArchived])
+}
+
+// ─── M7: Obligation Tracking ──────────────────────────────────────────────────
+
+model ContractObligation {
+  id              String              @id @default(cuid())
+  contractId      String
+  contract        Contract            @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String?
+  clauseReference String?
+  priority        ObligationPriority  @default(MEDIUM)
+  status          ObligationStatus    @default(PENDING)
+  dueDate         DateTime
+
+  assigneeId      String?
+  assignee        User?               @relation("ObligationAssignee", fields: [assigneeId], references: [id])
+
+  reminderDays    Int                 @default(7)
+  reminderSentAt  DateTime?
+
+  completedAt     DateTime?
+  completedById   String?
+  completedBy     User?               @relation("ObligationCompleter", fields: [completedById], references: [id])
+
+  createdById     String
+  createdBy       User                @relation("ObligationCreator", fields: [createdById], references: [id])
+
+  subTasks        ObligationSubTask[]
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([contractId])
+  @@index([organizationId, status])
+  @@index([status, dueDate])
+}
+
+model ObligationSubTask {
+  id            String              @id @default(cuid())
+  obligationId  String
+  obligation    ContractObligation  @relation(fields: [obligationId], references: [id], onDelete: Cascade)
+
+  title         String
+  isCompleted   Boolean             @default(false)
+  completedAt   DateTime?
+  completedById String?
+  completedBy   User?               @relation("SubTaskCompleter", fields: [completedById], references: [id])
+
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([obligationId])
+}
+
+enum ObligationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+enum ObligationPriority {
+  LOW
+  MEDIUM
+  HIGH
 }

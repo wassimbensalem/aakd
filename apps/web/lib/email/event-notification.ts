@@ -54,6 +54,20 @@ function metadataRows(
   if (eventName === "contract.expiring_soon" && typeof metadata.daysUntilExpiry === "number") {
     rows.push({ label: "Expires in", value: `${metadata.daysUntilExpiry} day${metadata.daysUntilExpiry === 1 ? "" : "s"}` })
   }
+  if (eventName === "obligation.due_soon" || eventName === "obligation.overdue") {
+    if (typeof metadata.obligationTitle === "string") {
+      rows.push({ label: "Obligation", value: metadata.obligationTitle })
+    }
+    if (typeof metadata.dueDate === "string") {
+      rows.push({ label: "Due date", value: metadata.dueDate.slice(0, 10) })
+    }
+    if (typeof metadata.assigneeName === "string") {
+      rows.push({ label: "Assignee", value: metadata.assigneeName })
+    }
+    if (eventName === "obligation.due_soon" && typeof metadata.daysUntilDue === "number") {
+      rows.push({ label: "Reminder", value: `${metadata.daysUntilDue} day${metadata.daysUntilDue === 1 ? "" : "s"} before due` })
+    }
+  }
   return rows
 }
 

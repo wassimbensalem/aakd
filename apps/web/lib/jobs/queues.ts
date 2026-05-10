@@ -21,6 +21,10 @@ export interface AlertsCheckJobData {
   triggeredAt: string
 }
 
+export interface ObligationsCheckJobData {
+  triggeredAt: string
+}
+
 export interface ContractEmbedJobData {
   contractId: string
   extractedText: string
@@ -55,6 +59,22 @@ export type EmailJobData =
       metadata: Record<string, string | number | boolean | null>
       unsubscribeToken: string
     }
+
+// ─── M6: Authoring (Word import / DOCX+PDF export) ───────────────────────────
+
+export interface DocumentConvertJobData {
+  contractId: string
+  storageKey: string
+  requestedById: string
+  jobId: string
+}
+
+export interface DocumentExportJobData {
+  contractId: string
+  format: "docx" | "pdf"
+  requestedById: string
+  jobId: string
+}
 
 // ─── M5: Notification fan-out + delivery ──────────────────────────────────────
 
@@ -99,6 +119,9 @@ let _signingSyncQueue: Queue<SigningSyncJobData> | null = null
 let _emailQueue: Queue<EmailJobData> | null = null
 let _notificationFanoutQueue: Queue<NotificationFanoutJobData> | null = null
 let _notificationDeliverQueue: Queue<NotificationDeliverJobData> | null = null
+let _documentConvertQueue: Queue<DocumentConvertJobData> | null = null
+let _documentExportQueue: Queue<DocumentExportJobData> | null = null
+let _obligationsCheckQueue: Queue<ObligationsCheckJobData> | null = null
 
 export function getContractExtractQueue(): Queue<ContractExtractJobData> {
   return (_contractExtractQueue ??= new Queue<ContractExtractJobData>("contract.extract", { connection }))
@@ -144,6 +167,33 @@ export function getNotificationDeliverQueue(): Queue<NotificationDeliverJobData>
   ))
 }
 
+export function getDocumentConvertQueue(): Queue<DocumentConvertJobData> {
+  return (_documentConvertQueue ??= new Queue<DocumentConvertJobData>(
+    "document.convert",
+    {
+      connection,
+      defaultJobOptions: { removeOnComplete: 100, removeOnFail: 200, attempts: 1 },
+    }
+  ))
+}
+
+export function getDocumentExportQueue(): Queue<DocumentExportJobData> {
+  return (_documentExportQueue ??= new Queue<DocumentExportJobData>(
+    "document.export",
+    {
+      connection,
+      defaultJobOptions: { removeOnComplete: 100, removeOnFail: 200, attempts: 1 },
+    }
+  ))
+}
+
+export function getObligationsCheckQueue(): Queue<ObligationsCheckJobData> {
+  return (_obligationsCheckQueue ??= new Queue<ObligationsCheckJobData>(
+    "obligations.check",
+    { connection },
+  ))
+}
+
 // ─── Legacy named exports (kept for backward compat) ─────────────────────────
 // These are getters so the Queue is still created lazily. We proxy both `add`
 // (used by API routes / worker handlers) and `close` (used by graceful shutdown).
@@ -180,4 +230,19 @@ export const notificationDeliverQueue = {
   add: (...a: Parameters<Queue<NotificationDeliverJobData>["add"]>) =>
     getNotificationDeliverQueue().add(...a),
   close: () => _notificationDeliverQueue?.close() ?? Promise.resolve(),
+}
+export const documentConvertQueue = {
+  add: (...a: Parameters<Queue<DocumentConvertJobData>["add"]>) =>
+    getDocumentConvertQueue().add(...a),
+  close: () => _documentConvertQueue?.close() ?? Promise.resolve(),
+}
+export const documentExportQueue = {
+  add: (...a: Parameters<Queue<DocumentExportJobData>["add"]>) =>
+    getDocumentExportQueue().add(...a),
+  close: () => _documentExportQueue?.close() ?? Promise.resolve(),
+}
+export const obligationsCheckQueue = {
+  add: (...a: Parameters<Queue<ObligationsCheckJobData>["add"]>) =>
+    getObligationsCheckQueue().add(...a),
+  close: () => _obligationsCheckQueue?.close() ?? Promise.resolve(),
 }

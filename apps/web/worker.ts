@@ -46,6 +46,9 @@ import type {
   EmailJobData,
   NotificationFanoutJobData,
   NotificationDeliverJobData,
+  DocumentConvertJobData,
+  DocumentExportJobData,
+  ObligationsCheckJobData,
 } from "@/lib/jobs/queues"
 import {
   contractAiExtractQueue,
@@ -55,7 +58,14 @@ import {
   emailQueue,
   notificationFanoutQueue,
   notificationDeliverQueue,
+  documentConvertQueue,
+  documentExportQueue,
+  obligationsCheckQueue,
 } from "@/lib/jobs/queues"
+import { htmlToPlateNodes } from "@/lib/editor/html-to-plate"
+import { plateToPlaintext, countWords } from "@/lib/editor/plate-to-plaintext"
+import { plateToDocxBuffer } from "@/lib/editor/plate-to-docx"
+import { plateToPdfBuffer } from "@/lib/editor/plate-to-pdf"
 
 // ─── Boot check: notification encryption key ─────────────────────────────────
 // Refuse to start if the key is missing — silently storing plaintext URLs and
@@ -602,6 +612,109 @@ alertsWorker.on("failed", (job, err) =>
   console.error(`[alerts] Job ${job?.id} failed:`, err),
 )
 
+// ─── Worker: obligations.check ────────────────────────────────────────────────
+
+const obligationsWorker = new Worker<ObligationsCheckJobData>(
+  "obligations.check",
+  async (job: Job<ObligationsCheckJobData>) => {
+    console.log(
+      `[obligations] Running check job ${job.id} (triggered: ${job.data.triggeredAt})`,
+    )
+
+    const db = getWorkerPrisma()
+    const now = new Date()
+
+    // Step 1 — promote past-due active obligations to OVERDUE.
+    // Capture the ids first so we can fan out a notification per row; updateMany
+    // doesn't return rows, and a separate query after the update can't tell
+    // which were freshly transitioned vs already overdue.
+    const toOverdue = await db.contractObligation.findMany({
+      where: {
+        status: { in: ["PENDING", "IN_PROGRESS"] },
+        dueDate: { lt: now },
+      },
+      select: {
+        id: true,
+        contractId: true,
+        title: true,
+        dueDate: true,
+        assignee: { select: { id: true, name: true } },
+      },
+    })
+
+    if (toOverdue.length > 0) {
+      await db.contractObligation.updateMany({
+        where: { id: { in: toOverdue.map((o) => o.id) } },
+        data: { status: "OVERDUE" },
+      })
+      for (const ob of toOverdue) {
+        await enqueueNotification("obligation.overdue", ob.contractId, null, {
+          obligationId: ob.id,
+          obligationTitle: ob.title,
+          dueDate: ob.dueDate.toISOString(),
+          assigneeName: ob.assignee?.name ?? null,
+          daysUntilDue: 0,
+        })
+      }
+    }
+
+    // Step 2 — send reminders. reminderDays varies per obligation, so we filter
+    // in app code rather than in the SQL where clause.
+    const reminderCandidates = await db.contractObligation.findMany({
+      where: {
+        status: { in: ["PENDING", "IN_PROGRESS"] },
+        reminderSentAt: null,
+      },
+      select: {
+        id: true,
+        contractId: true,
+        title: true,
+        dueDate: true,
+        reminderDays: true,
+        assignee: { select: { id: true, name: true } },
+      },
+    })
+
+    const eligible = reminderCandidates.filter((o) => {
+      const triggerAt = new Date(o.dueDate.getTime() - o.reminderDays * 86_400_000)
+      return triggerAt <= now
+    })
+
+    let remindersSent = 0
+    for (const ob of eligible) {
+      // Atomic guard so a concurrent run can't double-send. updateMany with the
+      // null filter returns count=0 if reminderSentAt was already set, which we
+      // use as the "skip — already sent" signal.
+      const guard = await db.contractObligation.updateMany({
+        where: { id: ob.id, reminderSentAt: null },
+        data: { reminderSentAt: now },
+      })
+      if (guard.count === 0) continue
+
+      await enqueueNotification("obligation.due_soon", ob.contractId, null, {
+        obligationId: ob.id,
+        obligationTitle: ob.title,
+        dueDate: ob.dueDate.toISOString(),
+        assigneeName: ob.assignee?.name ?? null,
+        daysUntilDue: ob.reminderDays,
+      })
+      remindersSent += 1
+    }
+
+    console.log(
+      `[obligations] Marked ${toOverdue.length} overdue, sent ${remindersSent} reminders`,
+    )
+  },
+  { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
+)
+
+obligationsWorker.on("completed", (job) =>
+  console.log(`[obligations] Job ${job.id} completed`),
+)
+obligationsWorker.on("failed", (job, err) =>
+  console.error(`[obligations] Job ${job?.id} failed:`, err),
+)
+
 // ─── Worker: signing.sync ─────────────────────────────────────────────────────
 
 type SyncableContract = {
@@ -1040,6 +1153,23 @@ async function resolveEmailRecipientIds(
       for (const a of admins) ids.add(a.userId)
       break
     }
+
+    case "obligation.due_soon":
+    case "obligation.overdue": {
+      // Notify the contract owner and the obligation's assignee (if set).
+      // metadata.obligationId lets us look up the assignee even when the
+      // assigneeName is the only field included in the payload.
+      ids.add(ownerId)
+      const obligationId = typeof metadata.obligationId === "string" ? metadata.obligationId : null
+      if (obligationId) {
+        const ob = await db.contractObligation.findUnique({
+          where: { id: obligationId },
+          select: { assigneeId: true },
+        })
+        if (ob?.assigneeId) ids.add(ob.assigneeId)
+      }
+      break
+    }
   }
 
   // Don't email the actor about their own action.
@@ -1230,6 +1360,151 @@ deliverWorker.on("failed", (job, err) =>
   console.error(`[deliver] Job ${job?.id} failed:`, err),
 )
 
+// ─── Worker: document.convert (M6 — Word import → Plate JSON) ─────────────────
+
+const documentConvertWorker = new Worker<DocumentConvertJobData>(
+  "document.convert",
+  async (job: Job<DocumentConvertJobData>) => {
+    const { contractId, storageKey, requestedById } = job.data
+    console.log(`[document.convert] Job ${job.id} contract=${contractId}`)
+
+    const db = getWorkerPrisma()
+
+    let buffer: Buffer
+    try {
+      const signedUrl = await storage.getSignedDownloadUrl(storageKey)
+      const res = await fetch(signedUrl)
+      if (!res.ok) throw new Error(`Failed to download .docx from storage: ${res.status}`)
+      buffer = Buffer.from(await res.arrayBuffer())
+    } catch (err) {
+      console.error(`[document.convert] download failed for ${storageKey}:`, err)
+      await storage.delete(storageKey).catch(() => {})
+      throw err
+    }
+
+    let html: string
+    try {
+      const result = await mammoth.convertToHtml({ buffer })
+      html = result.value ?? ""
+    } catch (err) {
+      console.error(`[document.convert] mammoth failed for ${contractId}:`, err)
+      await storage.delete(storageKey).catch(() => {})
+      throw err
+    }
+
+    const nodes = htmlToPlateNodes(html)
+    const plaintext = plateToPlaintext(nodes)
+    const wordCount = countWords(plaintext)
+
+    const existing = await db.contractDocument.findUnique({
+      where: { contractId },
+      select: { id: true, version: true },
+    })
+
+    if (existing) {
+      await db.contractDocument.update({
+        where: { contractId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          content: nodes as any,
+          wordCount,
+          version: existing.version + 1,
+          savedById: requestedById,
+        },
+      })
+    } else {
+      await db.contractDocument.create({
+        data: {
+          contractId,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          content: nodes as any,
+          wordCount,
+          version: 1,
+          savedById: requestedById,
+        },
+      })
+    }
+
+    await storage.delete(storageKey).catch((err) =>
+      console.warn(`[document.convert] Failed to delete tmp object ${storageKey}:`, err),
+    )
+
+    await db.activity.create({
+      data: {
+        contractId,
+        userId: requestedById,
+        action: "DOCUMENT_IMPORTED",
+        detail: `Imported Word document (${wordCount} words)`,
+      },
+    })
+
+    console.log(`[document.convert] Imported ${wordCount} words for contract ${contractId}`)
+  },
+  { connection, defaultJobOptions: { removeOnComplete: 100, removeOnFail: 200, attempts: 1 } },
+)
+
+documentConvertWorker.on("completed", (job) =>
+  console.log(`[document.convert] Job ${job.id} completed`),
+)
+documentConvertWorker.on("failed", (job, err) =>
+  console.error(`[document.convert] Job ${job?.id} failed:`, err),
+)
+
+// ─── Worker: document.export (M6 — Plate JSON → DOCX or PDF) ──────────────────
+
+const documentExportWorker = new Worker<DocumentExportJobData>(
+  "document.export",
+  async (job: Job<DocumentExportJobData>) => {
+    const { contractId, format, requestedById } = job.data
+    console.log(`[document.export] Job ${job.id} contract=${contractId} format=${format}`)
+
+    const db = getWorkerPrisma()
+    const document = await db.contractDocument.findUnique({
+      where: { contractId },
+      select: { content: true },
+    })
+    if (!document) {
+      throw new Error(`No document found for contract ${contractId}`)
+    }
+
+    const nodes = Array.isArray(document.content) ? (document.content as unknown[]) : []
+
+    let buffer: Buffer
+    let contentType: string
+    if (format === "docx") {
+      buffer = await plateToDocxBuffer(nodes)
+      contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    } else {
+      buffer = await plateToPdfBuffer(nodes)
+      contentType = "application/pdf"
+    }
+
+    const key = `exports/${contractId}/${job.id}.${format}`
+    await storage.upload(key, buffer, contentType)
+    const downloadUrl = await storage.getSignedDownloadUrl(key, 300)
+
+    await db.activity.create({
+      data: {
+        contractId,
+        userId: requestedById,
+        action: "DOCUMENT_EXPORTED",
+        detail: `Exported as ${format.toUpperCase()}`,
+      },
+    })
+
+    console.log(`[document.export] Exported contract ${contractId} as ${format} (${buffer.length} bytes)`)
+    return { downloadUrl }
+  },
+  { connection, defaultJobOptions: { removeOnComplete: 100, removeOnFail: 200, attempts: 1 } },
+)
+
+documentExportWorker.on("completed", (job) =>
+  console.log(`[document.export] Job ${job.id} completed`),
+)
+documentExportWorker.on("failed", (job, err) =>
+  console.error(`[document.export] Job ${job?.id} failed:`, err),
+)
+
 // Register the daily cron (9 AM UTC). BullMQ deduplicates by name + pattern,
 // so restarting the worker is safe — no stacking of duplicate schedules.
 alertsCheckQueue.add(
@@ -1248,6 +1523,14 @@ signingSyncQueue.add(
 ).then(() => console.log("[signing] Sync cron registered (*/15 * * * *)"))
   .catch((err) => console.error("[signing] Failed to register sync cron:", err))
 
+// Daily obligation sweep — auto-mark overdue + send reminders.
+obligationsCheckQueue.add(
+  "daily-check",
+  { triggeredAt: new Date().toISOString() },
+  { repeat: { pattern: "0 9 * * *" } },
+).then(() => console.log("[obligations] Daily cron registered (0 9 * * *)"))
+  .catch((err) => console.error("[obligations] Failed to register cron:", err))
+
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 
 async function shutdown() {
@@ -1256,17 +1539,23 @@ async function shutdown() {
   await aiExtractWorker.close()
   await embedWorker.close()
   await alertsWorker.close()
+  await obligationsWorker.close()
   await signingWorker.close()
   await emailWorker.close()
   await fanoutWorker.close()
   await deliverWorker.close()
+  await documentConvertWorker.close()
+  await documentExportWorker.close()
   await contractAiExtractQueue.close()
   await contractEmbedQueue.close()
   await alertsCheckQueue.close()
+  await obligationsCheckQueue.close()
   await signingSyncQueue.close()
   await emailQueue.close()
   await notificationFanoutQueue.close()
   await notificationDeliverQueue.close()
+  await documentConvertQueue.close()
+  await documentExportQueue.close()
   await getWorkerPrisma().$disconnect()
   process.exit(0)
 }

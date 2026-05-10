@@ -11,6 +11,10 @@ const ORG_SCOPED_MODELS = new Set([
   "Contract", "Folder", "Tag", "ApiKey",
   // M5: notification models with direct organizationId columns
   "OrgNotificationChannel", "OutboundWebhook", "UserNotificationPreference",
+  // M6: contract templates
+  "ContractTemplate",
+  // M7: obligation tracking
+  "ContractObligation",
 ])
 
 type ScopedQueryArgs = {

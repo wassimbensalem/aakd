@@ -238,9 +238,9 @@ AI and email are optional — the app runs without them (AI features degrade gra
 | M3 — AI Layer | ✅ Complete | Retrieval-grounded Contract Q&A with excerpt citations |
 | M4 — Launch Prep | ✅ Complete | Self-hosting docs, API reference, v1.0.0 changelog |
 | M5 — Ecosystem: Notifications | ✅ Complete | Full Slack/Teams event coverage, user-configurable webhooks, Zapier/Make connector, one-click unsubscribe |
-| M6 — Authoring | Pending | Browser-native contract editor + template library, Word import/export |
-| M7 — Obligation Tracking | Pending | Post-signature deliverables, SLAs, milestones, pass/fail status |
-| M8 — Analytics | Pending | Portfolio dashboard — KPIs, renewal timeline, status breakdown, contract health |
+| M6 — Authoring | ✅ Complete | ContractDocument + ContractTemplate, Plate editor (server-side), Word import, DOCX/PDF export, template API + use endpoint |
+| M7 — Obligation Tracking | ✅ Complete | ContractObligation + sub-tasks, full CRUD API, obligations tab on contract detail, daily cron auto-overdue, reminder notifications |
+| M8 — Analytics | ✅ Complete | /analytics page, 5 Recharts widgets, single GET /api/analytics/summary, org-scoped, obligation widget w/ graceful degradation |
 | M9 — Ecosystem: CRM | Pending | HubSpot, Salesforce, Pipedrive — link contracts to deals, auto-create from CRM |
 | M10 — Redlining | Pending | Tracked changes, version comparison (may defer to post-launch) |
 | 🚀 | — | **Open Source Launch** — publish repo publicly, LinkedIn, developer communities |

@@ -867,14 +867,12 @@ export default function ContractDetailPage() {
             className="rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[12.5px] font-normal text-muted-foreground -mb-px data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-foreground transition-colors cursor-pointer"
           >
             Editor
-            <span className="text-[9px] ml-1 px-1 py-0.5 rounded bg-muted text-muted-foreground font-semibold">M6</span>
           </TabsTrigger>
           <TabsTrigger
             value="obligations"
             className="rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[12.5px] font-normal text-muted-foreground -mb-px data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-foreground transition-colors cursor-pointer"
           >
             Obligations
-            <span className="text-[9px] ml-1 px-1 py-0.5 rounded bg-muted text-muted-foreground font-semibold">M7</span>
             {activeObligations.length > 0 && (
               <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
                 {activeObligations.length}

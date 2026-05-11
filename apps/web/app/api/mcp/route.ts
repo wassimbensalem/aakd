@@ -49,6 +49,20 @@ function toolSuccess(id: string | number, data: unknown) {
 }
 
 // ---------------------------------------------------------------------------
+// Lazy Anthropic singleton — avoids re-instantiating on every ask_contract call
+// ---------------------------------------------------------------------------
+
+let _anthropic: import("@anthropic-ai/sdk").default | null = null
+function getAnthropicClient() {
+  if (!_anthropic && process.env.ANTHROPIC_API_KEY) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Anthropic = require("@anthropic-ai/sdk").default
+    _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  }
+  return _anthropic
+}
+
+// ---------------------------------------------------------------------------
 // Tool definitions (returned by tools/list)
 // ---------------------------------------------------------------------------
 
@@ -421,21 +435,8 @@ async function toolSearchContracts(
           FROM "Contract"
           WHERE "organizationId" = ${orgId}
             ${status ? Prisma.sql`AND status = ${status}` : Prisma.empty}
-            AND to_tsvector('english',
-              coalesce(title, '') || ' ' ||
-              coalesce("counterpartyName", '') || ' ' ||
-              coalesce(notes, '') || ' ' ||
-              coalesce("extractedText", '')
-            ) @@ plainto_tsquery('english', ${q})
-          ORDER BY ts_rank(
-            to_tsvector('english',
-              coalesce(title, '') || ' ' ||
-              coalesce("counterpartyName", '') || ' ' ||
-              coalesce(notes, '') || ' ' ||
-              coalesce("extractedText", '')
-            ),
-            plainto_tsquery('english', ${q})
-          ) DESC
+            AND search_tsv @@ plainto_tsquery('english', ${q})
+          ORDER BY ts_rank(search_tsv, plainto_tsquery('english', ${q})) DESC
           LIMIT ${limit}
         `,
       )
@@ -666,6 +667,11 @@ async function toolAskContract(
 
   const { contractId, question } = parsed.data
 
+  const rl = await rateLimit(`${orgId}:ask-contract`, 10, 60_000)
+  if (!rl.allowed) {
+    return toolError(id, `Rate limit exceeded — retry after ${rl.retryAfter}s`)
+  }
+
   const contract = await prisma.contract.findUnique({
     where: { id: contractId },
     select: {
@@ -693,9 +699,8 @@ async function toolAskContract(
   let answer: string | null = null
 
   try {
-    if (process.env.ANTHROPIC_API_KEY) {
-      const Anthropic = (await import("@anthropic-ai/sdk")).default
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const anthropic = getAnthropicClient()
+    if (anthropic) {
       const msg = await anthropic.messages.create({
         model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
         max_tokens: 1024,

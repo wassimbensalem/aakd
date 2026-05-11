@@ -93,21 +93,8 @@ export async function GET(req: Request) {
           FROM "Contract"
           WHERE "organizationId" = ${orgId}
             AND "status" != 'ARCHIVED'
-            AND to_tsvector('english',
-              coalesce(title, '') || ' ' ||
-              coalesce("counterpartyName", '') || ' ' ||
-              coalesce(notes, '') || ' ' ||
-              coalesce("extractedText", '')
-            ) @@ plainto_tsquery('english', ${q})
-          ORDER BY ts_rank(
-            to_tsvector('english',
-              coalesce(title, '') || ' ' ||
-              coalesce("counterpartyName", '') || ' ' ||
-              coalesce(notes, '') || ' ' ||
-              coalesce("extractedText", '')
-            ),
-            plainto_tsquery('english', ${q})
-          ) DESC
+            AND search_tsv @@ plainto_tsquery('english', ${q})
+          ORDER BY ts_rank(search_tsv, plainto_tsquery('english', ${q})) DESC
           LIMIT ${limit} OFFSET ${offset}
         `
       )
@@ -156,12 +143,7 @@ export async function GET(req: Request) {
           FROM "Contract"
           WHERE "organizationId" = ${orgId}
             AND "status" != 'ARCHIVED'
-            AND to_tsvector('english',
-              coalesce(title, '') || ' ' ||
-              coalesce("counterpartyName", '') || ' ' ||
-              coalesce(notes, '') || ' ' ||
-              coalesce("extractedText", '')
-            ) @@ plainto_tsquery('english', ${q})
+            AND search_tsv @@ plainto_tsquery('english', ${q})
         `
       )
     } catch {

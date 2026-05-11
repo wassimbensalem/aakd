@@ -60,18 +60,20 @@ export async function GET(req: Request) {
     )
 
     // ── 1. Expiring Soon ──────────────────────────────────────────────────
-    // Three counts (cumulative) + top 10 soonest. Contract is org-scoped via
-    // the Prisma extension (findMany / count are auto-scoped).
-    const [next30, next60, next90, expiringContracts] = await Promise.all([
-      prisma.contract.count({
-        where: { status: "ACTIVE", endDate: { gte: now, lte: d30 } },
-      }),
-      prisma.contract.count({
-        where: { status: "ACTIVE", endDate: { gte: now, lte: d60 } },
-      }),
-      prisma.contract.count({
-        where: { status: "ACTIVE", endDate: { gte: now, lte: d90 } },
-      }),
+    // Single batched raw query for the three cumulative counts + top 10 soonest.
+    // Raw query requires explicit org predicate (not auto-scoped).
+    const [expiringCounts, expiringContracts] = await Promise.all([
+      prisma.$queryRaw<Array<{ next30: bigint; next60: bigint; next90: bigint }>>`
+        SELECT
+          COUNT(*) FILTER (WHERE "endDate" <= ${d30})::bigint AS next30,
+          COUNT(*) FILTER (WHERE "endDate" <= ${d60})::bigint AS next60,
+          COUNT(*) FILTER (WHERE "endDate" <= ${d90})::bigint AS next90
+        FROM "Contract"
+        WHERE "organizationId" = ${ctx.organizationId}
+          AND status = 'ACTIVE'
+          AND "endDate" >= ${now}
+          AND "endDate" <= ${d90}
+      `,
       prisma.contract.findMany({
         where: { status: "ACTIVE", endDate: { gte: now, lte: d90 } },
         orderBy: { endDate: "asc" },
@@ -85,6 +87,9 @@ export async function GET(req: Request) {
         },
       }),
     ])
+    const next30 = Number(expiringCounts[0]?.next30 ?? 0)
+    const next60 = Number(expiringCounts[0]?.next60 ?? 0)
+    const next90 = Number(expiringCounts[0]?.next90 ?? 0)
 
     const expiringSoon = {
       next30,
@@ -150,13 +155,19 @@ export async function GET(req: Request) {
       }))
 
     // ── 5. Approval Funnel ────────────────────────────────────────────────
-    // Approval has no organizationId column — scope via contract relation.
-    const approvalScope = { contract: { organizationId: ctx.organizationId } }
-    const [totalRequested, approved, rejected] = await Promise.all([
-      prisma.approval.count({ where: approvalScope }),
-      prisma.approval.count({ where: { ...approvalScope, status: "approved" } }),
-      prisma.approval.count({ where: { ...approvalScope, status: "rejected" } }),
-    ])
+    // Single batched raw query for all three counts.
+    const approvalRows = await prisma.$queryRaw<Array<{ total: bigint; approved: bigint; rejected: bigint }>>`
+      SELECT
+        COUNT(*)::bigint AS total,
+        COUNT(*) FILTER (WHERE a.status = 'approved')::bigint AS approved,
+        COUNT(*) FILTER (WHERE a.status = 'rejected')::bigint AS rejected
+      FROM "Approval" a
+      JOIN "Contract" c ON c.id = a."contractId"
+      WHERE c."organizationId" = ${ctx.organizationId}
+    `
+    const totalRequested = Number(approvalRows[0]?.total ?? 0)
+    const approved = Number(approvalRows[0]?.approved ?? 0)
+    const rejected = Number(approvalRows[0]?.rejected ?? 0)
     const approvalFunnel = {
       totalRequested,
       approved,
@@ -167,24 +178,18 @@ export async function GET(req: Request) {
     // ── 6. Obligations (graceful degradation) ─────────────────────────────
     let obligations: AnalyticsSummary["obligations"] = null
     try {
-      // The model is generated only after M7's migration. If absent, the
-      // dynamic property access throws and we return null.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const oblModel = (prisma as any).contractObligation
-      if (oblModel && typeof oblModel.count === "function") {
-        const dueSoonCutoff = new Date(now.getTime() + 7 * DAY_MS)
-        const obligationScope = { contract: { organizationId: ctx.organizationId } }
-        const [overdue, dueSoon] = await Promise.all([
-          oblModel.count({ where: { ...obligationScope, status: "OVERDUE" } }),
-          oblModel.count({
-            where: {
-              ...obligationScope,
-              status: { in: ["PENDING", "IN_PROGRESS"] },
-              dueDate: { lte: dueSoonCutoff },
-            },
-          }),
-        ])
-        obligations = { overdue, dueSoon }
+      const dueSoonCutoff = new Date(now.getTime() + 7 * DAY_MS)
+      const oblRows = await prisma.$queryRaw<Array<{ overdue: bigint; dueSoon: bigint }>>`
+        SELECT
+          COUNT(*) FILTER (WHERE o.status = 'OVERDUE')::bigint AS overdue,
+          COUNT(*) FILTER (WHERE o.status IN ('PENDING','IN_PROGRESS') AND o."dueDate" <= ${dueSoonCutoff})::bigint AS "dueSoon"
+        FROM "ContractObligation" o
+        JOIN "Contract" c ON c.id = o."contractId"
+        WHERE c."organizationId" = ${ctx.organizationId}
+      `
+      obligations = {
+        overdue: Number(oblRows[0]?.overdue ?? 0),
+        dueSoon: Number(oblRows[0]?.dueSoon ?? 0),
       }
     } catch {
       obligations = null

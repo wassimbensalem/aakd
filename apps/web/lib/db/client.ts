@@ -29,6 +29,7 @@ type ScopedQueryArgs = {
 function createPrismaClient() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL ?? "",
+    max: 20,
   })
 
   const adapter = new PrismaPg(pool)
@@ -58,6 +59,10 @@ function createPrismaClient() {
               ...scopedArgs.data,
               organization: { connect: { id: ctx.organizationId } },
             }
+            args = scopedArgs as typeof args
+          } else if (operation === "upsert") {
+            const scopedArgs = { ...args } as ScopedQueryArgs
+            scopedArgs.where = { ...scopedArgs.where, organizationId: ctx.organizationId }
             args = scopedArgs as typeof args
           } else if (["update", "updateMany", "delete", "deleteMany"].includes(operation)) {
             const scopedArgs = { ...args } as ScopedQueryArgs

@@ -1,13 +1,15 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { createEditor, Editor, Element as SlateElement, Range, Text, Transforms, type Descendant, type BaseEditor, type NodeEntry } from "slate"
+import { createEditor, Editor, Element as SlateElement, Node, Range, Text, Transforms, type Descendant, type BaseEditor, type NodeEntry } from "slate"
 import { Slate, Editable, withReact, type ReactEditor, type RenderElementProps, type RenderLeafProps } from "slate-react"
 import { withHistory, type HistoryEditor } from "slate-history"
 import { toast } from "sonner"
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   List, ListOrdered, Minus, Table as TableIcon, FileText, Heading1, Heading2, Heading3,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Indent, Outdent, LayoutTemplate, Image as ImageIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -24,6 +26,9 @@ type CustomElement = {
   children: CustomDescendant[]
   variable?: string
   indent?: number
+  align?: "left" | "center" | "right" | "justify"
+  url?: string
+  alt?: string
 }
 type CustomText = {
   text: string
@@ -123,6 +128,57 @@ function toggleBlock(editor: Editor, type: string): void {
   }
 }
 
+function getCurrentAlignment(editor: Editor): string {
+  const { selection } = editor
+  if (!selection) return "left"
+  const [match] = Array.from(
+    Editor.nodes(editor, {
+      at: Editor.unhangRange(editor, selection),
+      match: (n) => SlateElement.isElement(n),
+    }),
+  )
+  return (match?.[0] as unknown as CustomElement)?.align ?? "left"
+}
+
+function setAlignment(editor: Editor, align: "left" | "center" | "right" | "justify"): void {
+  const current = getCurrentAlignment(editor)
+  Transforms.setNodes(
+    editor,
+    { align: current === align ? undefined : align } as Partial<SlateElement>,
+    { match: (n) => SlateElement.isElement(n) },
+  )
+}
+
+const TABLE_TYPES = new Set(["table", "tr", "td", "th"])
+
+function indentBlock(editor: Editor): void {
+  const { selection } = editor
+  if (!selection) return
+  const [match] = Array.from(Editor.nodes(editor, {
+    match: (n) => SlateElement.isElement(n) && !TABLE_TYPES.has((n as unknown as CustomElement).type),
+  }))
+  if (!match) return
+  const cur = (match[0] as unknown as CustomElement).indent ?? 0
+  Transforms.setNodes(editor, { indent: Math.min(cur + 1, 8) } as Partial<SlateElement>, {
+    match: (n) => SlateElement.isElement(n) && !TABLE_TYPES.has((n as unknown as CustomElement).type),
+  })
+}
+
+function outdentBlock(editor: Editor): void {
+  const { selection } = editor
+  if (!selection) return
+  const [match] = Array.from(Editor.nodes(editor, {
+    match: (n) => SlateElement.isElement(n) && !TABLE_TYPES.has((n as unknown as CustomElement).type),
+  }))
+  if (!match) return
+  const cur = (match[0] as unknown as CustomElement).indent ?? 0
+  if (cur <= 0) return
+  const next = cur <= 1 ? undefined : cur - 1
+  Transforms.setNodes(editor, { indent: next } as Partial<SlateElement>, {
+    match: (n) => SlateElement.isElement(n) && !TABLE_TYPES.has((n as unknown as CustomElement).type),
+  })
+}
+
 function insertHorizontalRule(editor: Editor): void {
   Transforms.insertNodes(editor, [
     { type: "hr", children: [{ text: "" }] } as unknown as SlateElement,
@@ -148,6 +204,46 @@ function insertSimpleTable(editor: Editor): void {
   Transforms.insertNodes(editor, table)
 }
 
+function addTableRow(editor: Editor, tablePath: number[]): void {
+  const table = Node.get(editor, tablePath) as unknown as CustomElement
+  const colCount = (table.children[0] as unknown as CustomElement).children.length
+  const newRow: SlateElement = {
+    type: "tr",
+    children: Array.from({ length: colCount }, () => ({
+      type: "td",
+      children: [{ type: "p", children: [{ text: "" }] }],
+    })),
+  } as unknown as SlateElement
+  Transforms.insertNodes(editor, newRow, { at: [...tablePath, table.children.length] })
+}
+
+function removeTableRow(editor: Editor, tablePath: number[]): void {
+  const table = Node.get(editor, tablePath) as unknown as CustomElement
+  if (table.children.length <= 1) return
+  Transforms.removeNodes(editor, { at: [...tablePath, table.children.length - 1] })
+}
+
+function addTableCol(editor: Editor, tablePath: number[]): void {
+  const table = Node.get(editor, tablePath) as unknown as CustomElement
+  table.children.forEach((_, rowIdx) => {
+    Transforms.insertNodes(
+      editor,
+      { type: "td", children: [{ type: "p", children: [{ text: "" }] }] } as unknown as SlateElement,
+      { at: [...tablePath, rowIdx, (table.children[rowIdx] as unknown as CustomElement).children.length] },
+    )
+  })
+}
+
+function removeTableCol(editor: Editor, tablePath: number[]): void {
+  const table = Node.get(editor, tablePath) as unknown as CustomElement
+  const colCount = (table.children[0] as unknown as CustomElement).children.length
+  if (colCount <= 1) return
+  ;[...table.children].reverse().forEach((_, i) => {
+    const rowIdx = table.children.length - 1 - i
+    Transforms.removeNodes(editor, { at: [...tablePath, rowIdx, colCount - 1] })
+  })
+}
+
 function insertVariableNode(editor: Editor, name: string): void {
   if (!name) return
   const node: SlateElement = {
@@ -158,6 +254,22 @@ function insertVariableNode(editor: Editor, name: string): void {
   Transforms.insertNodes(editor, node)
   // Move past the inserted void inline.
   Transforms.move(editor, { unit: "offset" })
+}
+
+async function insertImageNode(editor: Editor, contractId: string, file: File): Promise<void> {
+  const fd = new FormData()
+  fd.append("file", file)
+  const res = await fetch(`/api/contracts/${contractId}/document/image`, { method: "POST", body: fd })
+  if (!res.ok) throw new Error("Upload failed")
+  const { url } = await res.json()
+  const node: SlateElement = {
+    type: "image",
+    url,
+    alt: file.name,
+    children: [{ text: "" }],
+  } as unknown as SlateElement
+  Transforms.insertNodes(editor, node)
+  Transforms.insertNodes(editor, { type: "p", children: [{ text: "" }] } as unknown as SlateElement)
 }
 
 // ─── Renderers ────────────────────────────────────────────────────────────────
@@ -177,40 +289,41 @@ function renderElement(props: RenderElementProps): React.ReactElement {
   const { attributes, children, element } = props
   const el = element as unknown as CustomElement
   const indentStyle = el.indent ? { marginLeft: `${(el.indent - 1) * 24}px` } : undefined
+  const alignStyle = el.align ? { textAlign: el.align as React.CSSProperties["textAlign"] } : undefined
   switch (el.type) {
     case "h1":
       return (
-        <h1 {...attributes} className="text-2xl font-bold mt-4 mb-2">
+        <h1 {...attributes} className="text-2xl font-bold mt-4 mb-2" style={alignStyle}>
           {children}
         </h1>
       )
     case "h2":
       return (
-        <h2 {...attributes} className="text-xl font-bold mt-3 mb-2">
+        <h2 {...attributes} className="text-xl font-bold mt-3 mb-2" style={alignStyle}>
           {children}
         </h2>
       )
     case "h3":
       return (
-        <h3 {...attributes} className="text-lg font-bold mt-3 mb-1.5">
+        <h3 {...attributes} className="text-lg font-bold mt-3 mb-1.5" style={alignStyle}>
           {children}
         </h3>
       )
     case "ol":
       return (
-        <ol {...attributes} className="list-decimal pl-6 my-2" style={indentStyle}>
+        <ol {...attributes} className="list-decimal pl-6 my-2" style={{ ...indentStyle, ...alignStyle }}>
           {children}
         </ol>
       )
     case "ul":
       return (
-        <ul {...attributes} className="list-disc pl-6 my-2" style={indentStyle}>
+        <ul {...attributes} className="list-disc pl-6 my-2" style={{ ...indentStyle, ...alignStyle }}>
           {children}
         </ul>
       )
     case "li":
       return (
-        <li {...attributes} className="my-1">
+        <li {...attributes} className="my-1" style={alignStyle}>
           {children}
         </li>
       )
@@ -250,7 +363,7 @@ function renderElement(props: RenderElementProps): React.ReactElement {
     case "p":
     default:
       return (
-        <p {...attributes} className="my-2 leading-6">
+        <p {...attributes} className="my-2 leading-6" style={alignStyle}>
           {children}
         </p>
       )
@@ -320,6 +433,8 @@ export function ContractEditor({
   valueRef.current = value
   const versionRef = useRef<number>(version)
   versionRef.current = version
+  const [activeTablePath, setActiveTablePath] = useState<number[] | null>(null)
+  const [pageLayout, setPageLayout] = useState(false)
 
   useEffect(() => {
     setIsReadOnly(readOnly)
@@ -443,6 +558,78 @@ export function ContractEditor({
     [editor, triggerSave],
   )
 
+  const renderElementFn = useCallback((props: RenderElementProps): React.ReactElement => {
+    const { attributes, children, element } = props
+    const el = element as unknown as CustomElement
+    const indentStyle = el.indent ? { marginLeft: `${(el.indent - 1) * 24}px` } : undefined
+    const alignStyle = el.align ? { textAlign: el.align as React.CSSProperties["textAlign"] } : undefined
+    switch (el.type) {
+      case "h1":
+        return <h1 {...attributes} className="text-2xl font-bold mt-4 mb-2" style={alignStyle}>{children}</h1>
+      case "h2":
+        return <h2 {...attributes} className="text-xl font-bold mt-3 mb-2" style={alignStyle}>{children}</h2>
+      case "h3":
+        return <h3 {...attributes} className="text-lg font-bold mt-3 mb-1.5" style={alignStyle}>{children}</h3>
+      case "ol":
+        return <ol {...attributes} className="list-decimal pl-6 my-2" style={{ ...indentStyle, ...alignStyle }}>{children}</ol>
+      case "ul":
+        return <ul {...attributes} className="list-disc pl-6 my-2" style={{ ...indentStyle, ...alignStyle }}>{children}</ul>
+      case "li":
+        return <li {...attributes} className="my-1" style={alignStyle}>{children}</li>
+      case "table":
+        return (
+          <div {...attributes} className="my-3">
+            {activeTablePath && (
+              <div contentEditable={false} className="flex items-center gap-1 mb-1">
+                <button type="button" onClick={() => addTableRow(editor, activeTablePath)}
+                  className="rounded px-2 py-0.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700">+ Row</button>
+                <button type="button" onClick={() => removeTableRow(editor, activeTablePath)}
+                  className="rounded px-2 py-0.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700">− Row</button>
+                <button type="button" onClick={() => addTableCol(editor, activeTablePath)}
+                  className="rounded px-2 py-0.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700">+ Col</button>
+                <button type="button" onClick={() => removeTableCol(editor, activeTablePath)}
+                  className="rounded px-2 py-0.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700">− Col</button>
+              </div>
+            )}
+            <table className="border border-zinc-300 w-full">
+              <tbody>{children}</tbody>
+            </table>
+          </div>
+        )
+      case "tr":
+        return <tr {...attributes}>{children}</tr>
+      case "td":
+        return <td {...attributes} className="border border-zinc-300 px-2 py-1.5 align-top">{children}</td>
+      case "th":
+        return <th {...attributes} className="border border-zinc-300 px-2 py-1.5 align-top font-semibold bg-zinc-50">{children}</th>
+      case "hr":
+        return <div {...attributes} contentEditable={false} className="my-4 border-t border-zinc-300">{children}</div>
+      case "image": {
+        const src = el.url ?? ""
+        const alt = el.alt ?? ""
+        return (
+          <div {...attributes} contentEditable={false} className="my-3 flex justify-start">
+            {children}
+            {src
+              ? <img src={src} alt={alt} className="max-w-full rounded border border-zinc-200" style={{ maxHeight: 400 }} />
+              : <div className="flex items-center justify-center w-full h-24 bg-zinc-50 border border-dashed border-zinc-300 rounded text-sm text-zinc-400">Image not found</div>
+            }
+          </div>
+        )
+      }
+      case "template_variable":
+        return (
+          <span {...attributes}>
+            <VariableChip name={el.variable ?? ""} />
+            {children}
+          </span>
+        )
+      case "p":
+      default:
+        return <p {...attributes} className="my-2 leading-6" style={alignStyle}>{children}</p>
+    }
+  }, [editor, activeTablePath])
+
   // Recomputes only when document content or selection changes, not on every render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const headingValue = useMemo(() => {
@@ -562,6 +749,40 @@ export function ContractEditor({
             <span className="w-px h-5 bg-zinc-200 mx-1" />
 
             <ToolbarButton
+              active={getCurrentAlignment(editor) === "left"}
+              onMouseDown={(e) => { e.preventDefault(); setAlignment(editor, "left") }}
+              title="Align left"
+            ><AlignLeft className="size-4" /></ToolbarButton>
+            <ToolbarButton
+              active={getCurrentAlignment(editor) === "center"}
+              onMouseDown={(e) => { e.preventDefault(); setAlignment(editor, "center") }}
+              title="Align center"
+            ><AlignCenter className="size-4" /></ToolbarButton>
+            <ToolbarButton
+              active={getCurrentAlignment(editor) === "right"}
+              onMouseDown={(e) => { e.preventDefault(); setAlignment(editor, "right") }}
+              title="Align right"
+            ><AlignRight className="size-4" /></ToolbarButton>
+            <ToolbarButton
+              active={getCurrentAlignment(editor) === "justify"}
+              onMouseDown={(e) => { e.preventDefault(); setAlignment(editor, "justify") }}
+              title="Justify"
+            ><AlignJustify className="size-4" /></ToolbarButton>
+
+            <span className="w-px h-5 bg-zinc-200 mx-1" />
+
+            <ToolbarButton
+              onMouseDown={(e) => { e.preventDefault(); indentBlock(editor) }}
+              title="Indent"
+            ><Indent className="size-4" /></ToolbarButton>
+            <ToolbarButton
+              onMouseDown={(e) => { e.preventDefault(); outdentBlock(editor) }}
+              title="Outdent"
+            ><Outdent className="size-4" /></ToolbarButton>
+
+            <span className="w-px h-5 bg-zinc-200 mx-1" />
+
+            <ToolbarButton
               active={isBlockActive(editor, "ol")}
               onMouseDown={(e) => { e.preventDefault(); toggleBlock(editor, "ol") }}
               title="Ordered list"
@@ -590,6 +811,28 @@ export function ContractEditor({
             >
               <Minus className="size-4" />
             </ToolbarButton>
+            <ToolbarButton
+              onMouseDown={(e) => {
+                e.preventDefault()
+                if (!contractId) { toast.error("Save the contract before inserting images."); return }
+                const input = document.createElement("input")
+                input.type = "file"
+                input.accept = "image/jpeg,image/png,image/gif,image/webp"
+                input.onchange = async () => {
+                  const file = input.files?.[0]
+                  if (!file) return
+                  try {
+                    await insertImageNode(editor, contractId, file)
+                  } catch {
+                    toast.error("Image upload failed.")
+                  }
+                }
+                input.click()
+              }}
+              title="Insert image"
+            >
+              <ImageIcon className="size-4" />
+            </ToolbarButton>
           </>
         )}
 
@@ -598,12 +841,29 @@ export function ContractEditor({
             {wordCount.toLocaleString()} words
           </span>
           <SaveStatusLabel status={saveStatus} />
+          <button
+            type="button"
+            onClick={() => setPageLayout((v) => !v)}
+            className={cn(
+              "rounded p-1.5 transition-colors",
+              pageLayout ? "bg-indigo-100 text-indigo-700" : "text-zinc-500 hover:bg-zinc-100"
+            )}
+            title="Toggle page layout"
+          >
+            <LayoutTemplate className="size-4" />
+          </button>
           {rightActions}
         </div>
       </div>
 
       <div className="grid grid-cols-12 gap-4">
-        <div className={cn("rounded-md border border-zinc-200 bg-white p-4 min-h-[400px]", showVariablesPanel ? "col-span-9" : "col-span-12")}>
+        <div className={cn(showVariablesPanel ? "col-span-9" : "col-span-12", pageLayout && "flex justify-center bg-zinc-100 rounded-md p-6 min-h-[600px]")}>
+          <div className={cn(
+            "bg-white",
+            pageLayout
+              ? "w-[794px] min-h-[1123px] shadow-lg p-[72px] border border-zinc-200"
+              : "rounded-md border border-zinc-200 p-4 min-h-[400px]"
+          )}>
           {(() => {
             if (value.length === 0 && !isReadOnly) {
               return (
@@ -620,15 +880,24 @@ export function ContractEditor({
           <Slate editor={editor as unknown as ReactEditor} initialValue={value} onChange={handleChange}>
             <Editable
               readOnly={isReadOnly}
-              renderElement={renderElement}
+              renderElement={renderElementFn}
               renderLeaf={renderLeaf}
               onKeyDown={onKeyDown}
               onBlur={handleBlur}
+              onClick={() => {
+                const { selection } = editor
+                if (!selection) { setActiveTablePath(null); return }
+                const [tableEntry] = Array.from(Editor.nodes(editor, {
+                  match: (n) => SlateElement.isElement(n) && (n as unknown as CustomElement).type === "table",
+                }))
+                setActiveTablePath(tableEntry ? [...tableEntry[1]] : null)
+              }}
               spellCheck
               placeholder={isReadOnly ? undefined : "Start writing…"}
               className="outline-none min-h-[400px] text-sm text-zinc-900"
             />
           </Slate>
+          </div>
         </div>
 
         {showVariablesPanel && (
@@ -710,9 +979,8 @@ function withTemplateVariableInline<T extends ReactEditor>(editor: T): T {
     return isInline(el)
   }
   editor.isVoid = (el) => {
-    if (SlateElement.isElement(el) && (el as unknown as CustomElement).type === "template_variable") {
-      return true
-    }
+    const type = (el as unknown as CustomElement).type
+    if (type === "template_variable" || type === "image") return true
     return isVoid(el)
   }
   return editor

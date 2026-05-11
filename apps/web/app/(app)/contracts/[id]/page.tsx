@@ -560,6 +560,20 @@ export default function ContractDetailPage() {
     }
   }
 
+  async function cancelApproval(approvalId: string) {
+    if (!window.confirm("Cancel this approval request?")) return
+    try {
+      const res = await fetch(`/api/contracts/${id}/approvals/${approvalId}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) throw new Error("Failed")
+      toast.success("Approval request cancelled")
+      fetchContract()
+    } catch {
+      toast.error("Failed to cancel approval request")
+    }
+  }
+
   async function decideApproval(approvalId: string, decision: "approved" | "rejected", comment?: string) {
     try {
       const res = await fetch(`/api/contracts/${id}/approvals/${approvalId}`, {
@@ -655,6 +669,7 @@ export default function ContractDetailPage() {
   const canRequestApproval =
     (currentMember?.role === "admin" || currentMember?.role === "legal" || currentMember?.role === "owner") &&
     APPROVAL_REQUESTABLE_STATUSES.includes(contract.status)
+  const isAdminOrOwner = currentMember?.role === "admin" || currentMember?.role === "owner"
   const canManage = currentMember?.role === "admin" || currentMember?.role === "legal" || currentMember?.role === "owner"
 
   return (
@@ -1409,30 +1424,43 @@ export default function ContractDetailPage() {
                                 {approval.requestedBy.name} · <RelativeTime date={approval.createdAt} />
                               </p>
                             </div>
-                            {approval.status === "pending" && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 shrink-0">
-                                <Clock className="size-3" />
-                                Pending
-                              </span>
-                            )}
-                            {approval.status === "approved" && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 shrink-0">
-                                <CheckCircle className="size-3" />
-                                Approved
-                              </span>
-                            )}
-                            {approval.status === "rejected" && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 shrink-0">
-                                <XCircle className="size-3" />
-                                Rejected
-                              </span>
-                            )}
-                            {approval.status === "waiting" && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground shrink-0">
-                                <Clock className="size-3" />
-                                Queued (Step {approval.step})
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {approval.status === "pending" && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                  <Clock className="size-3" />
+                                  Pending
+                                </span>
+                              )}
+                              {approval.status === "approved" && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                  <CheckCircle className="size-3" />
+                                  Approved
+                                </span>
+                              )}
+                              {approval.status === "rejected" && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                                  <XCircle className="size-3" />
+                                  Rejected
+                                </span>
+                              )}
+                              {approval.status === "waiting" && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                  <Clock className="size-3" />
+                                  Queued (Step {approval.step})
+                                </span>
+                              )}
+                              {(isPending || isWaiting) &&
+                                (approval.requestedBy.id === session?.user?.id || isAdminOrOwner) && (
+                                <button
+                                  type="button"
+                                  title="Cancel approval request"
+                                  onClick={() => cancelApproval(approval.id)}
+                                  className="text-muted-foreground hover:text-destructive transition-colors"
+                                >
+                                  <X className="size-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           {approval.comment && (

@@ -24,6 +24,7 @@ const actionConfig: Record<ActivityAction, { label: string; Icon: React.Componen
   DELETED: { label: "Deleted", Icon: Trash },
   ARCHIVED: { label: "Archived", Icon: Archive },
   TAGGED: { label: "Tagged", Icon: TagIcon },
+  APPROVAL_CANCELLED: { label: "Cancelled approval request", Icon: XCircle },
 }
 
 export function ActivityTimeline({ activities }: { activities: Activity[] }) {

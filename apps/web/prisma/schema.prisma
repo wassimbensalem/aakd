@@ -295,6 +295,7 @@ enum ActivityAction {
   CRM_UNLINKED
   CRM_SYNCED
   IMPORT_COMPLETED
+  APPROVAL_CANCELLED
 }
 
 model Folder {

@@ -126,20 +126,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       select: USER_SELECT,
     })
 
-    // Only count "pending" approvals (actively awaiting a decision) to determine
-    // whether we're in an active cycle. "waiting" approvals that were never
-    // activated (because a prior step rejected) are stale and must not block
-    // a re-request — they would push the new approval to step N+1 as "waiting"
-    // and suppress the notification entirely.
+    // Only count "pending" *required* approvals to determine whether we're in an
+    // active cycle. Optional approvals are always "pending" and must not push a
+    // new required approver to a higher step or falsely signal an active chain.
     const pendingCount = await prisma.approval.count({
-      where: { contractId: params.id, status: "pending" },
+      where: { contractId: params.id, status: "pending", required: true },
     })
     const hasActivePending = pendingCount > 0
 
     // Determine step — caller override takes precedence; otherwise auto-assign.
-    // Start fresh at step 1 when no pending approvals exist (post-rejection reset).
+    // Only count steps from *required* approvals so optional approvers (step 0)
+    // never pollute the sequential numbering.
     const stepAgg = await prisma.approval.aggregate({
-      where: { contractId: params.id },
+      where: { contractId: params.id, required: true },
       _max: { step: true },
     })
     const nextStep = body.step ?? (hasActivePending ? (stepAgg._max.step ?? 0) + 1 : 1)
@@ -156,9 +155,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     // approval in front of it) start in "waiting" so only the current active
     // reviewer gets notified. The PATCH handler activates the next step.
     // Required approvers follow the sequential chain (waiting if not first).
-    // Optional approvers are always notified immediately (pending).
+    // Optional approvers are always notified immediately (pending) and sit at
+    // step 0 — outside the sequential chain — so they never shift the counter.
     const isRequired = body.required ?? true
     const approvalStatus = (!isRequired || nextStep === 1) ? "pending" : "waiting"
+    // Optional approvers use step 0 (out-of-band); required ones use nextStep.
+    const assignedStep = isRequired ? nextStep : 0
 
     // Create the approval record
     const approval = await prisma.approval.create({
@@ -168,7 +170,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         assignedToId: body.assignedToId,
         status: approvalStatus,
         required: isRequired,
-        step: nextStep,
+        step: assignedStep,
       },
       include: {
         requestedBy: { select: USER_SELECT },

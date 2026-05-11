@@ -1,4 +1,5 @@
 import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
+import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
@@ -93,20 +94,25 @@ export async function PATCH(
       })
 
       let advancedTo: "AWAITING_SIGNATURE" | "INTERNAL_REVIEW" | null = null
-      let activatedNext: { id: string; assignedToId: string } | null = null
+      let activatedNext: { id: string; assignedToId: string; requestedBy: { id: string; name: string | null; email: string; image: string | null } } | null = null
 
       if (body.decision === "approved" && contract.status === "PENDING_APPROVAL") {
         // Activate the next step in the chain if it exists
         const nextWaiting = await tx.approval.findFirst({
           where: { contractId: params.id, status: "waiting" },
           orderBy: { step: "asc" },
+          include: { requestedBy: { select: USER_SELECT } },
         })
         if (nextWaiting) {
           await tx.approval.update({
             where: { id: nextWaiting.id },
             data: { status: "pending" },
           })
-          activatedNext = { id: nextWaiting.id, assignedToId: nextWaiting.assignedToId }
+          activatedNext = {
+            id: nextWaiting.id,
+            assignedToId: nextWaiting.assignedToId,
+            requestedBy: nextWaiting.requestedBy,
+          }
         }
 
         // Only advance contract when ALL *required* approvals are resolved
@@ -207,7 +213,9 @@ export async function PATCH(
       await enqueueNotification("contract.sent_for_signing", params.id, ctx.userId, {})
     }
 
-    // Notify the next-in-chain approver that it is now their turn
+    // Notify the next-in-chain approver that it is now their turn.
+    // Use activatedNext.requestedBy (the person who requested *that* step),
+    // not updated.requestedBy (the person who requested the step just decided).
     if (activatedNext) {
       const nextAssignee = await prisma.user.findUnique({
         where: { id: activatedNext.assignedToId },
@@ -218,12 +226,13 @@ export async function PATCH(
           where: { id: params.id },
           select: { title: true },
         })
+        const nextRequesterName = activatedNext.requestedBy?.name ?? "A team member"
         emailQueue
           .add("send", {
             kind: "approval_request",
             to: nextAssignee.email,
             assigneeName: nextAssignee.name,
-            requesterName: updated.requestedBy?.name ?? "A team member",
+            requesterName: nextRequesterName,
             contractTitle: contractForEmail?.title ?? "Contract",
           })
           .catch(() => {})
@@ -231,12 +240,96 @@ export async function PATCH(
           approvalId: activatedNext.id,
           assigneeId: nextAssignee.id,
           assigneeName: nextAssignee.name,
-          requesterId: ctx.userId,
-          requesterName: updated.requestedBy?.name ?? "A team member",
+          requesterId: activatedNext.requestedBy?.id ?? ctx.userId,
+          requesterName: nextRequesterName,
         })
       }
     }
 
     return Response.json({ approval: updated })
+  })
+}
+
+// ─── DELETE /api/contracts/[id]/approvals/[approvalId] ───────────────────────
+// Cancel/withdraw a pending or waiting approval request.
+// Only the original requester OR an admin/owner may cancel.
+// Already-decided approvals (approved/rejected) cannot be cancelled.
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string; approvalId: string } },
+) {
+  const ctx = await resolveAuth(req)
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const scopeError = requireWriteScope(ctx)
+  if (scopeError) return scopeError
+
+  return requestContext.run(ctx, async () => {
+    // Org-scope check on the contract
+    const contract = await prisma.contract.findUnique({
+      where: { id: params.id },
+      select: { id: true, organizationId: true, status: true },
+    })
+    if (!contract || contract.organizationId !== ctx.organizationId) {
+      return Response.json({ error: "Not Found" }, { status: 404 })
+    }
+
+    const approval = await prisma.approval.findUnique({
+      where: { id: params.approvalId },
+      include: {
+        assignedTo: { select: USER_SELECT },
+        requestedBy: { select: USER_SELECT },
+      },
+    })
+    if (!approval || approval.contractId !== params.id) {
+      return Response.json({ error: "Not Found" }, { status: 404 })
+    }
+
+    // Only pending or waiting approvals can be cancelled
+    if (approval.status !== "pending" && approval.status !== "waiting") {
+      return Response.json(
+        { error: "Only pending or waiting approvals can be cancelled" },
+        { status: 409 },
+      )
+    }
+
+    // Only the original requester or an admin/owner may cancel
+    const isRequester = approval.requestedById === ctx.userId
+    const isAdminOrOwner = hasRole(ctx.role, "admin")
+    if (!isRequester && !isAdminOrOwner) {
+      return Response.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const assigneeName = approval.assignedTo.name ?? "Reviewer"
+
+    await prisma.$transaction(async (tx) => {
+      await tx.approval.delete({ where: { id: params.approvalId } })
+
+      // If this was the only pending approval, revert contract to INTERNAL_REVIEW
+      if (approval.status === "pending" && contract.status === "PENDING_APPROVAL") {
+        const otherPending = await tx.approval.count({
+          where: {
+            contractId: params.id,
+            status: "pending",
+            id: { not: params.approvalId },
+          },
+        })
+        if (otherPending === 0) {
+          await tx.contract.update({
+            where: { id: params.id },
+            data: { status: "INTERNAL_REVIEW" },
+          })
+        }
+      }
+    })
+
+    await writeActivity(
+      params.id,
+      ctx.userId,
+      "APPROVAL_CANCELLED",
+      `Approval request for ${assigneeName} was cancelled`,
+    )
+
+    return Response.json({ success: true })
   })
 }

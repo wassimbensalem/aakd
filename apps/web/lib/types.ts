@@ -42,6 +42,7 @@ export type ActivityAction =
   | "DELETED"
   | "ARCHIVED"
   | "TAGGED"
+  | "APPROVAL_CANCELLED"
 
 export interface Contract {
   id: string

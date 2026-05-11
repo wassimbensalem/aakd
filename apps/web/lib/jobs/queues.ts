@@ -80,6 +80,14 @@ export type EmailJobData =
       unsubscribeToken: string
     }
 
+// ─── M7: Obligation AI extraction ────────────────────────────────────────────
+
+export interface ObligationExtractJobData {
+  contractId: string
+  extractedText: string  // passed in so the worker doesn't need a DB read
+  requestedById: string
+}
+
 // ─── M6: Authoring (Word import / DOCX+PDF export) ───────────────────────────
 
 export interface DocumentConvertJobData {
@@ -145,6 +153,7 @@ let _documentExportQueue: Queue<DocumentExportJobData> | null = null
 let _obligationsCheckQueue: Queue<ObligationsCheckJobData> | null = null
 let _salesforcePollQueue: Queue<SalesforcePollJobData> | null = null
 let _importProcessQueue: Queue<ImportProcessJobData> | null = null
+let _obligationExtractQueue: Queue<ObligationExtractJobData> | null = null
 
 export function getContractExtractQueue(): Queue<ContractExtractJobData> {
   return (_contractExtractQueue ??= new Queue<ContractExtractJobData>("contract.extract", { connection }))
@@ -230,6 +239,16 @@ export function getSalesforcePollQueue(): Queue<SalesforcePollJobData> {
   ))
 }
 
+export function getObligationExtractQueue(): Queue<ObligationExtractJobData> {
+  return (_obligationExtractQueue ??= new Queue<ObligationExtractJobData>(
+    "obligations.ai_extract",
+    {
+      connection,
+      defaultJobOptions: { removeOnComplete: 100, removeOnFail: 200, attempts: 1 },
+    }
+  ))
+}
+
 export function getImportProcessQueue(): Queue<ImportProcessJobData> {
   // attempts: 1 — partial progress is persisted per ImportRow as the worker
   // streams through the file. A retry would re-process completed rows; instead
@@ -302,4 +321,9 @@ export const importProcessQueue = {
   add: (...a: Parameters<Queue<ImportProcessJobData>["add"]>) =>
     getImportProcessQueue().add(...a),
   close: () => _importProcessQueue?.close() ?? Promise.resolve(),
+}
+export const obligationExtractQueue = {
+  add: (...a: Parameters<Queue<ObligationExtractJobData>["add"]>) =>
+    getObligationExtractQueue().add(...a),
+  close: () => _obligationExtractQueue?.close() ?? Promise.resolve(),
 }

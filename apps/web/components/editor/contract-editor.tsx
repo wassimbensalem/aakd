@@ -13,6 +13,23 @@ import { TableCell } from "@tiptap/extension-table-cell"
 import { TableHeader } from "@tiptap/extension-table-header"
 import Color from "@tiptap/extension-color"
 import TextStyle from "@tiptap/extension-text-style"
+
+// ─── Extended TextStyle — adds fontSize attribute ─────────────────────────────
+const TextStyleExtended = TextStyle.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      fontSize: {
+        default: null,
+        parseHTML: (element) => (element as HTMLElement).style.fontSize || null,
+        renderHTML: (attributes) => {
+          if (!(attributes as { fontSize?: string }).fontSize) return {}
+          return { style: `font-size: ${(attributes as { fontSize: string }).fontSize}` }
+        },
+      },
+    }
+  },
+})
 import Highlight from "@tiptap/extension-highlight"
 import Placeholder from "@tiptap/extension-placeholder"
 import CharacterCount from "@tiptap/extension-character-count"
@@ -287,10 +304,14 @@ function normalizeContent(raw: unknown): TipTapDoc {
 
 const FONT_SIZES = ["12px", "14px", "16px", "18px", "20px", "24px", "32px"] as const
 
+// Sentinel used instead of "" so Radix Select can distinguish
+// "Default / None" from "nothing selected" (empty string breaks Radix).
+const COLOR_NONE = "__none__"
+
 // ─── Text colors ───────────────────────────────────────────────────────────────
 
 const TEXT_COLORS = [
-  { label: "Default", value: "" },
+  { label: "Default", value: COLOR_NONE },
   { label: "Red", value: "#ef4444" },
   { label: "Orange", value: "#f97316" },
   { label: "Amber", value: "#f59e0b" },
@@ -304,7 +325,7 @@ const TEXT_COLORS = [
 // ─── Highlight colors ──────────────────────────────────────────────────────────
 
 const HIGHLIGHT_COLORS = [
-  { label: "None", value: "" },
+  { label: "None", value: COLOR_NONE },
   { label: "Yellow", value: "#fef08a" },
   { label: "Green", value: "#bbf7d0" },
   { label: "Blue", value: "#bfdbfe" },
@@ -399,7 +420,7 @@ export function ContractEditor({
       TableCell,
       TableHeader,
       Color,
-      TextStyle,
+      TextStyleExtended,
       Highlight.configure({ multicolor: true }),
       Placeholder.configure({ placeholder: "Start writing…" }),
       CharacterCount,
@@ -449,20 +470,23 @@ export function ContractEditor({
   // Sync currentUserId/currentUserName to TrackChangesExtension storage
   useEffect(() => {
     if (!editor) return
-    const ext = editor.extensionManager.extensions.find((e) => e.name === "trackChangesExtension")
-    if (ext) {
-      (ext.storage as { userId: string; userName: string }).userId = currentUserId ?? ""
-      ;(ext.storage as { userId: string; userName: string }).userName = currentUserName ?? ""
+    // editor.storage[name] is the live storage object shared with the extension's this.storage
+    const tc = editor.storage.trackChangesExtension as
+      | { enabled: boolean; userId: string; userName: string }
+      | undefined
+    if (tc) {
+      tc.userId = currentUserId ?? ""
+      tc.userName = currentUserName ?? ""
     }
   }, [editor, currentUserId, currentUserName])
 
   // Sync trackChanges toggle to extension storage
   useEffect(() => {
     if (!editor) return
-    const ext = editor.extensionManager.extensions.find((e) => e.name === "trackChangesExtension")
-    if (ext) {
-      (ext.storage as { enabled: boolean }).enabled = trackChanges
-    }
+    const tc = editor.storage.trackChangesExtension as
+      | { enabled: boolean }
+      | undefined
+    if (tc) tc.enabled = trackChanges
   }, [editor, trackChanges])
 
   // Wire accept/reject all
@@ -603,14 +627,14 @@ export function ContractEditor({
   })()
 
   const currentColor = (() => {
-    if (!editor) return ""
-    return (editor.getAttributes("textStyle").color as string | undefined) ?? ""
+    if (!editor) return COLOR_NONE
+    return (editor.getAttributes("textStyle").color as string | undefined) || COLOR_NONE
   })()
 
   const currentHighlight = (() => {
-    if (!editor) return ""
+    if (!editor) return COLOR_NONE
     const attrs = editor.getAttributes("highlight")
-    return (attrs.color as string | undefined) ?? ""
+    return (attrs.color as string | undefined) || COLOR_NONE
   })()
 
   // ─── Table helpers ─────────────────────────────────────────────────────────
@@ -620,6 +644,24 @@ export function ContractEditor({
   // ─── Comment button visibility ─────────────────────────────────────────────
 
   const hasSelection = editor ? !editor.state.selection.empty : false
+
+  // ─── Selection preservation for toolbar dropdowns ─────────────────────────
+  // Radix Select steals editor focus on open. Save selection before open,
+  // restore it in onValueChange before running the TipTap command.
+
+  const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
+
+  const saveEditorSelection = useCallback(() => {
+    if (!editor) return
+    const { from, to } = editor.state.selection
+    savedSelectionRef.current = { from, to }
+  }, [editor])
+
+  const restoreEditorSelection = useCallback(() => {
+    if (!editor || !savedSelectionRef.current) return
+    const { from, to } = savedSelectionRef.current
+    editor.commands.setTextSelection({ from, to })
+  }, [editor])
 
   // ─── Image upload ──────────────────────────────────────────────────────────
 
@@ -704,7 +746,11 @@ export function ContractEditor({
             <span className="w-px h-5 bg-zinc-200 mx-1" />
 
             {/* Heading */}
-            <Select value={headingValue} onValueChange={(v) => setHeading(v ?? "p")}>
+            <Select
+              value={headingValue}
+              onOpenChange={(open) => { if (open) saveEditorSelection() }}
+              onValueChange={(v) => { restoreEditorSelection(); setHeading(v ?? "p") }}
+            >
               <SelectTrigger className="h-8 w-32 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -725,7 +771,9 @@ export function ContractEditor({
             {/* Font size */}
             <Select
               value={currentFontSize}
+              onOpenChange={(open) => { if (open) saveEditorSelection() }}
               onValueChange={(v) => {
+                restoreEditorSelection()
                 if (v) editor.chain().focus().setMark("textStyle", { fontSize: v }).run()
               }}
             >
@@ -742,19 +790,20 @@ export function ContractEditor({
             {/* Text color */}
             <Select
               value={currentColor}
+              onOpenChange={(open) => { if (open) saveEditorSelection() }}
               onValueChange={(v) => {
-                const color = v ?? ""
-                if (color === "") {
+                restoreEditorSelection()
+                if (!v || v === COLOR_NONE) {
                   editor.chain().focus().unsetColor().run()
                 } else {
-                  editor.chain().focus().setColor(color).run()
+                  editor.chain().focus().setColor(v).run()
                 }
               }}
             >
               <SelectTrigger className="h-8 w-8 p-0 flex items-center justify-center border-zinc-200">
                 <div
                   className="size-4 rounded-sm border border-zinc-300"
-                  style={{ backgroundColor: currentColor || "#000000" }}
+                  style={{ backgroundColor: currentColor === COLOR_NONE ? "#000000" : currentColor }}
                 />
               </SelectTrigger>
               <SelectContent>
@@ -763,7 +812,7 @@ export function ContractEditor({
                     <span className="inline-flex items-center gap-2">
                       <span
                         className="size-3 rounded-sm border border-zinc-200 inline-block"
-                        style={{ backgroundColor: c.value || "#000000" }}
+                        style={{ backgroundColor: c.value === COLOR_NONE ? "#000000" : c.value }}
                       />
                       {c.label}
                     </span>
@@ -775,19 +824,20 @@ export function ContractEditor({
             {/* Highlight color */}
             <Select
               value={currentHighlight}
+              onOpenChange={(open) => { if (open) saveEditorSelection() }}
               onValueChange={(v) => {
-                const color = v ?? ""
-                if (color === "") {
+                restoreEditorSelection()
+                if (!v || v === COLOR_NONE) {
                   editor.chain().focus().unsetHighlight().run()
                 } else {
-                  editor.chain().focus().setHighlight({ color }).run()
+                  editor.chain().focus().setHighlight({ color: v }).run()
                 }
               }}
             >
               <SelectTrigger className="h-8 w-8 p-0 flex items-center justify-center border-zinc-200">
                 <div
                   className="size-4 rounded-sm border border-zinc-300 flex items-center justify-center"
-                  style={{ backgroundColor: currentHighlight || "transparent" }}
+                  style={{ backgroundColor: currentHighlight === COLOR_NONE ? "transparent" : currentHighlight }}
                 >
                   <Highlighter className="size-2.5 text-zinc-600" />
                 </div>
@@ -798,7 +848,7 @@ export function ContractEditor({
                     <span className="inline-flex items-center gap-2">
                       <span
                         className="size-3 rounded-sm border border-zinc-200 inline-block"
-                        style={{ backgroundColor: c.value || "transparent" }}
+                        style={{ backgroundColor: c.value === COLOR_NONE ? "transparent" : c.value }}
                       />
                       {c.label}
                     </span>

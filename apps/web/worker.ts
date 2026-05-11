@@ -53,6 +53,7 @@ import type {
   DocumentExportJobData,
   ObligationsCheckJobData,
   ImportProcessJobData,
+  ObligationExtractJobData,
 } from "@/lib/jobs/queues"
 import {
   contractExtractQueue,
@@ -68,6 +69,8 @@ import {
   obligationsCheckQueue,
   salesforcePollQueue,
   importProcessQueue,
+  getObligationExtractQueue,
+  obligationExtractQueue,
 } from "@/lib/jobs/queues"
 import type { SalesforcePollJobData } from "@/lib/jobs/queues"
 import { processImportJob } from "@/lib/import/processor"
@@ -773,6 +776,112 @@ obligationsWorker.on("completed", (job) =>
 )
 obligationsWorker.on("failed", (job, err) =>
   console.error(`[obligations] Job ${job?.id} failed:`, err),
+)
+
+// ─── Worker: obligations.ai_extract ──────────────────────────────────────────
+
+const OBLIGATION_EXTRACTION_PROMPT = `You are a contract analysis assistant. Identify all obligations, commitments, deliverables, and deadlines in this contract.
+
+Return ONLY a valid JSON array. Each item must have this exact shape:
+{
+  "title": <short obligation title, max 100 chars>,
+  "description": <1-2 sentence description of the obligation>,
+  "clauseReference": <clause/section reference e.g. "Section 4.2" or null>,
+  "priority": <"HIGH" | "MEDIUM" | "LOW" — HIGH for payment/penalty/termination obligations>,
+  "suggestedDueDays": <number of days from today to suggest as due date, integer 1-365, use 30 if unclear>,
+  "confidence": <number between 0 and 1 — how confident you are this is a genuine contractual obligation: 1.0 = explicit obligation with clear deadline, 0.5 = inferred commitment, 0.2 = vague or general statement>
+}
+
+Return ONLY the JSON array. No explanation, no markdown fences. Max 20 obligations.`
+
+async function callObligationLLM(text: string): Promise<string | null> {
+  const provider =
+    process.env.AI_PROVIDER?.toLowerCase() ||
+    (process.env.ANTHROPIC_API_KEY
+      ? "anthropic"
+      : process.env.OPENAI_API_KEY
+        ? "openai"
+        : process.env.OLLAMA_BASE_URL
+          ? "ollama"
+          : null)
+
+  if (!provider) return null
+
+  if (provider === "anthropic") {
+    if (!process.env.ANTHROPIC_API_KEY) return null
+    const msg = await getAnthropic().messages.create({
+      model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
+      max_tokens: 2048,
+      system: OBLIGATION_EXTRACTION_PROMPT,
+      messages: [{ role: "user", content: `Here is the contract text to analyze:\n\n${text}` }],
+    })
+    const block = msg.content.find((b) => b.type === "text")
+    return block?.type === "text" ? block.text.trim() : ""
+  }
+
+  if (provider === "openai") {
+    if (!process.env.OPENAI_API_KEY) return null
+    const res = await getOpenAI().chat.completions.create({
+      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+      max_tokens: 2048,
+      messages: [
+        { role: "system", content: OBLIGATION_EXTRACTION_PROMPT },
+        { role: "user", content: `Here is the contract text to analyze:\n\n${text}` },
+      ],
+    })
+    return res.choices[0]?.message.content?.trim() ?? ""
+  }
+
+  if (provider === "ollama") {
+    const base = (process.env.OLLAMA_BASE_URL ?? "http://localhost:11434").replace(/\/$/, "")
+    const model = process.env.OLLAMA_MODEL ?? "llama3"
+    const res = await fetch(`${base}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        messages: [
+          { role: "system", content: OBLIGATION_EXTRACTION_PROMPT },
+          { role: "user", content: `Here is the contract text to analyze:\n\n${text}` },
+        ],
+      }),
+    })
+    if (!res.ok) throw new Error(`Ollama returned ${res.status}`)
+    const data = (await res.json()) as { message?: { content?: string } }
+    return data.message?.content?.trim() ?? ""
+  }
+
+  return null
+}
+
+const obligationExtractWorker = new Worker<ObligationExtractJobData>(
+  "obligations.ai_extract",
+  async (job: Job<ObligationExtractJobData>) => {
+    const { contractId, extractedText } = job.data
+    console.log(`[obligations.extract] Processing job ${job.id} for contract ${contractId}`)
+
+    const raw = await callObligationLLM(extractedText)
+    if (!raw) throw new Error("no_ai_provider")
+
+    let suggestions: unknown
+    try {
+      suggestions = JSON.parse(raw)
+    } catch {
+      throw new Error("parse_error: " + raw.slice(0, 200))
+    }
+
+    // Return value is stored by BullMQ in Redis and available via job.returnvalue
+    return suggestions
+  },
+  { connection, defaultJobOptions: { removeOnComplete: 100, removeOnFail: 200, attempts: 1 } },
+)
+
+obligationExtractWorker.on("completed", (job) =>
+  console.log(`[obligations.extract] Job ${job.id} completed`),
+)
+obligationExtractWorker.on("failed", (job, err) =>
+  console.error(`[obligations.extract] Job ${job?.id} failed:`, err.message),
 )
 
 // ─── Worker: signing.sync ─────────────────────────────────────────────────────
@@ -2093,6 +2202,7 @@ async function shutdown() {
   await documentExportWorker.close()
   await salesforcePollWorker.close()
   await importWorker.close()
+  await obligationExtractWorker.close()
   await contractExtractQueue.close()
   await contractAiExtractQueue.close()
   await contractEmbedQueue.close()
@@ -2106,6 +2216,7 @@ async function shutdown() {
   await documentExportQueue.close()
   await salesforcePollQueue.close()
   await importProcessQueue.close()
+  await obligationExtractQueue.close()
   await getWorkerPrisma().$disconnect()
   // The app Prisma client (lib/db/client) is also imported by some worker
   // helpers (alerts/check, email senders). Disconnecting it here prevents a

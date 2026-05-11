@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslations } from "next-intl"
 import { format, differenceInCalendarDays } from "date-fns"
 import { Check, CheckSquare, Loader2, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react"
@@ -76,6 +76,11 @@ export function ObligationList({
   const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set())
   const [acceptingIdx, setAcceptingIdx] = useState<number | null>(null)
   const [acceptingAll, setAcceptingAll] = useState(false)
+  const [jobId, setJobId] = useState<string | null>(() => {
+    // Hydrate from localStorage on mount — survives navigation
+    if (typeof window === "undefined") return null
+    return localStorage.getItem(`obligation_extract_job_${contractId}`)
+  })
 
   const canWrite = role === "owner" || role === "admin" || role === "legal" || role === "member"
   const canDelete = role === "owner" || role === "admin" || role === "legal"
@@ -90,6 +95,60 @@ export function ObligationList({
     setEditing(null)
     setSheetOpen(true)
   }
+
+  useEffect(() => {
+    if (!jobId) return
+    setExtracting(true)
+
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          `/api/contracts/${contractId}/obligations/extract?jobId=${encodeURIComponent(jobId)}`
+        )
+        if (!res.ok || cancelled) return
+
+        const data = await res.json()
+
+        if (data.state === "completed") {
+          if (!cancelled) {
+            const s = data.suggestions ?? []
+            if (s.length === 0) {
+              toast.info("No obligations found in this contract.")
+            } else {
+              setSuggestions(s)
+            }
+            setExtracting(false)
+            localStorage.removeItem(`obligation_extract_job_${contractId}`)
+            setJobId(null)
+          }
+        } else if (data.state === "failed" || data.state === "not_found") {
+          if (!cancelled) {
+            toast.error("Obligation extraction failed. Please try again.")
+            setExtracting(false)
+            localStorage.removeItem(`obligation_extract_job_${contractId}`)
+            setJobId(null)
+          }
+        }
+        // "active" → keep polling
+      } catch {
+        if (!cancelled) {
+          toast.error("Failed to check extraction status.")
+          setExtracting(false)
+          localStorage.removeItem(`obligation_extract_job_${contractId}`)
+          setJobId(null)
+        }
+      }
+    }
+
+    // Poll immediately, then every 3 seconds
+    poll()
+    const interval = setInterval(poll, 3_000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [jobId, contractId])
 
   async function extractWithAI() {
     setExtracting(true)
@@ -106,18 +165,16 @@ export function ObligationList({
         } else {
           toast.error("Could not extract obligations.")
         }
+        setExtracting(false)
         return
       }
       if (!res.ok) throw new Error()
-      const { suggestions: s } = await res.json()
-      if (!s || s.length === 0) {
-        toast.info("No obligations found in this contract.")
-        return
-      }
-      setSuggestions(s)
+      const { jobId: id } = await res.json()
+      localStorage.setItem(`obligation_extract_job_${contractId}`, id)
+      setJobId(id)
+      // polling effect takes it from here
     } catch {
       toast.error("Failed to extract obligations.")
-    } finally {
       setExtracting(false)
     }
   }
@@ -192,6 +249,8 @@ export function ObligationList({
     setDismissedIds(newDismissed)
     setAcceptingAll(false)
     setSuggestions([])
+    localStorage.removeItem(`obligation_extract_job_${contractId}`)
+    setJobId(null)
     toast.success(`${created.length} obligation${created.length !== 1 ? "s" : ""} created.`)
   }
 
@@ -378,7 +437,11 @@ export function ObligationList({
               </Button>
               <button
                 type="button"
-                onClick={() => setSuggestions([])}
+                onClick={() => {
+                  setSuggestions([])
+                  localStorage.removeItem(`obligation_extract_job_${contractId}`)
+                  setJobId(null)
+                }}
                 className="rounded p-1 text-indigo-400 hover:text-indigo-700"
                 aria-label="Dismiss all suggestions"
               >

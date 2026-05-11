@@ -2003,15 +2003,13 @@ const documentExportWorker = new Worker<DocumentExportJobData>(
       throw new Error(`No document found for contract ${contractId}`)
     }
 
-    const nodes = Array.isArray(document.content) ? (document.content as unknown[]) : []
-
     let buffer: Buffer
     let contentType: string
     if (format === "docx") {
-      buffer = await plateToDocxBuffer(nodes)
+      buffer = await plateToDocxBuffer(document.content)
       contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     } else {
-      buffer = await plateToPdfBuffer(nodes)
+      buffer = await plateToPdfBuffer(document.content)
       contentType = "application/pdf"
     }
 

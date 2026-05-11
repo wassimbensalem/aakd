@@ -1,20 +1,17 @@
+// HTML → TipTap ProseMirror JSON.
+// Uses @xmldom/xmldom (already installed) for HTML parsing.
+// Export names are preserved for backward compat with worker.ts:
+//   htmlToPlateNodes   — primary alias, returns TipTapDoc
+//   htmlToTiptapDoc    — canonical name
+
 import { DOMParser } from "@xmldom/xmldom"
+import type { TipTapDoc, TipTapNode, TipTapMark } from "./tiptap-types"
 
-export interface PlateTextLeaf {
-  text: string
-  bold?: boolean
-  italic?: boolean
-  underline?: boolean
-  strikethrough?: boolean
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-export interface PlateElementNode {
-  type: string
-  children: PlateNode[]
-  indent?: number
-}
+const MAX_NESTING_DEPTH = 6
 
-export type PlateNode = PlateTextLeaf | PlateElementNode
+const HEADING_MAP: Record<string, number> = { h1: 1, h2: 2, h3: 3 }
 
 interface InlineMarks {
   bold?: boolean
@@ -23,119 +20,132 @@ interface InlineMarks {
   strikethrough?: boolean
 }
 
-const MAX_NESTING_DEPTH = 6
-
-const HEADING_TAGS: Record<string, string> = {
-  h1: "h1",
-  h2: "h2",
-  h3: "h3",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isElementNode(n: any): boolean {
+  return !!n && typeof n === "object" && n.nodeType === 1
 }
 
-function isElementNode(n: unknown): boolean {
-  return !!n && typeof n === "object" && (n as { nodeType?: number }).nodeType === 1
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isTextNode(n: any): boolean {
+  return !!n && typeof n === "object" && n.nodeType === 3
 }
 
-function isTextNode(n: unknown): boolean {
-  return !!n && typeof n === "object" && (n as { nodeType?: number }).nodeType === 3
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tagName(node: any): string {
+  return ((node.tagName ?? node.nodeName ?? "") as string).toLowerCase()
 }
 
-function tagName(node: { tagName?: string; nodeName?: string }): string {
-  return (node.tagName ?? node.nodeName ?? "").toLowerCase()
+function makeTextNode(text: string, marks: InlineMarks, href?: string): TipTapNode {
+  const builtMarks: TipTapMark[] = []
+  if (marks.bold) builtMarks.push({ type: "bold" })
+  if (marks.italic) builtMarks.push({ type: "italic" })
+  if (marks.underline) builtMarks.push({ type: "underline" })
+  if (marks.strikethrough) builtMarks.push({ type: "strike" })
+  if (href) builtMarks.push({ type: "link", attrs: { href } })
+
+  const node: TipTapNode = { type: "text", text }
+  if (builtMarks.length > 0) node.marks = builtMarks
+  return node
 }
 
-function makeText(text: string, marks: InlineMarks): PlateTextLeaf {
-  const leaf: PlateTextLeaf = { text }
-  if (marks.bold) leaf.bold = true
-  if (marks.italic) leaf.italic = true
-  if (marks.underline) leaf.underline = true
-  if (marks.strikethrough) leaf.strikethrough = true
-  return leaf
-}
+// ─── Collect inline children → TipTap text nodes with marks ──────────────────
 
-// Walk inline children of a block element and collect text leaves with marks
-// applied. Whitespace-only text nodes between block siblings are dropped at
-// the block level (see processChildren), so we don't filter them here.
 function collectInline(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   node: any,
   marks: InlineMarks,
-  out: PlateTextLeaf[],
+  out: TipTapNode[],
+  href?: string,
 ): void {
   const childNodes = node.childNodes
   if (!childNodes) return
   for (let i = 0; i < childNodes.length; i++) {
     const child = childNodes[i]
     if (isTextNode(child)) {
-      const text = child.nodeValue ?? ""
-      if (text.length > 0) out.push(makeText(text, marks))
+      const text: string = child.nodeValue ?? ""
+      if (text.length > 0) out.push(makeTextNode(text, marks, href))
       continue
     }
     if (!isElementNode(child)) continue
     const tag = tagName(child)
     if (tag === "br") {
-      out.push(makeText("\n", marks))
+      out.push(makeTextNode("\n", marks, href))
       continue
     }
     if (tag === "strong" || tag === "b") {
-      collectInline(child, { ...marks, bold: true }, out)
+      collectInline(child, { ...marks, bold: true }, out, href)
       continue
     }
     if (tag === "em" || tag === "i") {
-      collectInline(child, { ...marks, italic: true }, out)
+      collectInline(child, { ...marks, italic: true }, out, href)
       continue
     }
     if (tag === "u") {
-      collectInline(child, { ...marks, underline: true }, out)
+      collectInline(child, { ...marks, underline: true }, out, href)
       continue
     }
     if (tag === "s" || tag === "del" || tag === "strike") {
-      collectInline(child, { ...marks, strikethrough: true }, out)
+      collectInline(child, { ...marks, strikethrough: true }, out, href)
+      continue
+    }
+    if (tag === "a") {
+      const childHref: string = child.getAttribute?.("href") ?? ""
+      collectInline(child, marks, out, childHref || href)
+      continue
+    }
+    if (tag === "img") {
+      const src: string = child.getAttribute?.("src") ?? ""
+      const alt: string = child.getAttribute?.("alt") ?? ""
+      if (src) out.push({ type: "image", attrs: { src, alt } })
       continue
     }
     // Any other inline element: recurse with current marks
-    collectInline(child, marks, out)
+    collectInline(child, marks, out, href)
   }
 }
 
-function inlineChildren(
+function inlineContent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   node: any,
-): PlateTextLeaf[] {
-  const leaves: PlateTextLeaf[] = []
-  collectInline(node, {}, leaves)
-  if (leaves.length === 0) leaves.push({ text: "" })
-  return leaves
+): TipTapNode[] {
+  const nodes: TipTapNode[] = []
+  collectInline(node, {}, nodes)
+  if (nodes.length === 0) nodes.push({ type: "text", text: "" })
+  return nodes
 }
 
-function elementChildArray(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function elementChildren(node: any): any[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  node: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any[] {
-  const out: unknown[] = []
+  const out: any[] = []
   const childNodes = node.childNodes
-  if (!childNodes) return out as never
+  if (!childNodes) return out
   for (let i = 0; i < childNodes.length; i++) {
-    const c = childNodes[i]
-    if (isElementNode(c)) out.push(c)
+    if (isElementNode(childNodes[i])) out.push(childNodes[i])
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return out as any[]
+  return out
 }
+
+// ─── List processing ──────────────────────────────────────────────────────────
 
 function processList(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   listEl: any,
-  type: "ol" | "ul",
+  type: "ul" | "ol",
   depth: number,
-): PlateElementNode[] {
-  const out: PlateElementNode[] = []
-  const items = elementChildArray(listEl).filter((c) => tagName(c) === "li")
-  for (const li of items) {
-    // Inline content of <li> (excluding nested lists)
-    const liInline: PlateTextLeaf[] = []
+): TipTapNode {
+  const listType = type === "ul" ? "bulletList" : "orderedList"
+  const items: TipTapNode[] = []
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const liElements = elementChildren(listEl).filter((c: any) => tagName(c) === "li")
+
+  for (const li of liElements) {
+    // Separate inline content from nested lists
+    const inlineItems: TipTapNode[] = []
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nestedLists: any[] = []
+
     if (li.childNodes) {
       for (let i = 0; i < li.childNodes.length; i++) {
         const child = li.childNodes[i]
@@ -146,220 +156,244 @@ function processList(
             continue
           }
         }
-        // Treat anything else (text, inline tags, paragraphs inside li) as inline text
         if (isTextNode(child)) {
-          const text = child.nodeValue ?? ""
-          if (text.length > 0) liInline.push({ text })
+          const text: string = child.nodeValue ?? ""
+          if (text.length > 0) inlineItems.push(makeTextNode(text, {}))
         } else if (isElementNode(child)) {
-          const tag = tagName(child)
-          if (tag === "strong" || tag === "b") {
-            collectInline(child, { bold: true }, liInline)
-          } else if (tag === "em" || tag === "i") {
-            collectInline(child, { italic: true }, liInline)
-          } else if (tag === "u") {
-            collectInline(child, { underline: true }, liInline)
-          } else if (tag === "s" || tag === "del" || tag === "strike") {
-            collectInline(child, { strikethrough: true }, liInline)
-          } else {
-            collectInline(child, {}, liInline)
-          }
+          collectInline(child, {}, inlineItems)
         }
       }
     }
-    if (liInline.length === 0) liInline.push({ text: "" })
 
-    const liNode: PlateElementNode = {
-      type: "li",
-      children: liInline,
-    }
-    const cappedDepth = Math.min(depth, MAX_NESTING_DEPTH)
-    if (cappedDepth > 1) liNode.indent = cappedDepth
-    out.push({ type, children: [liNode] })
+    if (inlineItems.length === 0) inlineItems.push({ type: "text", text: "" })
 
-    for (const nested of nestedLists) {
-      const nt = tagName(nested) as "ol" | "ul"
-      out.push(...processList(nested, nt, depth + 1))
+    const listItemContent: TipTapNode[] = [
+      { type: "paragraph", content: inlineItems },
+    ]
+
+    if (nestedLists.length > 0 && depth < MAX_NESTING_DEPTH) {
+      for (const nested of nestedLists) {
+        const nt = tagName(nested) as "ol" | "ul"
+        listItemContent.push(processList(nested, nt, depth + 1))
+      }
     }
+
+    items.push({ type: "listItem", content: listItemContent })
   }
-  return out
+
+  if (items.length === 0) {
+    items.push({
+      type: "listItem",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
+    })
+  }
+
+  return { type: listType, content: items }
 }
 
-function processTable(
+// ─── Table processing ─────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function processTable(tableEl: any): TipTapNode {
+  const rows: TipTapNode[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tableEl: any,
-): PlateElementNode {
-  const rows: PlateElementNode[] = []
-  // Walk through tbody/thead/tr to flatten to a single table node.
-  function visit(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    el: any,
-  ): void {
-    const children = elementChildArray(el)
-    for (const c of children) {
-      const t = tagName(c)
+  function visitTable(el: any): void {
+    for (const child of elementChildren(el)) {
+      const t = tagName(child)
       if (t === "tr") {
-        const cells: PlateElementNode[] = []
-        const cellEls = elementChildArray(c).filter(
-          (x) => tagName(x) === "td" || tagName(x) === "th",
+        const cells: TipTapNode[] = []
+        const cellEls = elementChildren(child).filter(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (x: any) => tagName(x) === "td" || tagName(x) === "th",
         )
         for (const cell of cellEls) {
-          const cellType = tagName(cell) === "th" ? "th" : "td"
-          const inline = inlineChildren(cell)
+          const cellType = tagName(cell) === "th" ? "tableHeader" : "tableCell"
           cells.push({
             type: cellType,
-            children: [{ type: "p", children: inline }],
+            attrs: {},
+            content: [{ type: "paragraph", content: inlineContent(cell) }],
           })
         }
-        rows.push({ type: "tr", children: cells.length > 0 ? cells : [{ type: "td", children: [{ type: "p", children: [{ text: "" }] }] }] })
+        if (cells.length === 0) {
+          cells.push({
+            type: "tableCell",
+            attrs: {},
+            content: [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
+          })
+        }
+        rows.push({ type: "tableRow", content: cells })
       } else if (t === "tbody" || t === "thead" || t === "tfoot") {
-        visit(c)
+        visitTable(child)
       }
     }
   }
-  visit(tableEl)
-  return {
-    type: "table",
-    children: rows.length > 0 ? rows : [{ type: "tr", children: [{ type: "td", children: [{ type: "p", children: [{ text: "" }] }] }] }],
+
+  visitTable(tableEl)
+
+  if (rows.length === 0) {
+    rows.push({
+      type: "tableRow",
+      content: [{
+        type: "tableCell",
+        attrs: {},
+        content: [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
+      }],
+    })
   }
+
+  return { type: "table", content: rows }
 }
+
+// ─── Block processing ─────────────────────────────────────────────────────────
+
+const BLOCK_TAGS = new Set([
+  "root", "body", "html", "div", "section", "article", "main", "header", "footer",
+])
+
+const WRAPPER_TAGS_THAT_RECURSE_AS_SIBLINGS = BLOCK_TAGS
 
 function processBlock(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   el: any,
-  out: PlateNode[],
+  out: TipTapNode[],
   depth: number,
 ): void {
   const tag = tagName(el)
 
-  if (HEADING_TAGS[tag]) {
-    out.push({ type: HEADING_TAGS[tag], children: inlineChildren(el) })
+  // Heading
+  const headingLevel = HEADING_MAP[tag]
+  if (headingLevel !== undefined) {
+    out.push({ type: "heading", attrs: { level: headingLevel }, content: inlineContent(el) })
     return
   }
+
   if (tag === "p") {
-    out.push({ type: "p", children: inlineChildren(el) })
+    out.push({ type: "paragraph", content: inlineContent(el) })
     return
   }
-  if (tag === "ol" || tag === "ul") {
-    out.push(...processList(el, tag, depth + 1))
+
+  if (tag === "ul" || tag === "ol") {
+    out.push(processList(el, tag, depth + 1))
     return
   }
+
   if (tag === "table") {
     out.push(processTable(el))
     return
   }
+
   if (tag === "hr") {
-    out.push({ type: "hr", children: [{ text: "" }] })
+    out.push({ type: "horizontalRule" })
     return
   }
-  if (tag === "br") {
+
+  if (tag === "img") {
+    const src: string = el.getAttribute?.("src") ?? ""
+    const alt: string = el.getAttribute?.("alt") ?? ""
+    if (src) out.push({ type: "image", attrs: { src, alt } })
     return
   }
-  // body, div, section, article, root wrapper, etc — recurse children as siblings
-  if (
-    tag === "root" ||
-    tag === "body" ||
-    tag === "html" ||
-    tag === "div" ||
-    tag === "section" ||
-    tag === "article" ||
-    tag === "main" ||
-    tag === "header" ||
-    tag === "footer"
-  ) {
-    const children = elementChildArray(el)
+
+  if (tag === "br") return
+
+  // Wrapper elements (div, body, section, etc.) — recurse children as siblings
+  if (WRAPPER_TAGS_THAT_RECURSE_AS_SIBLINGS.has(tag)) {
+    const children = elementChildren(el)
     if (children.length === 0) {
-      // Inline content directly under wrapper — wrap in a paragraph
-      const inline = inlineChildren(el)
-      const hasContent = inline.some((l) => l.text && l.text.trim().length > 0)
-      if (hasContent) out.push({ type: "p", children: inline })
+      // Inline content directly under wrapper — wrap in paragraph
+      const inline = inlineContent(el)
+      const hasContent = inline.some((n) => n.type === "text" && (n.text?.trim().length ?? 0) > 0)
+      if (hasContent) out.push({ type: "paragraph", content: inline })
       return
     }
-    // Mix of block and inline: gather inline runs into paragraphs
-    let pendingInline: PlateTextLeaf[] = []
+
+    let pendingInline: TipTapNode[] = []
     const flush = () => {
       if (pendingInline.length > 0) {
-        const hasContent = pendingInline.some((l) => l.text && l.text.trim().length > 0)
-        if (hasContent) out.push({ type: "p", children: pendingInline })
+        const hasContent = pendingInline.some(
+          (n) => n.type === "text" && (n.text?.trim().length ?? 0) > 0
+        )
+        if (hasContent) out.push({ type: "paragraph", content: pendingInline })
         pendingInline = []
       }
     }
+
     if (el.childNodes) {
       for (let i = 0; i < el.childNodes.length; i++) {
         const child = el.childNodes[i]
         if (isTextNode(child)) {
-          const text = child.nodeValue ?? ""
-          if (text.trim().length > 0) pendingInline.push({ text })
+          const text: string = child.nodeValue ?? ""
+          if (text.trim().length > 0) pendingInline.push({ type: "text", text })
           continue
         }
         if (!isElementNode(child)) continue
         const childTag = tagName(child)
         if (
+          HEADING_MAP[childTag] !== undefined ||
           childTag === "p" ||
-          HEADING_TAGS[childTag] ||
-          childTag === "ol" ||
           childTag === "ul" ||
+          childTag === "ol" ||
           childTag === "table" ||
           childTag === "hr" ||
-          childTag === "div" ||
-          childTag === "section" ||
-          childTag === "article"
+          BLOCK_TAGS.has(childTag)
         ) {
           flush()
           processBlock(child, out, depth)
         } else {
-          // Inline: collect with marks
-          if (childTag === "strong" || childTag === "b") {
-            collectInline(child, { bold: true }, pendingInline)
-          } else if (childTag === "em" || childTag === "i") {
-            collectInline(child, { italic: true }, pendingInline)
-          } else if (childTag === "u") {
-            collectInline(child, { underline: true }, pendingInline)
-          } else if (childTag === "s" || childTag === "del" || childTag === "strike") {
-            collectInline(child, { strikethrough: true }, pendingInline)
-          } else if (childTag === "br") {
-            pendingInline.push({ text: "\n" })
-          } else {
-            collectInline(child, {}, pendingInline)
-          }
+          collectInline(child, {}, pendingInline)
         }
       }
     }
     flush()
     return
   }
-  // Fallback: any other block tag → paragraph
-  out.push({ type: "p", children: inlineChildren(el) })
+
+  // Fallback: treat as paragraph
+  out.push({ type: "paragraph", content: inlineContent(el) })
 }
 
-function emptyDocument(): PlateNode[] {
-  return [{ type: "p", children: [{ text: "" }] }]
+// ─── Empty doc ────────────────────────────────────────────────────────────────
+
+function emptyDoc(): TipTapDoc {
+  return { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "" }] }] }
 }
 
-export function htmlToPlateNodes(html: string): PlateNode[] {
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Parse an HTML string and return a TipTap ProseMirror doc.
+ * This is the canonical implementation; `htmlToPlateNodes` is an alias for
+ * backward compatibility with existing worker.ts imports.
+ */
+export function htmlToTiptapDoc(html: string): TipTapDoc {
   const trimmed = (html ?? "").trim()
-  if (!trimmed) return emptyDocument()
+  if (!trimmed) return emptyDoc()
 
-  // Wrap in a body so the parser has a clear root
   const wrapped = trimmed.startsWith("<")
     ? `<root>${trimmed}</root>`
     : `<root><p>${trimmed}</p></root>`
 
-  // @xmldom/xmldom parses HTML loosely — good enough for mammoth's clean output.
   let doc: ReturnType<DOMParser["parseFromString"]>
   try {
-    doc = new DOMParser({
-      onError: () => {},
-    }).parseFromString(wrapped, "text/html")
+    doc = new DOMParser({ onError: () => {} }).parseFromString(wrapped, "text/html")
   } catch {
-    return emptyDocument()
+    return emptyDoc()
   }
 
   const root = doc.documentElement
-  if (!root) return emptyDocument()
+  if (!root) return emptyDoc()
 
-  const out: PlateNode[] = []
+  const out: TipTapNode[] = []
   processBlock(root, out, 0)
 
-  if (out.length === 0) return emptyDocument()
-  return out
+  if (out.length === 0) return emptyDoc()
+
+  return { type: "doc", content: out }
 }
+
+/**
+ * Alias for backward compatibility — worker.ts imports `htmlToPlateNodes`.
+ * Returns a TipTapDoc (not a Plate/Slate array).
+ */
+export const htmlToPlateNodes = htmlToTiptapDoc

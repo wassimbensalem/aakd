@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import type { Descendant } from "slate"
 import { Button } from "@/components/ui/button"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -28,7 +27,7 @@ export interface EditorTabProps {
 
 export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) {
   const [loading, setLoading] = useState(true)
-  const [content, setContent] = useState<Descendant[] | null>(null)
+  const [content, setContent] = useState<unknown | null>(null)
   const [version, setVersion] = useState<number>(0)
   const [importOpen, setImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -52,11 +51,7 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
       }
       const data = await res.json()
       if (data.document) {
-        setContent(
-          Array.isArray(data.document.content) && data.document.content.length > 0
-            ? (data.document.content as Descendant[])
-            : EMPTY_DOC,
-        )
+        setContent(data.document.content ?? EMPTY_DOC)
         setVersion(data.document.version)
       } else {
         setContent(EMPTY_DOC)
@@ -229,15 +224,47 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
     }
   }
 
-  // Derive TOC from document content
+  // Derive TOC from document content.
+  // Supports both TipTap format ({ type: "doc", content: [...] }) and legacy Slate arrays.
   const tocItems = useMemo(() => {
     if (!content) return []
-    const headings = (content as Array<{ type?: string; children?: Array<{ text?: string }> }>)
-      .filter((n) => n.type === "h1" || n.type === "h2" || n.type === "h3")
-    return headings.map((n, i) => ({
-      num: String(i + 1),
-      title: (n.children ?? []).map((c) => c.text ?? "").join("").trim() || `Section ${i + 1}`,
-    }))
+
+    // Flatten content to an array of nodes to inspect
+    type AnyNode = { type?: string; content?: AnyNode[]; children?: Array<{ text?: string }>; attrs?: { level?: number } }
+    let nodes: AnyNode[] = []
+    if (Array.isArray(content)) {
+      nodes = content as AnyNode[]
+    } else {
+      const doc = content as { type?: string; content?: AnyNode[] }
+      if (doc.type === "doc" && Array.isArray(doc.content)) {
+        nodes = doc.content
+      }
+    }
+
+    const headings = nodes.filter((n) =>
+      // TipTap
+      n.type === "heading" ||
+      // Legacy Slate
+      n.type === "h1" || n.type === "h2" || n.type === "h3"
+    )
+
+    return headings.map((n, i) => {
+      let title = ""
+      if (n.type === "heading" && Array.isArray(n.content)) {
+        // TipTap: collect text from content[].text
+        title = n.content
+          .map((c: AnyNode & { text?: string }) => c.text ?? "")
+          .join("")
+          .trim()
+      } else if (Array.isArray(n.children)) {
+        // Legacy Slate: children are text leaves
+        title = n.children.map((c) => c.text ?? "").join("").trim()
+      }
+      return {
+        num: String(i + 1),
+        title: title || `Section ${i + 1}`,
+      }
+    })
   }, [content])
 
   if (loading) {

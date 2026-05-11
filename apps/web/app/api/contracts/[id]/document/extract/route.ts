@@ -31,8 +31,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return Response.json({ error: "no_document" }, { status: 422 })
     }
 
-    const nodes = Array.isArray(document.content) ? (document.content as unknown[]) : []
-    const plaintext = plateToPlaintext(nodes)
+    const plaintext = plateToPlaintext(document.content)
 
     if (!plaintext) {
       return Response.json({ error: "empty_document" }, { status: 422 })

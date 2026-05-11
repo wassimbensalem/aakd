@@ -1,3 +1,7 @@
+// TipTap JSON → DOCX buffer.
+// Also accepts legacy Slate array format (via slateToTiptap conversion).
+// Uses the `docx` npm package for generation.
+
 import {
   Document,
   Packer,
@@ -13,31 +17,20 @@ import {
   AlignmentType,
   LevelFormat,
 } from "docx"
+import { slateToTiptap } from "./slate-to-tiptap"
+import type { TipTapDoc, TipTapNode } from "./tiptap-types"
 
-// Reference key for the custom numbered list (ordered); unordered lists use
-// docx's built-in `bullet` shorthand and need no explicit reference.
+// Reference key for the custom numbered list
 const ORDERED_LIST_REF = "cf-ordered-list"
 
-interface AnyNode {
-  type?: string
-  text?: string
-  children?: unknown[]
-  variable?: string
-  bold?: boolean
-  italic?: boolean
-  underline?: boolean
-  strikethrough?: boolean
-  indent?: number
-}
-
 function getFont(): string {
-  return process.env.DOCX_EXPORT_FONT || "Times New Roman"
+  return process.env.DOCX_EXPORT_FONT ?? "Times New Roman"
 }
 
-const HEADING_LEVEL: Record<string, (typeof HeadingLevel)[keyof typeof HeadingLevel]> = {
-  h1: HeadingLevel.HEADING_1,
-  h2: HeadingLevel.HEADING_2,
-  h3: HeadingLevel.HEADING_3,
+const HEADING_LEVEL_MAP: Record<number, (typeof HeadingLevel)[keyof typeof HeadingLevel]> = {
+  1: HeadingLevel.HEADING_1,
+  2: HeadingLevel.HEADING_2,
+  3: HeadingLevel.HEADING_3,
 }
 
 // docx font sizes are half-points: 12pt = 24, 16pt = 32, 20pt = 40, 24pt = 48
@@ -48,255 +41,263 @@ const FONT_SIZES: Record<string, number> = {
   h3: 32,
 }
 
-function flattenInline(children: unknown[] | undefined): TextRun[] {
-  if (!Array.isArray(children)) return []
-  const runs: TextRun[] = []
+// ─── TipTap marks → TextRun properties ───────────────────────────────────────
+
+interface TextRunOptions {
+  text: string
+  font: string
+  bold?: true
+  italics?: true
+  underline?: { type: typeof UnderlineType[keyof typeof UnderlineType] }
+  strike?: true
+  color?: string
+}
+
+function marksToRunOptions(
+  text: string,
+  marks: TipTapNode["marks"],
+  font: string,
+): TextRunOptions {
+  const opts: TextRunOptions = { text, font }
+  if (!marks) return opts
+  for (const mark of marks) {
+    if (mark.type === "bold") opts.bold = true
+    if (mark.type === "italic") opts.italics = true
+    if (mark.type === "underline") opts.underline = { type: UnderlineType.SINGLE }
+    if (mark.type === "strike") opts.strike = true
+    if (mark.type === "textStyle" && mark.attrs?.color) {
+      // docx TextRun color takes hex without #
+      opts.color = (mark.attrs.color as string).replace(/^#/, "")
+    }
+  }
+  return opts
+}
+
+// ─── Flatten TipTap inline content → docx TextRuns ───────────────────────────
+
+function flattenInline(content: TipTapNode[] | undefined): TextRun[] {
+  if (!Array.isArray(content) || content.length === 0) {
+    return [new TextRun({ text: "", font: getFont() })]
+  }
   const font = getFont()
-  walk(children, runs, font)
+  const runs: TextRun[] = []
+
+  function walk(nodes: TipTapNode[]): void {
+    for (const node of nodes) {
+      if (node.type === "text") {
+        runs.push(new TextRun(marksToRunOptions(node.text ?? "", node.marks, font)))
+        continue
+      }
+      if (node.type === "templateVariable") {
+        const variable = (node.attrs?.variable as string | undefined) ?? ""
+        runs.push(new TextRun({ text: `{{${variable}}}`, font }))
+        continue
+      }
+      // For any inline node that has content children, recurse
+      if (Array.isArray(node.content)) {
+        walk(node.content)
+      }
+    }
+  }
+
+  walk(content)
   if (runs.length === 0) runs.push(new TextRun({ text: "", font }))
   return runs
 }
 
-function walk(children: unknown[], runs: TextRun[], font: string): void {
-  for (const child of children) {
-    if (!child || typeof child !== "object") continue
-    const n = child as AnyNode
-    if (typeof n.text === "string") {
-      runs.push(new TextRun({
-        text: n.text,
-        font,
-        ...(n.bold ? { bold: true } : {}),
-        ...(n.italic ? { italics: true } : {}),
-        ...(n.underline ? { underline: { type: UnderlineType.SINGLE } } : {}),
-        ...(n.strikethrough ? { strike: true } : {}),
-      }))
-      continue
-    }
-    if (n.type === "template_variable" && typeof n.variable === "string") {
-      runs.push(new TextRun({ text: `{{${n.variable}}}`, font }))
-      continue
-    }
-    if (Array.isArray(n.children)) {
-      walk(n.children, runs, font)
-    }
-  }
-}
+// ─── List item processing ─────────────────────────────────────────────────────
 
 function listItemParagraphs(
-  node: AnyNode,
-  listType: "ol" | "ul",
+  items: TipTapNode[],
+  listType: "bulletList" | "orderedList",
   level: number,
 ): Paragraph[] {
   const paragraphs: Paragraph[] = []
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      if (!child || typeof child !== "object") continue
-      const li = child as AnyNode
-      if (li.type === "li") {
-        const indentLevel = li.indent ? Math.max(0, Math.min(li.indent - 1, 5)) : level
-        if (listType === "ol") {
-          paragraphs.push(
-            new Paragraph({
-              numbering: { reference: ORDERED_LIST_REF, level: indentLevel },
-              children: flattenInline(li.children),
-            }),
-          )
+
+  for (const item of items) {
+    if (item.type !== "listItem") continue
+    const itemContent = item.content ?? []
+
+    for (const child of itemContent) {
+      if (child.type === "paragraph") {
+        if (listType === "orderedList") {
+          paragraphs.push(new Paragraph({
+            numbering: { reference: ORDERED_LIST_REF, level },
+            children: flattenInline(child.content),
+          }))
         } else {
-          paragraphs.push(
-            new Paragraph({
-              bullet: { level: indentLevel },
-              children: flattenInline(li.children),
-            }),
-          )
+          paragraphs.push(new Paragraph({
+            bullet: { level },
+            children: flattenInline(child.content),
+          }))
         }
+      } else if (child.type === "bulletList" || child.type === "orderedList") {
+        // Nested list
+        const nestedType = child.type as "bulletList" | "orderedList"
+        paragraphs.push(...listItemParagraphs(child.content ?? [], nestedType, level + 1))
       }
     }
   }
+
   return paragraphs
 }
 
-function tableFromNode(node: AnyNode): Table {
+// ─── Table processing ─────────────────────────────────────────────────────────
+
+function tableFromNode(node: TipTapNode): Table {
   const rows: TableRow[] = []
-  if (Array.isArray(node.children)) {
-    for (const trNode of node.children) {
-      if (!trNode || typeof trNode !== "object") continue
-      const tr = trNode as AnyNode
-      if (tr.type !== "tr") continue
-      const cells: TableCell[] = []
-      if (Array.isArray(tr.children)) {
-        for (const cellNode of tr.children) {
-          if (!cellNode || typeof cellNode !== "object") continue
-          const cell = cellNode as AnyNode
-          if (cell.type !== "td" && cell.type !== "th") continue
-          const paragraphs: Paragraph[] = []
-          if (Array.isArray(cell.children)) {
-            for (const c of cell.children) {
-              if (!c || typeof c !== "object") continue
-              const p = c as AnyNode
-              if (p.type === "p" || !p.type) {
-                paragraphs.push(
-                  new Paragraph({
-                    children: flattenInline(p.children),
-                  }),
-                )
-              }
-            }
-          }
-          if (paragraphs.length === 0) {
-            paragraphs.push(new Paragraph({ children: [new TextRun({ text: "", font: getFont() })] }))
-          }
-          cells.push(new TableCell({ children: paragraphs }))
+
+  for (const rowNode of node.content ?? []) {
+    if (rowNode.type !== "tableRow") continue
+    const cells: TableCell[] = []
+
+    for (const cellNode of rowNode.content ?? []) {
+      if (cellNode.type !== "tableCell" && cellNode.type !== "tableHeader") continue
+      const paragraphs: Paragraph[] = []
+
+      for (const pNode of cellNode.content ?? []) {
+        if (pNode.type === "paragraph") {
+          paragraphs.push(new Paragraph({ children: flattenInline(pNode.content) }))
         }
       }
-      if (cells.length > 0) rows.push(new TableRow({ children: cells }))
+
+      if (paragraphs.length === 0) {
+        paragraphs.push(new Paragraph({ children: [new TextRun({ text: "", font: getFont() })] }))
+      }
+      cells.push(new TableCell({ children: paragraphs }))
     }
+
+    if (cells.length > 0) rows.push(new TableRow({ children: cells }))
   }
+
   if (rows.length === 0) {
-    rows.push(
-      new TableRow({
-        children: [
-          new TableCell({
-            children: [new Paragraph({ children: [new TextRun({ text: "", font: getFont() })] })],
-          }),
-        ],
-      }),
-    )
+    rows.push(new TableRow({
+      children: [new TableCell({
+        children: [new Paragraph({ children: [new TextRun({ text: "", font: getFont() })] })],
+      })],
+    }))
   }
-  return new Table({
-    rows,
-    width: { size: 100, type: WidthType.PERCENTAGE },
-  })
+
+  return new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } })
 }
 
-function nodeToDocxBlocks(node: unknown): Array<Paragraph | Table> {
-  if (!node || typeof node !== "object") return []
-  const n = node as AnyNode
-  const type = n.type ?? ""
+// ─── Convert a single TipTap node → docx blocks ───────────────────────────────
 
-  if (type === "h1" || type === "h2" || type === "h3") {
-    return [
-      new Paragraph({
-        heading: HEADING_LEVEL[type],
-        children: flattenInline(n.children).map((run) => {
-          // Re-create with appropriate size + bold for heading style.
-          // (docx's HEADING_LEVEL handles styling but TextRun font/size apply too.)
-          return run
-        }),
-      }),
-    ]
+function nodeToDocxBlocks(node: TipTapNode): Array<Paragraph | Table> {
+  const type = node.type ?? ""
+
+  if (type === "heading") {
+    const level = (node.attrs?.level as number | undefined) ?? 1
+    return [new Paragraph({
+      heading: HEADING_LEVEL_MAP[level] ?? HeadingLevel.HEADING_1,
+      children: flattenInline(node.content),
+    })]
   }
 
-  if (type === "p" || !type) {
-    return [
-      new Paragraph({
-        children: flattenInline(n.children),
-      }),
-    ]
+  if (type === "paragraph") {
+    return [new Paragraph({ children: flattenInline(node.content) })]
   }
 
-  if (type === "ol" || type === "ul") {
-    return listItemParagraphs(n, type, 0)
+  if (type === "bulletList") {
+    return listItemParagraphs(node.content ?? [], "bulletList", 0)
   }
 
-  if (type === "li") {
-    // Standalone li without parent context — treat as unordered bullet
-    return [
-      new Paragraph({
-        bullet: { level: 0 },
-        children: flattenInline(n.children),
-      }),
-    ]
+  if (type === "orderedList") {
+    return listItemParagraphs(node.content ?? [], "orderedList", 0)
   }
 
   if (type === "table") {
-    return [tableFromNode(n)]
+    return [tableFromNode(node)]
   }
 
-  if (type === "hr") {
-    return [
-      new Paragraph({
-        border: {
-          bottom: { style: BorderStyle.SINGLE, size: 6, space: 1, color: "auto" },
-        },
-        alignment: AlignmentType.LEFT,
-        children: [new TextRun({ text: "", font: getFont() })],
-      }),
-    ]
+  if (type === "horizontalRule") {
+    return [new Paragraph({
+      border: {
+        bottom: { style: BorderStyle.SINGLE, size: 6, space: 1, color: "auto" },
+      },
+      alignment: AlignmentType.LEFT,
+      children: [new TextRun({ text: "", font: getFont() })],
+    })]
   }
 
-  // Fallback: treat as paragraph
-  return [
-    new Paragraph({
-      children: flattenInline(n.children),
-    }),
-  ]
+  if (type === "image") {
+    // Images in DOCX require binary embedding which we skip; emit alt text instead.
+    const alt = (node.attrs?.alt as string | undefined) ?? ""
+    return [new Paragraph({ children: [new TextRun({ text: alt || "[image]", font: getFont() })] })]
+  }
+
+  // Fallback
+  return [new Paragraph({ children: flattenInline(node.content) })]
 }
 
-export async function plateToDocxBuffer(nodes: unknown[]): Promise<Buffer> {
+// ─── Normalize input: accept TipTap doc OR legacy Slate array ─────────────────
+
+function normalizeToTiptap(input: unknown): TipTapNode[] {
+  if (!input) return []
+  if (Array.isArray(input)) {
+    // Legacy Slate array
+    return slateToTiptap(input).content
+  }
+  const doc = input as { type?: string; content?: TipTapNode[] }
+  if (doc.type === "doc" && Array.isArray(doc.content)) {
+    return doc.content
+  }
+  return []
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Convert TipTap JSON (or legacy Slate array) to a DOCX buffer.
+ * Export name kept as `plateToDocxBuffer` for backward compat.
+ */
+export async function plateToDocxBuffer(doc: unknown): Promise<Buffer> {
   const font = getFont()
+  const nodes = normalizeToTiptap(doc)
   const blocks: Array<Paragraph | Table> = []
+
   for (const n of nodes) {
     blocks.push(...nodeToDocxBlocks(n))
   }
+
   if (blocks.length === 0) {
     blocks.push(new Paragraph({ children: [new TextRun({ text: "", font })] }))
   }
 
-  const doc = new Document({
+  const document = new Document({
     numbering: {
-      config: [
-        {
-          reference: ORDERED_LIST_REF,
-          levels: Array.from({ length: 9 }, (_, i) => ({
-            level: i,
-            format: LevelFormat.DECIMAL,
-            text: `%${i + 1}.`,
-            alignment: AlignmentType.LEFT,
-            style: {
-              paragraph: {
-                indent: { left: 720 * (i + 1), hanging: 360 },
-              },
-              run: { font },
-            },
-          })),
-        },
-      ],
+      config: [{
+        reference: ORDERED_LIST_REF,
+        levels: Array.from({ length: 9 }, (_, i) => ({
+          level: i,
+          format: LevelFormat.DECIMAL,
+          text: `%${i + 1}.`,
+          alignment: AlignmentType.LEFT,
+          style: {
+            paragraph: { indent: { left: 720 * (i + 1), hanging: 360 } },
+            run: { font },
+          },
+        })),
+      }],
     },
     styles: {
       default: {
-        document: {
-          run: {
-            font,
-            size: FONT_SIZES.body,
-          },
-        },
-        heading1: {
-          run: { font, size: FONT_SIZES.h1, bold: true },
-        },
-        heading2: {
-          run: { font, size: FONT_SIZES.h2, bold: true },
-        },
-        heading3: {
-          run: { font, size: FONT_SIZES.h3, bold: true },
-        },
+        document: { run: { font, size: FONT_SIZES.body } },
+        heading1: { run: { font, size: FONT_SIZES.h1, bold: true } },
+        heading2: { run: { font, size: FONT_SIZES.h2, bold: true } },
+        heading3: { run: { font, size: FONT_SIZES.h3, bold: true } },
       },
     },
-    sections: [
-      {
-        properties: {
-          page: {
-            margin: {
-              top: 1440,
-              right: 1440,
-              bottom: 1440,
-              left: 1440,
-            },
-          },
-        },
-        children: blocks,
+    sections: [{
+      properties: {
+        page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } },
       },
-    ],
+      children: blocks,
+    }],
   })
 
-  return Packer.toBuffer(doc)
+  return Packer.toBuffer(document)
 }
+
+// Re-export type for external use
+export type { TipTapDoc }

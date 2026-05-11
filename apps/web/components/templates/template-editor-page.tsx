@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
 import { ChevronRight, Plus, Trash2 } from "lucide-react"
-import type { Descendant } from "slate"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,7 +34,7 @@ export function TemplateEditorPage({ templateId }: { templateId?: string }) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [contractType, setContractType] = useState<ContractType | "NONE">("NONE")
-  const [content, setContent] = useState<Descendant[]>(EMPTY_DOC)
+  const [content, setContent] = useState<unknown>(EMPTY_DOC)
   const [wordCount, setWordCount] = useState(0)
   const [variables, setVariables] = useState<Variable[]>([])
   const [loading, setLoading] = useState(isEdit)
@@ -57,7 +56,7 @@ export function TemplateEditorPage({ templateId }: { templateId?: string }) {
         setName(tpl.name ?? "")
         setDescription(tpl.description ?? "")
         setContractType((tpl.contractType ?? "NONE") as ContractType | "NONE")
-        if (Array.isArray(tpl.content) && tpl.content.length > 0) setContent(tpl.content)
+        if (tpl.content) setContent(tpl.content)
         if (Array.isArray(tpl.variables)) setVariables(tpl.variables)
         setWordCount(tpl.wordCount ?? 0)
         setLoading(false)
@@ -68,7 +67,7 @@ export function TemplateEditorPage({ templateId }: { templateId?: string }) {
       })
   }, [isEdit, templateId, router])
 
-  const handleEditorChange = useCallback((value: Descendant[], wc: number) => {
+  const handleEditorChange = useCallback((value: unknown, wc: number) => {
     setContent(value)
     setWordCount(wc)
   }, [])
@@ -318,18 +317,38 @@ export function TemplateEditorPage({ templateId }: { templateId?: string }) {
   )
 }
 
-function findUsedVariableNames(nodes: Descendant[]): string[] {
+function findUsedVariableNames(doc: unknown): string[] {
   const out = new Set<string>()
   function visit(n: unknown): void {
     if (!n || typeof n !== "object") return
-    const node = n as { type?: string; variable?: string; children?: unknown[] }
+    const node = n as {
+      type?: string
+      variable?: string          // legacy Slate
+      attrs?: { variable?: string } // TipTap
+      children?: unknown[]
+      content?: unknown[]
+    }
+    // TipTap templateVariable node
+    if (node.type === "templateVariable" && node.attrs?.variable) {
+      out.add(node.attrs.variable)
+    }
+    // Legacy Slate template_variable node
     if (node.type === "template_variable" && typeof node.variable === "string") {
       out.add(node.variable)
     }
+    // TipTap children are in `content`
+    if (Array.isArray(node.content)) {
+      for (const c of node.content) visit(c)
+    }
+    // Legacy Slate children are in `children`
     if (Array.isArray(node.children)) {
       for (const c of node.children) visit(c)
     }
   }
-  for (const n of nodes) visit(n)
+  if (Array.isArray(doc)) {
+    for (const n of doc) visit(n)
+  } else {
+    visit(doc)
+  }
   return Array.from(out)
 }

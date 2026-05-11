@@ -85,8 +85,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       }
     }
 
-    const sourceContent = Array.isArray(tpl.content) ? (tpl.content as unknown[]) : []
-    const substituted = substituteVariables(sourceContent, parsed.data.values, declared)
+    const substituted = substituteVariables(tpl.content, parsed.data.values, declared)
     const wordCount = countWords(plateToPlaintext(substituted))
 
     const contractData: Prisma.ContractCreateInput = {

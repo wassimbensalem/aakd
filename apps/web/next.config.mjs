@@ -8,6 +8,11 @@ const withNextIntl = createNextIntlPlugin("./i18n.ts")
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Expose signing feature flag to the client — derived from DOCUSEAL_API_KEY
+  // so users never need to set a separate toggle. No key = signing hidden.
+  env: {
+    NEXT_PUBLIC_SIGNING_ENABLED: process.env.DOCUSEAL_API_KEY ? "true" : "false",
+  },
   output: "standalone",
   // In a pnpm monorepo the root node_modules lives two levels up.
   // Setting this tells Next.js to trace dependencies from the monorepo

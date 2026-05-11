@@ -643,7 +643,9 @@ export default function ContractDetailPage() {
   const activeObligations = obligations.filter(
     (o) => o.status === "PENDING" || o.status === "IN_PROGRESS",
   )
+  const signingEnabled = process.env.NEXT_PUBLIC_SIGNING_ENABLED === "true"
   const canSendForSignature =
+    signingEnabled &&
     contract.status === "AWAITING_SIGNATURE" &&
     (!contract.signingStatus || ["declined", "expired", "failed"].includes(contract.signingStatus))
 
@@ -784,12 +786,14 @@ export default function ContractDetailPage() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger
-            value="signing"
-            className="rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[12.5px] font-normal text-muted-foreground -mb-px data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-foreground transition-colors cursor-pointer"
-          >
-            Signing
-          </TabsTrigger>
+          {signingEnabled && (
+            <TabsTrigger
+              value="signing"
+              className="rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[12.5px] font-normal text-muted-foreground -mb-px data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-foreground transition-colors cursor-pointer"
+            >
+              Signing
+            </TabsTrigger>
+          )}
           <TabsTrigger
             value="qa"
             className="rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[12.5px] font-normal text-muted-foreground -mb-px data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-foreground transition-colors cursor-pointer"
@@ -1540,7 +1544,7 @@ export default function ContractDetailPage() {
         </TabsContent>
 
         {/* Signing */}
-        <TabsContent value="signing" className="flex-1 overflow-auto m-0 border-0">
+        {signingEnabled && <TabsContent value="signing" className="flex-1 overflow-auto m-0 border-0">
           <div className="p-7">
             <div className="rounded-[var(--radius)] border border-border bg-card p-5 space-y-4">
               <div className="flex items-center justify-between">
@@ -1623,7 +1627,7 @@ export default function ContractDetailPage() {
               )}
             </div>
           </div>
-        </TabsContent>
+        </TabsContent>}
 
         {/* Q&A */}
         <TabsContent value="qa" className="flex-1 overflow-auto m-0 border-0">

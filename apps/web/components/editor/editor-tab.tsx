@@ -876,27 +876,28 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
             {/* ── Changes tab ───────────────────────────────── */}
             {rightTab === "changes" && (
               <div className="space-y-2">
-                {changeCount > 0 && (
-                  <div className="flex gap-2 pb-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 text-emerald-700 border-emerald-200 hover:bg-emerald-50 text-[11px]"
-                      onClick={handleAcceptAllChanges}
-                    >
-                      <Check className="size-3.5 mr-1" />
-                      Accept All
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 text-red-700 border-red-200 hover:bg-red-50 text-[11px]"
-                      onClick={handleRejectAllChanges}
-                    >
-                      Reject All
-                    </Button>
-                  </div>
-                )}
+                {/* Accept / Reject All — always visible; disabled when nothing to act on */}
+                <div className="flex gap-2 pb-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 text-emerald-700 border-emerald-200 hover:bg-emerald-50 text-[11px] disabled:opacity-40"
+                    disabled={changeCount === 0}
+                    onClick={handleAcceptAllChanges}
+                  >
+                    <Check className="size-3.5 mr-1" />
+                    Accept All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 text-red-700 border-red-200 hover:bg-red-50 text-[11px] disabled:opacity-40"
+                    disabled={changeCount === 0}
+                    onClick={handleRejectAllChanges}
+                  >
+                    Reject All
+                  </Button>
+                </div>
                 {changes.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-12">
                     <div className="text-muted-foreground/40">

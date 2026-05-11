@@ -217,23 +217,8 @@ function createTrackChangesPlugin(
   })
 }
 
-// ─── TrackChangesExtension wrapper ───────────────────────────────────────────
-
-const TrackChangesExtension = Extension.create({
-  name: "trackChangesExtension",
-  addStorage() {
-    return { enabled: false, userId: "", userName: "" }
-  },
-  addProseMirrorPlugins() {
-    const storage = this.storage as { enabled: boolean; userId: string; userName: string }
-    return [
-      createTrackChangesPlugin(
-        () => storage.enabled,
-        () => storage.userId,
-      ),
-    ]
-  },
-})
+// TrackChangesExtension is built inline inside ContractEditor (see useEditor extensions)
+// so that its plugin closure can directly capture stable React refs.
 
 // ─── Accept / Reject All helpers ─────────────────────────────────────────────
 
@@ -390,6 +375,14 @@ export function ContractEditor({
   const [pageLayout, setPageLayout] = useState(false)
   const [trackChanges, setTrackChanges] = useState(false)
 
+  // These refs are captured by the ProseMirror plugin closure at editor creation.
+  // Mutating .current is synchronous and is always visible to the closure on the
+  // next transaction — no useEffect needed, no TipTap storage indirection.
+  const tcEnabledRef = useRef(false)
+  const tcUserIdRef  = useRef(currentUserId ?? "")
+  tcEnabledRef.current = trackChanges
+  tcUserIdRef.current  = currentUserId ?? ""
+
   const pendingSaveRef = useRef(false)
   const pendingRetryRef = useRef(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -428,7 +421,19 @@ export function ContractEditor({
       CommentMark,
       InsertionMark,
       DeletionMark,
-      TrackChangesExtension,
+      // Build the TrackChangesExtension inline so its ProseMirror plugin closure
+      // captures tcEnabledRef / tcUserIdRef directly.  Mutating .current is
+      // synchronous and visible to the plugin on the very next transaction —
+      // no TipTap storage indirection that might break across versions.
+      Extension.create({
+        name: "trackChangesExtension",
+        addProseMirrorPlugins: () => [
+          createTrackChangesPlugin(
+            () => tcEnabledRef.current,
+            () => tcUserIdRef.current,
+          ),
+        ],
+      }),
     ],
     content: initialDoc,
     editable: !isReadOnly,
@@ -467,27 +472,8 @@ export function ContractEditor({
     if (editor) onEditorReady?.(editor)
   }, [editor, onEditorReady])
 
-  // Sync currentUserId/currentUserName to TrackChangesExtension storage
-  useEffect(() => {
-    if (!editor) return
-    // editor.storage[name] is the live storage object shared with the extension's this.storage
-    const tc = editor.storage.trackChangesExtension as
-      | { enabled: boolean; userId: string; userName: string }
-      | undefined
-    if (tc) {
-      tc.userId = currentUserId ?? ""
-      tc.userName = currentUserName ?? ""
-    }
-  }, [editor, currentUserId, currentUserName])
-
-  // Sync trackChanges toggle to extension storage
-  useEffect(() => {
-    if (!editor) return
-    const tc = editor.storage.trackChangesExtension as
-      | { enabled: boolean }
-      | undefined
-    if (tc) tc.enabled = trackChanges
-  }, [editor, trackChanges])
+  // tcEnabledRef.current and tcUserIdRef.current are updated synchronously on
+  // every render (lines above), so no useEffect is needed for track-changes sync.
 
   // Wire accept/reject all
   useEffect(() => {
@@ -924,16 +910,16 @@ export function ContractEditor({
             <button
               type="button"
               onMouseDown={(e) => { e.preventDefault(); setTrackChanges((v) => !v) }}
-              title="Track Changes"
+              title={trackChanges ? "Disable Track Changes" : "Enable Track Changes"}
               className={cn(
-                "h-8 px-2.5 inline-flex items-center gap-1.5 rounded text-xs font-medium transition-colors",
+                "h-8 px-2.5 inline-flex items-center gap-1.5 rounded text-xs font-medium transition-colors border",
                 trackChanges
-                  ? "bg-primary/10 text-primary"
-                  : "text-zinc-600 hover:bg-zinc-100"
+                  ? "bg-amber-50 border-amber-300 text-amber-700 ring-1 ring-amber-300"
+                  : "border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:border-zinc-300"
               )}
             >
               <GitBranch className="size-3.5" />
-              Track
+              {trackChanges ? "Tracking" : "Track"}
             </button>
 
             <span className="w-px h-5 bg-zinc-200 mx-1" />

@@ -30,22 +30,13 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Contract, ContractStatus } from "@/lib/types"
 import { useSession } from "@/lib/auth/client"
 import { cn } from "@/lib/utils"
+import { useTranslations } from "next-intl"
 
 // ── Filter configuration ───────────────────────────────────────────────────
 interface FilterConfig {
   label: string
   status: ContractStatus | "ALL"
 }
-
-const FILTERS: FilterConfig[] = [
-  { label: "All",       status: "ALL"                },
-  { label: "Active",    status: "ACTIVE"             },
-  { label: "Draft",     status: "DRAFT"              },
-  { label: "In Review", status: "INTERNAL_REVIEW"    },
-  { label: "Signed",    status: "AWAITING_SIGNATURE" },
-  { label: "Pending",   status: "PENDING_APPROVAL"   },
-  { label: "Expiring",  status: "EXPIRED"            },
-]
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 function useDebounce<T>(value: T, delay: number): T {
@@ -79,6 +70,17 @@ export default function ContractsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { data: session } = useSession()
+  const t = useTranslations("contracts")
+
+  const FILTERS: FilterConfig[] = [
+    { label: t("filterAll"),      status: "ALL"                },
+    { label: t("filterActive"),   status: "ACTIVE"             },
+    { label: t("filterDraft"),    status: "DRAFT"              },
+    { label: t("filterInReview"), status: "INTERNAL_REVIEW"    },
+    { label: t("filterSigned"),   status: "AWAITING_SIGNATURE" },
+    { label: t("filterPending"),  status: "PENDING_APPROVAL"   },
+    { label: t("filterExpiring"), status: "EXPIRED"            },
+  ]
 
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
@@ -131,7 +133,7 @@ export default function ContractsPage() {
         setTotal(data.total ?? (data.contracts ?? data ?? []).length)
       } catch (e) {
         if ((e as Error).name === "AbortError") return
-        toast.error("Failed to load contracts")
+        toast.error(t("failedToLoad"))
       } finally {
         setLoading(false)
       }
@@ -156,15 +158,15 @@ export default function ContractsPage() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        toast.error(err.message ?? err.error ?? "Failed to archive contract")
+        toast.error(err.message ?? err.error ?? t("failedToArchive"))
         return
       }
-      toast.success("Contract archived")
+      toast.success(t("contractArchived"))
       // Bust the router cache so the dashboard reflects the removal immediately.
       router.refresh()
       fetchContracts()
     } catch {
-      toast.error("Failed to archive")
+      toast.error(t("failedToArchive"))
     }
   }
 
@@ -200,14 +202,14 @@ export default function ContractsPage() {
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between border-b border-border px-7 py-5">
         <div>
-          <h1 className="text-[18px] font-bold text-foreground">Contracts</h1>
+          <h1 className="text-[18px] font-bold text-foreground">{t("title")}</h1>
           <p className="mt-0.5 text-[12.5px] text-muted-foreground">
             {total} contract{total !== 1 ? "s" : ""} in your repository
           </p>
         </div>
         <Link href="/contracts/new" className={buttonVariants({ size: "sm" })}>
           <Plus className="size-4" />
-          New Contract
+          {t("newContract")}
         </Link>
       </div>
 
@@ -219,7 +221,7 @@ export default function ContractsPage() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search contracts..."
+              placeholder={t("searchPlaceholder")}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
@@ -255,7 +257,7 @@ export default function ContractsPage() {
               </span>
               <Button variant="outline" size="sm" className="h-7 gap-1.5 text-[12px]">
                 <Download className="size-3.5" />
-                Export
+                {t("export")}
               </Button>
               {canManage && (
                 <Button
@@ -265,7 +267,7 @@ export default function ContractsPage() {
                   onClick={archiveSelected}
                 >
                   <Archive className="size-3.5" />
-                  Archive
+                  {t("archive")}
                 </Button>
               )}
             </div>
@@ -280,7 +282,7 @@ export default function ContractsPage() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-9 bg-muted" />
-                  {["Contract", "Counterparty", "Status", "Value", "End Date", "Owner", ""].map(
+                  {[t("tableContract"), t("tableCounterparty"), t("tableStatus"), t("tableValue"), t("tableEndDate"), t("tableOwner"), ""].map(
                     (h) => (
                       <TableHead
                         key={h}
@@ -309,13 +311,13 @@ export default function ContractsPage() {
           /* Empty state */
           <EmptyState
             icon={FileText}
-            title="No contracts yet"
+            title={t("noContracts")}
             description={
               search || activeFilter !== "ALL"
-                ? "No contracts match your filters."
-                : "Create your first contract to get started."
+                ? t("noContractsFilter")
+                : t("createFirst")
             }
-            action={!search && activeFilter === "ALL" ? "New Contract" : undefined}
+            action={!search && activeFilter === "ALL" ? t("newContract") : undefined}
             onAction={
               !search && activeFilter === "ALL"
                 ? () => router.push("/contracts/new")
@@ -337,7 +339,7 @@ export default function ContractsPage() {
                       className="size-3.5 cursor-pointer rounded border-border accent-primary"
                     />
                   </TableHead>
-                  {["Contract", "Counterparty", "Status", "Value", "End Date", "Owner", ""].map(
+                  {[t("tableContract"), t("tableCounterparty"), t("tableStatus"), t("tableValue"), t("tableEndDate"), t("tableOwner"), ""].map(
                     (h) => (
                       <TableHead
                         key={h}
@@ -448,7 +450,7 @@ export default function ContractsPage() {
                             onClick={() => router.push(`/contracts/${c.id}`)}
                           >
                             <Eye className="size-4" />
-                            View
+                            {t("view")}
                           </DropdownMenuItem>
                           {canManage && (
                             <DropdownMenuItem
@@ -456,7 +458,7 @@ export default function ContractsPage() {
                               variant="destructive"
                             >
                               <Archive className="size-4" />
-                              Archive
+                              {t("archiveAction")}
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>

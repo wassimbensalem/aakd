@@ -6,11 +6,14 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useTranslations } from "next-intl"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
+  const t = useTranslations("auth")
+  const tc = useTranslations("common")
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -23,7 +26,7 @@ export default function ForgotPasswordPage() {
       })
       setSent(true)
     } catch {
-      toast.error("Something went wrong. Please try again.")
+      toast.error(tc("error"))
     } finally {
       setLoading(false)
     }
@@ -33,14 +36,14 @@ export default function ForgotPasswordPage() {
     return (
       <>
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-zinc-900">Check your email</h1>
+          <h1 className="text-xl font-semibold text-zinc-900">{t("checkEmailTitle")}</h1>
           <p className="text-sm text-zinc-500 mt-1">
-            If <strong>{email}</strong> has an account, you&apos;ll receive a reset link shortly.
+            {t("checkEmailSubtitle", { email })}
           </p>
         </div>
         <p className="mt-4 text-center text-sm text-zinc-500">
           <Link href="/login" className="text-indigo-600 hover:underline">
-            Back to sign in
+            {t("backToSignIn")}
           </Link>
         </p>
       </>
@@ -50,12 +53,12 @@ export default function ForgotPasswordPage() {
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-zinc-900">Forgot password?</h1>
-        <p className="text-sm text-zinc-500">Enter your email and we&apos;ll send you a reset link.</p>
+        <h1 className="text-xl font-semibold text-zinc-900">{t("forgotPasswordTitle")}</h1>
+        <p className="text-sm text-zinc-500">{t("forgotPasswordSubtitle")}</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t("email")}</Label>
           <Input
             id="email"
             type="email"
@@ -67,12 +70,12 @@ export default function ForgotPasswordPage() {
           />
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Sending..." : "Send reset link"}
+          {loading ? t("sending") : t("sendResetLink")}
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-zinc-500">
         <Link href="/login" className="text-indigo-600 hover:underline">
-          Back to sign in
+          {t("backToSignIn")}
         </Link>
       </p>
     </>

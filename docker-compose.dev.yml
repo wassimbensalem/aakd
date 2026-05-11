@@ -33,6 +33,41 @@ services:
       - "6379:6379"
     restart: unless-stopped
 
+  worker:
+    image: node:20-alpine
+    working_dir: /app/apps/web
+    command: sh -c "npm install -g tsx && tsx watch worker.ts"
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/clauseflow
+      REDIS_URL: redis://redis:6379
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET: clauseflow
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin
+      STORAGE_REGION: us-east-1
+      # AI (optional — worker degrades gracefully if unset)
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      # Email (optional — notifications still fire via in-app/Slack without this)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@clauseflow.io}
+      # Notifications encryption (required for Slack/Teams routing)
+      NOTIFICATION_ENCRYPTION_KEY: ${NOTIFICATION_ENCRYPTION_KEY:-dev-placeholder-change-in-production}
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
   # Dev MinIO uses port 9010 (mapped 9010→9000 inside container)
   createbuckets:
     image: minio/mc

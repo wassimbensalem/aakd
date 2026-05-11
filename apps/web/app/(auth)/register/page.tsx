@@ -8,6 +8,7 @@ import { signUp } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useTranslations } from "next-intl"
 
 function RegisterForm() {
   const router = useRouter()
@@ -15,6 +16,8 @@ function RegisterForm() {
   // If the user arrived via an invitation link, callbackURL points back to
   // /accept-invitation?id=... — skip /create-org entirely and go accept.
   const callbackURL = searchParams.get("callbackURL") ?? null
+  const t = useTranslations("auth")
+  const te = useTranslations("errors")
 
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
@@ -34,12 +37,12 @@ function RegisterForm() {
         callbackURL: destination,
       })
       if (result.error) {
-        toast.error(result.error.message ?? "Registration failed")
+        toast.error(result.error.message ?? t("registrationFailed"))
       } else {
         router.push(destination)
       }
     } catch {
-      toast.error("An unexpected error occurred")
+      toast.error(te("serverError"))
     } finally {
       setLoading(false)
     }
@@ -48,9 +51,9 @@ function RegisterForm() {
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-zinc-900">Create account</h1>
+        <h1 className="text-xl font-semibold text-zinc-900">{t("register")}</h1>
         <p className="text-sm text-zinc-500">
-          {callbackURL ? "Create an account to accept your invitation" : "Get started with ClauseFlow"}
+          {callbackURL ? t("registerSubtitleInvite") : t("registerSubtitle")}
         </p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -67,7 +70,7 @@ function RegisterForm() {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t("email")}</Label>
           <Input
             id="email"
             type="email"
@@ -79,7 +82,7 @@ function RegisterForm() {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">{t("password")}</Label>
           <Input
             id="password"
             type="password"
@@ -92,16 +95,16 @@ function RegisterForm() {
           />
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Creating account..." : "Create account"}
+          {loading ? t("creatingAccount") : t("register")}
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-zinc-500">
-        Already have an account?{" "}
+        {t("hasAccount")}{" "}
         <Link
           href={callbackURL ? `/login?callbackURL=${encodeURIComponent(callbackURL)}` : "/login"}
           className="text-indigo-600 hover:underline"
         >
-          Sign in
+          {t("login")}
         </Link>
       </p>
     </>

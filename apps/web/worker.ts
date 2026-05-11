@@ -2126,3 +2126,10 @@ const _provider = process.env.AI_PROVIDER?.toLowerCase() || (
     : "none"
 )
 console.log(`[worker] AI provider: ${_provider}`)
+if (!process.env.SMTP_HOST) {
+  console.warn(
+    "[worker] ⚠  SMTP_HOST is not set — reminder and alert emails will be silently skipped.\n" +
+    "          In-app notifications and Slack/Teams will still fire.\n" +
+    "          Set SMTP_HOST (+ SMTP_USER, SMTP_PASS) in .env.local to enable email delivery.",
+  )
+}

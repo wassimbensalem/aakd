@@ -10,8 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ApiKey } from "@/lib/types"
+import { useTranslations } from "next-intl"
 
 export default function ApiKeysPage() {
+  const t = useTranslations("apiKeys")
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -28,7 +30,7 @@ export default function ApiKeysPage() {
       const data = await res.json()
       setKeys(data.apiKeys ?? data ?? [])
     } catch {
-      toast.error("Failed to load API keys")
+      toast.error(t("failedToLoad"))
     } finally {
       setLoading(false)
     }
@@ -54,21 +56,21 @@ export default function ApiKeysPage() {
       setShowCreateModal(false)
       fetchKeys()
     } catch {
-      toast.error("Failed to create API key")
+      toast.error(t("createFailed"))
     } finally {
       setCreating(false)
     }
   }
 
   async function revokeKey(id: string) {
-    if (!confirm("Revoke this API key? This cannot be undone.")) return
+    if (!confirm(t("revokeConfirm"))) return
     try {
       const res = await fetch(`/api/org/api-keys/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error()
-      toast.success("API key revoked")
+      toast.success(t("revokeSuccess"))
       fetchKeys()
     } catch {
-      toast.error("Failed to revoke key")
+      toast.error(t("revokeFailed"))
     }
   }
 
@@ -87,12 +89,12 @@ export default function ApiKeysPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">API Keys</h1>
-          <p className="text-sm text-muted-foreground">Manage API keys for programmatic access</p>
+          <h1 className="text-xl font-semibold text-foreground">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button onClick={() => setShowCreateModal(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Create New Key
+          {t("createNewKey")}
         </Button>
       </div>
 
@@ -115,7 +117,7 @@ export default function ApiKeysPage() {
           ))
         ) : keys.length === 0 ? (
           <div className="rounded-[var(--radius)] border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            No API keys yet. Create one to get started.
+            {t("noKeys")}
           </div>
         ) : (
           keys.map((k) => (
@@ -133,21 +135,21 @@ export default function ApiKeysPage() {
                   </div>
                   {!k.revokedAt && (
                     <p className="text-xs text-muted-foreground">
-                      The full key was shown once at creation.
+                      {t("keyShownOnce")}
                     </p>
                   )}
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>Created {format(new Date(k.createdAt), "MMM d, yyyy")}</span>
+                    <span>{t("created")} {format(new Date(k.createdAt), "MMM d, yyyy")}</span>
                     {k.lastUsedAt && (
                       <>
                         <span aria-hidden>·</span>
-                        <span>Last used {formatDistanceToNow(new Date(k.lastUsedAt), { addSuffix: true })}</span>
+                        <span>{t("lastUsed")} {formatDistanceToNow(new Date(k.lastUsedAt), { addSuffix: true })}</span>
                       </>
                     )}
                     {!k.lastUsedAt && (
                       <>
                         <span aria-hidden>·</span>
-                        <span>Never used</span>
+                        <span>{t("neverUsed")}</span>
                       </>
                     )}
                   </div>
@@ -160,7 +162,7 @@ export default function ApiKeysPage() {
                     onClick={() => revokeKey(k.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Revoke
+                    {t("revoke")}
                   </Button>
                 )}
               </div>
@@ -173,12 +175,12 @@ export default function ApiKeysPage() {
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New API Key</DialogTitle>
+            <DialogTitle>{t("createModalTitle")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={createKey} className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label htmlFor="keyName" className="text-sm font-medium text-foreground">
-                Key Name
+                {t("keyName")}
               </Label>
               <Input
                 id="keyName"
@@ -190,7 +192,7 @@ export default function ApiKeysPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="keyDescription" className="text-sm font-medium text-foreground">
-                Description <span className="text-muted-foreground font-normal">(optional)</span>
+                {t("descriptionOptional")}
               </Label>
               <Input
                 id="keyDescription"
@@ -208,7 +210,7 @@ export default function ApiKeysPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={creating}>
-                {creating ? "Creating..." : "Create Key"}
+                {creating ? t("creating") : t("createKey")}
               </Button>
             </div>
           </form>
@@ -219,12 +221,12 @@ export default function ApiKeysPage() {
       <Dialog open={!!newKey} onOpenChange={() => setNewKey(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>API Key Created</DialogTitle>
+            <DialogTitle>{t("createdTitle")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="rounded-[var(--radius)] bg-amber-50 border border-amber-200 p-3">
               <p className="text-sm text-amber-800 font-medium">
-                This key will only be shown once. Copy it now.
+                {t("copyOnce")}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -241,7 +243,7 @@ export default function ApiKeysPage() {
                 }
               </Button>
             </div>
-            <Button className="w-full" onClick={() => setNewKey(null)}>Done</Button>
+            <Button className="w-full" onClick={() => setNewKey(null)}>{t("done")}</Button>
           </div>
         </DialogContent>
       </Dialog>

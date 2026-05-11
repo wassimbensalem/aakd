@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveOrganization, organization } from "@/lib/auth/client"
+import { useTranslations } from "next-intl"
 
 type AIStatus = { provider: string | null; model: string | null }
 
@@ -39,6 +40,7 @@ const INDUSTRIES = [
 
 export default function OrgSettingsPage() {
   const { data: activeOrg } = useActiveOrganization()
+  const t = useTranslations("org")
   const [name, setName] = useState("")
   const [domain, setDomain] = useState("")
   const [timezone, setTimezone] = useState("UTC")
@@ -113,12 +115,12 @@ export default function OrgSettingsPage() {
         body: JSON.stringify({ name, domain, timezone, industry, logo: logoUrl }),
       })
       if (!res.ok) throw new Error("Failed to update")
-      toast.success("Organization updated")
+      toast.success(t("orgUpdated"))
       if (activeOrg?.id) {
         await organization.setActive({ organizationId: activeOrg.id }).catch(() => {})
       }
     } catch {
-      toast.error("Failed to update organization")
+      toast.error(t("failedToUpdate"))
     } finally {
       setSaving(false)
     }
@@ -127,18 +129,18 @@ export default function OrgSettingsPage() {
   return (
     <div className="p-6 max-w-2xl space-y-6">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-foreground">Organization</h1>
-        <p className="text-sm text-muted-foreground">Manage your organization settings</p>
+        <h1 className="text-xl font-semibold text-foreground">{t("title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       {/* General Information card */}
       <div className="rounded-[var(--radius)] border border-border bg-card p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4">General Information</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-4">{t("generalInfo")}</h2>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="orgName" className="text-sm font-medium text-foreground">
-                Organization Name
+                {t("orgName")}
               </Label>
               <Input
                 id="orgName"
@@ -149,7 +151,7 @@ export default function OrgSettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="orgDomain" className="text-sm font-medium text-foreground">
-                Domain
+                {t("domain")}
               </Label>
               <Input
                 id="orgDomain"
@@ -160,7 +162,7 @@ export default function OrgSettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="orgTimezone" className="text-sm font-medium text-foreground">
-                Timezone
+                {t("timezone")}
               </Label>
               <select
                 id="orgTimezone"
@@ -175,7 +177,7 @@ export default function OrgSettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="orgIndustry" className="text-sm font-medium text-foreground">
-                Industry
+                {t("industry")}
               </Label>
               <select
                 id="orgIndustry"
@@ -183,7 +185,7 @@ export default function OrgSettingsPage() {
                 onChange={(e) => setIndustry(e.target.value)}
                 className="flex h-9 w-full rounded-[var(--radius)] border border-border bg-background px-3 py-1 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">Select industry</option>
+                <option value="">{t("selectIndustry")}</option>
                 {INDUSTRIES.map((ind) => (
                   <option key={ind} value={ind}>{ind}</option>
                 ))}
@@ -193,7 +195,7 @@ export default function OrgSettingsPage() {
 
           {activeOrg?.createdAt && (
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-foreground">Created</Label>
+              <Label className="text-sm font-medium text-foreground">{t("created")}</Label>
               <p className="text-sm text-muted-foreground">
                 {format(new Date(activeOrg.createdAt), "MMMM d, yyyy")}
               </p>
@@ -202,7 +204,7 @@ export default function OrgSettingsPage() {
 
           <div className="border-t border-border pt-4 flex justify-end">
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? t("saving") : t("saveChanges")}
             </Button>
           </div>
         </form>
@@ -210,7 +212,7 @@ export default function OrgSettingsPage() {
 
       {/* Organization Logo card */}
       <div className="rounded-[var(--radius)] border border-border bg-card p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4">Organization Logo</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-4">{t("orgLogo")}</h2>
         {logoUrl ? (
           <div className="flex items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -224,7 +226,7 @@ export default function OrgSettingsPage() {
               size="sm"
               onClick={() => setLogoUrl(null)}
             >
-              Remove
+              {t("remove")}
             </Button>
           </div>
         ) : (
@@ -236,9 +238,9 @@ export default function OrgSettingsPage() {
           >
             <ImageIcon className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-foreground font-medium">
-              {logoUploading ? "Uploading…" : "Click to upload or drag and drop"}
+              {logoUploading ? t("uploading") : t("clickToUpload")}
             </p>
-            <p className="text-xs text-muted-foreground">PNG, JPG, WebP up to 2MB</p>
+            <p className="text-xs text-muted-foreground">{t("logoFormats")}</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -255,12 +257,12 @@ export default function OrgSettingsPage() {
 
       {/* AI Configuration */}
       <div className="rounded-[var(--radius)] border border-border bg-card p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4">AI Configuration</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-4">{t("aiConfig")}</h2>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-foreground/80">Provider</span>
+            <span className="text-sm text-foreground/80">{t("provider")}</span>
             {aiStatus === null ? (
-              <span className="text-sm text-muted-foreground">Loading…</span>
+              <span className="text-sm text-muted-foreground">{t("loading")}</span>
             ) : aiStatus.provider ? (
               <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
@@ -269,12 +271,12 @@ export default function OrgSettingsPage() {
             ) : (
               <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
                 <span className="inline-block w-2 h-2 rounded-full bg-border" />
-                Not configured
+                {t("notConfigured")}
               </span>
             )}
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-foreground/80">Model</span>
+            <span className="text-sm text-foreground/80">{t("model")}</span>
             {aiStatus?.model ? (
               <span className="text-sm font-mono text-foreground">{aiStatus.model}</span>
             ) : (

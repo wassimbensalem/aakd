@@ -8,14 +8,9 @@ import { ContractStatusBadge } from "@/components/contract-status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Contract } from "@/lib/types"
 import type { AnalyticsSummary } from "@/app/api/analytics/summary/route"
+import { useTranslations } from "next-intl"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getGreeting(hour: number) {
-  if (hour < 12) return "Good morning"
-  if (hour < 17) return "Good afternoon"
-  return "Good evening"
-}
 
 function getInitials(name: string): string {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -53,10 +48,10 @@ function StatCard({ title, value, sub, loading }: { title: string; value: number
 
 // ─── Renewal bar chart ────────────────────────────────────────────────────────
 
-function RenewalChart({ monthlyVolume }: { monthlyVolume: Array<{ month: string; count: number }> }) {
+function RenewalChart({ monthlyVolume, standardLabel, highVolumeLabel, noDataLabel }: { monthlyVolume: Array<{ month: string; count: number }>; standardLabel: string; highVolumeLabel: string; noDataLabel: string }) {
   const slice = monthlyVolume.slice(-8)
   if (slice.length === 0) {
-    return <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">No data yet</div>
+    return <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">{noDataLabel}</div>
   }
   const max = Math.max(...slice.map((d) => d.count), 1)
   const barW = 28, gap = 10, chartH = 100
@@ -90,11 +85,11 @@ function RenewalChart({ monthlyVolume }: { monthlyVolume: Array<{ month: string;
       <div className="flex gap-4 mt-1 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-sm" style={{ background: "hsl(148 58% 30%)", opacity: 0.75 }} />
-          Standard
+          {standardLabel}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-sm" style={{ background: "hsl(38 85% 52%)" }} />
-          High volume
+          {highVolumeLabel}
         </span>
       </div>
     </div>
@@ -105,6 +100,7 @@ function RenewalChart({ monthlyVolume }: { monthlyVolume: Array<{ month: string;
 
 export default function DashboardPage() {
   const { data: session } = useSession()
+  const t = useTranslations("dashboard")
   const [analytics, setAnalytics]     = useState<AnalyticsSummary | null>(null)
   const [contracts, setContracts]     = useState<Contract[]>([])
   const [loading, setLoading]         = useState(true)
@@ -128,13 +124,15 @@ export default function DashboardPage() {
   }, []) // mounts fresh on every navigation
 
   const hour       = new Date().getHours()
-  const greeting   = getGreeting(hour)
+  const greeting   = hour < 12 ? t("greeting.morning") : hour < 17 ? t("greeting.afternoon") : t("greeting.evening")
   const fullName   = session?.user?.name ?? session?.user?.email ?? "there"
   const firstName  = fullName.split(" ")[0]
 
   const activeCount   = analytics?.byStatus.find((s) => s.status === "ACTIVE")?.count ?? 0
   const expiringCount = analytics?.expiringSoon.next30 ?? 0
   const pendingCount  = analytics?.approvalFunnel.pending ?? 0
+
+  const tableHeaders = [t("table.contract"), t("table.counterparty"), t("table.value"), t("table.due"), t("table.status"), ""]
 
   return (
     <div className="flex flex-col h-full">
@@ -146,7 +144,7 @@ export default function DashboardPage() {
             : <h1 className="text-[18px] font-bold tracking-tight leading-snug">{greeting}, {firstName}</h1>
           }
           <p className="text-[12.5px] text-muted-foreground mt-0.5">
-            Here&apos;s what&apos;s happening with your contracts.
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -162,16 +160,16 @@ export default function DashboardPage() {
             className="inline-flex items-center gap-1.5 h-[34px] px-3 text-[13px] font-medium rounded-[var(--radius)] bg-primary text-primary-foreground transition-opacity hover:opacity-90"
           >
             <Plus className="h-3.5 w-3.5" />
-            New Contract
+            {t("newContract")}
           </Link>
         </div>
       </div>
 
       {/* ── Stat cards ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3 px-7 pt-4 shrink-0">
-        <StatCard title="Active Contracts"  value={activeCount}   sub="Total in portfolio"  loading={loading} />
-        <StatCard title="Expiring Soon"     value={expiringCount} sub="Within 30 days"      loading={loading} />
-        <StatCard title="Pending Approvals" value={pendingCount}  sub="Awaiting review"     loading={loading} />
+        <StatCard title={t("activeContracts")}  value={activeCount}   sub={t("totalInPortfolio")}  loading={loading} />
+        <StatCard title={t("expiringSoon")}      value={expiringCount} sub={t("within30Days")}      loading={loading} />
+        <StatCard title={t("pendingApprovals")}  value={pendingCount}  sub={t("awaitingReview")}    loading={loading} />
       </div>
 
       {/* ── Main grid ────────────────────────────────────────────────── */}
@@ -179,9 +177,9 @@ export default function DashboardPage() {
         {/* Recent contracts table */}
         <div className="flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-[14px] font-semibold">Recent Contracts</h2>
+            <h2 className="text-[14px] font-semibold">{t("recentContracts")}</h2>
             <Link href="/contracts" className="flex items-center gap-1 text-[12px] font-medium text-primary hover:opacity-80 transition-opacity">
-              View all <ArrowUpRight className="h-3 w-3" />
+              {t("viewAll")} <ArrowUpRight className="h-3 w-3" />
             </Link>
           </div>
 
@@ -190,7 +188,7 @@ export default function DashboardPage() {
               <table className="w-full border-collapse" style={{ fontSize: "12.5px" }}>
                 <thead>
                   <tr>
-                    {["Contract", "Counterparty", "Value", "Due", "Status", ""].map((h, i) => (
+                    {tableHeaders.map((h, i) => (
                       <th key={i} className="px-3 py-[7px] text-left text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground bg-muted border-b border-border">{h}</th>
                     ))}
                   </tr>
@@ -212,11 +210,11 @@ export default function DashboardPage() {
                 <FileText className="h-5 w-5 text-primary" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium">No contracts yet</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Upload your first contract to get started</p>
+                <p className="text-sm font-medium">{t("noContracts")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("uploadFirst")}</p>
               </div>
               <Link href="/contracts/new" className="inline-flex items-center gap-1.5 h-8 px-3 text-[0.8rem] font-medium rounded-[var(--radius)] bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
-                <Plus className="h-3.5 w-3.5" /> Upload contract
+                <Plus className="h-3.5 w-3.5" /> {t("uploadContract")}
               </Link>
             </div>
           ) : (
@@ -224,7 +222,7 @@ export default function DashboardPage() {
               <table className="w-full border-collapse" style={{ fontSize: "12.5px" }}>
                 <thead>
                   <tr>
-                    {["Contract", "Counterparty", "Value", "Due", "Status", ""].map((h, i) => (
+                    {tableHeaders.map((h, i) => (
                       <th key={i} className="px-3 py-[7px] text-left text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground bg-muted border-b border-border">{h}</th>
                     ))}
                   </tr>
@@ -269,14 +267,14 @@ export default function DashboardPage() {
         {/* Renewal timeline */}
         <div className="rounded-[var(--radius)] border border-border bg-card px-5 py-4 flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[13px] font-semibold">Renewal Timeline</h3>
+            <h3 className="text-[13px] font-semibold">{t("renewalTimeline")}</h3>
             <span className="text-[11px] text-muted-foreground">
               Last {(analytics?.monthlyVolume ?? []).slice(-8).length} months
             </span>
           </div>
           {loading
             ? <Skeleton className="h-32 w-full" />
-            : <RenewalChart monthlyVolume={analytics?.monthlyVolume ?? []} />
+            : <RenewalChart monthlyVolume={analytics?.monthlyVolume ?? []} standardLabel={t("standard")} highVolumeLabel={t("highVolume")} noDataLabel={t("noData")} />
           }
         </div>
       </div>

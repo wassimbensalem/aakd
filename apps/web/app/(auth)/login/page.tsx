@@ -8,11 +8,14 @@ import { signIn } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useTranslations } from "next-intl"
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackURL = searchParams.get("callbackURL") ?? "/dashboard"
+  const t = useTranslations("auth")
+  const te = useTranslations("errors")
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -28,12 +31,12 @@ function LoginForm() {
         callbackURL,
       })
       if (result.error) {
-        toast.error(result.error.message ?? "Sign in failed")
+        toast.error(result.error.message ?? t("signInFailed"))
       } else {
         router.push(callbackURL)
       }
     } catch {
-      toast.error("An unexpected error occurred")
+      toast.error(te("serverError"))
     } finally {
       setLoading(false)
     }
@@ -42,12 +45,12 @@ function LoginForm() {
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-zinc-900">Sign in</h1>
-        <p className="text-sm text-zinc-500">Enter your credentials to continue</p>
+        <h1 className="text-xl font-semibold text-zinc-900">{t("login")}</h1>
+        <p className="text-sm text-zinc-500">{t("loginSubtitle")}</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t("email")}</Label>
           <Input
             id="email"
             type="email"
@@ -60,9 +63,9 @@ function LoginForm() {
         </div>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("password")}</Label>
             <Link href="/forgot-password" className="text-xs text-indigo-600 hover:underline">
-              Forgot password?
+              {t("forgotPassword")}
             </Link>
           </div>
           <Input
@@ -76,16 +79,16 @@ function LoginForm() {
           />
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Signing in..." : "Sign in"}
+          {loading ? t("signingIn") : t("login")}
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-zinc-500">
-        No account?{" "}
+        {t("noAccount")}{" "}
         <Link
           href={callbackURL !== "/dashboard" ? `/register?callbackURL=${encodeURIComponent(callbackURL)}` : "/register"}
           className="text-indigo-600 hover:underline"
         >
-          Create one
+          {t("createOne")}
         </Link>
       </p>
     </>

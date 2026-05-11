@@ -16,7 +16,9 @@ import TextStyle from "@tiptap/extension-text-style"
 import Highlight from "@tiptap/extension-highlight"
 import Placeholder from "@tiptap/extension-placeholder"
 import CharacterCount from "@tiptap/extension-character-count"
-import { Node } from "@tiptap/core"
+import { Mark, Node, Extension } from "@tiptap/core"
+import { Plugin, PluginKey } from "@tiptap/pm/state"
+import { ReplaceStep } from "@tiptap/pm/transform"
 import { toast } from "sonner"
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
@@ -25,6 +27,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Indent, Outdent, LayoutTemplate, Image as ImageIcon,
   Undo, Redo, Link as LinkIcon, Highlighter,
+  MessageSquare, GitBranch,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -64,6 +67,198 @@ const TemplateVariableExtension = Node.create({
     ]
   },
 })
+
+// ─── CommentMark extension ────────────────────────────────────────────────────
+
+const CommentMark = Mark.create({
+  name: "comment",
+  addAttributes() {
+    return {
+      commentId: { default: null },
+    }
+  },
+  parseHTML() {
+    return [{ tag: "mark[data-comment-id]" }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "mark",
+      {
+        "data-comment-id": HTMLAttributes.commentId as string,
+        class: "bg-amber-100 border-b-2 border-amber-400 cursor-pointer rounded-sm",
+      },
+      0,
+    ]
+  },
+})
+
+// ─── InsertionMark extension ──────────────────────────────────────────────────
+
+const InsertionMark = Mark.create({
+  name: "insertion",
+  addAttributes() {
+    return {
+      userId:    { default: null },
+      createdAt: { default: null },
+    }
+  },
+  parseHTML() { return [{ tag: "ins" }] },
+  renderHTML() {
+    return [
+      "ins",
+      {
+        class: "no-underline",
+        style: "color: hsl(var(--success, 142 71% 45%)); background: hsl(142 71% 45% / 0.08); border-bottom: 2px solid hsl(142 71% 45% / 0.35); text-decoration: none;",
+      },
+      0,
+    ]
+  },
+})
+
+// ─── DeletionMark extension ───────────────────────────────────────────────────
+
+const DeletionMark = Mark.create({
+  name: "deletion",
+  addAttributes() {
+    return {
+      userId:    { default: null },
+      createdAt: { default: null },
+    }
+  },
+  parseHTML() { return [{ tag: "del" }] },
+  renderHTML() {
+    return [
+      "del",
+      {
+        style: "color: hsl(var(--destructive, 0 84% 60%)); background: hsl(0 84% 60% / 0.06); text-decoration: line-through;",
+      },
+      0,
+    ]
+  },
+})
+
+// ─── Track Changes ProseMirror Plugin ────────────────────────────────────────
+
+const TC_META = "trackChangesOp"
+const tcKey = new PluginKey<boolean>("trackChanges")
+
+function createTrackChangesPlugin(
+  isEnabled: () => boolean,
+  getUserId: () => string,
+) {
+  return new Plugin({
+    key: tcKey,
+    appendTransaction(transactions, oldState, newState) {
+      if (!isEnabled()) return null
+      const relevant = transactions.filter(
+        (tr) => tr.docChanged && !tr.getMeta(TC_META),
+      )
+      if (relevant.length === 0) return null
+
+      const userId = getUserId()
+      const now = new Date().toISOString()
+      const outTr = newState.tr.setMeta(TC_META, true)
+      let dirty = false
+
+      const insertionMarkType = newState.schema.marks["insertion"]
+      const deletionMarkType  = newState.schema.marks["deletion"]
+
+      for (const tr of relevant) {
+        let offset = 0
+
+        for (const step of tr.steps) {
+          if (!(step instanceof ReplaceStep)) { offset += step.getMap().map(0) - 0; continue }
+
+          const rs   = step as ReplaceStep
+          const from = rs.from + offset
+          const to   = rs.to   + offset
+          const insertedSize = rs.slice.content.size
+
+          // Deletions: re-insert removed text with deletion mark
+          if (to > from && deletionMarkType) {
+            const deletedFrag = oldState.doc.slice(rs.from, rs.to).content
+            const mark = deletionMarkType.create({ userId, createdAt: now })
+            outTr.insert(from, deletedFrag)
+            outTr.addMark(from, from + (rs.to - rs.from), mark)
+            dirty = true
+          }
+
+          // Insertions: mark newly inserted content
+          if (insertedSize > 0 && insertionMarkType) {
+            const mark = insertionMarkType.create({ userId, createdAt: now })
+            const insertStart = from + (to > from ? (rs.to - rs.from) : 0)
+            outTr.addMark(insertStart, insertStart + insertedSize, mark)
+            dirty = true
+          }
+
+          offset += insertedSize - (rs.to - rs.from)
+        }
+      }
+
+      return dirty ? outTr : null
+    },
+  })
+}
+
+// ─── TrackChangesExtension wrapper ───────────────────────────────────────────
+
+const TrackChangesExtension = Extension.create({
+  name: "trackChangesExtension",
+  addStorage() {
+    return { enabled: false, userId: "", userName: "" }
+  },
+  addProseMirrorPlugins() {
+    const storage = this.storage as { enabled: boolean; userId: string; userName: string }
+    return [
+      createTrackChangesPlugin(
+        () => storage.enabled,
+        () => storage.userId,
+      ),
+    ]
+  },
+})
+
+// ─── Accept / Reject All helpers ─────────────────────────────────────────────
+
+export function acceptAllChanges(editor: Editor) {
+  const toDelete: { from: number; to: number }[] = []
+  editor.state.doc.descendants((node, pos) => {
+    if (node.isText) {
+      if (node.marks.some((m) => m.type.name === "deletion")) {
+        toDelete.push({ from: pos, to: pos + node.nodeSize })
+      }
+    }
+  })
+  const tr = editor.state.tr
+  for (const { from, to } of toDelete.reverse()) {
+    tr.delete(from, to)
+  }
+  const deletionMark = editor.state.schema.marks["deletion"]
+  const insertionMark = editor.state.schema.marks["insertion"]
+  if (deletionMark) tr.removeMark(0, tr.doc.content.size, deletionMark)
+  if (insertionMark) tr.removeMark(0, tr.doc.content.size, insertionMark)
+  editor.view.dispatch(tr)
+}
+
+export function rejectAllChanges(editor: Editor) {
+  const toDelete: { from: number; to: number }[] = []
+  editor.state.doc.descendants((node, pos) => {
+    if (node.isText) {
+      if (node.marks.some((m) => m.type.name === "insertion")) {
+        toDelete.push({ from: pos, to: pos + node.nodeSize })
+      }
+    }
+  })
+  const tr = editor.state.tr
+  for (const { from, to } of toDelete.reverse()) {
+    tr.delete(from, to)
+  }
+  const deletionMark = editor.state.schema.marks["deletion"]
+  const insertionMark = editor.state.schema.marks["insertion"]
+  if (deletionMark) tr.removeMark(0, tr.doc.content.size, deletionMark)
+  if (insertionMark) tr.removeMark(0, tr.doc.content.size, insertionMark)
+  editor.view.dispatch(tr)
+}
 
 // ─── Empty doc constant ────────────────────────────────────────────────────────
 
@@ -130,6 +325,17 @@ export interface ContractEditorProps {
   onChange?: (value: unknown, wordCount: number) => void
   rightActions?: React.ReactNode
   enableAutoSave?: boolean
+  // Feature: Comments
+  onAddComment?: () => void
+  // Feature: Track Changes
+  currentUserId?: string
+  currentUserName?: string
+  onAcceptAllChanges?: () => void
+  onRejectAllChanges?: () => void
+  // Feature: Clause Navigation
+  onSelectionChange?: (activeHeading: string | null) => void
+  // Expose editor instance to parent
+  onEditorReady?: (editor: Editor) => void
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -145,6 +351,13 @@ export function ContractEditor({
   onChange,
   rightActions,
   enableAutoSave = true,
+  onAddComment,
+  currentUserId,
+  currentUserName,
+  onAcceptAllChanges,
+  onRejectAllChanges,
+  onSelectionChange,
+  onEditorReady,
 }: ContractEditorProps): React.ReactElement {
   const initialDoc = normalizeContent(initialContent)
 
@@ -154,6 +367,7 @@ export function ContractEditor({
     "idle" | "saved" | "unsaved" | "saving" | "conflict" | "error"
   >(initialVersion > 0 ? "saved" : "idle")
   const [pageLayout, setPageLayout] = useState(false)
+  const [trackChanges, setTrackChanges] = useState(false)
 
   const pendingSaveRef = useRef(false)
   const pendingRetryRef = useRef(false)
@@ -190,6 +404,10 @@ export function ContractEditor({
       Placeholder.configure({ placeholder: "Start writing…" }),
       CharacterCount,
       TemplateVariableExtension,
+      CommentMark,
+      InsertionMark,
+      DeletionMark,
+      TrackChangesExtension,
     ],
     content: initialDoc,
     editable: !isReadOnly,
@@ -205,6 +423,16 @@ export function ContractEditor({
         saveTimer.current = setTimeout(() => triggerSave(ed), 3_000)
       }
     },
+    onSelectionUpdate: ({ editor: ed }) => {
+      const pos = ed.state.selection.from
+      let nearestHeading: string | null = null
+      ed.state.doc.descendants((node, nodePos) => {
+        if (node.type.name === "heading" && nodePos <= pos) {
+          nearestHeading = node.textContent
+        }
+      })
+      onSelectionChange?.(nearestHeading)
+    },
   })
 
   // Sync readOnly to editor
@@ -212,6 +440,37 @@ export function ContractEditor({
     if (!editor) return
     editor.setEditable(!isReadOnly)
   }, [editor, isReadOnly])
+
+  // Expose editor instance to parent
+  useEffect(() => {
+    if (editor) onEditorReady?.(editor)
+  }, [editor, onEditorReady])
+
+  // Sync currentUserId/currentUserName to TrackChangesExtension storage
+  useEffect(() => {
+    if (!editor) return
+    const ext = editor.extensionManager.extensions.find((e) => e.name === "trackChangesExtension")
+    if (ext) {
+      (ext.storage as { userId: string; userName: string }).userId = currentUserId ?? ""
+      ;(ext.storage as { userId: string; userName: string }).userName = currentUserName ?? ""
+    }
+  }, [editor, currentUserId, currentUserName])
+
+  // Sync trackChanges toggle to extension storage
+  useEffect(() => {
+    if (!editor) return
+    const ext = editor.extensionManager.extensions.find((e) => e.name === "trackChangesExtension")
+    if (ext) {
+      (ext.storage as { enabled: boolean }).enabled = trackChanges
+    }
+  }, [editor, trackChanges])
+
+  // Wire accept/reject all
+  useEffect(() => {
+    if (!editor || !onAcceptAllChanges) return
+    // The parent calls this prop function; we replace it by calling our internal function
+    // We expose the editor to the parent via a ref-like pattern via the effect
+  }, [editor, onAcceptAllChanges])
 
   // ─── Word count ────────────────────────────────────────────────────────────
 
@@ -358,6 +617,10 @@ export function ContractEditor({
 
   const isInTable = editor?.isActive("table") ?? false
 
+  // ─── Comment button visibility ─────────────────────────────────────────────
+
+  const hasSelection = editor ? !editor.state.selection.empty : false
+
   // ─── Image upload ──────────────────────────────────────────────────────────
 
   async function handleImageUpload(file: File) {
@@ -394,6 +657,20 @@ export function ContractEditor({
       type: "templateVariable",
       attrs: { variable: name },
     }).run()
+  }
+
+  // ─── Handle accept/reject all ──────────────────────────────────────────────
+
+  function handleAcceptAll() {
+    if (!editor) return
+    acceptAllChanges(editor)
+    onAcceptAllChanges?.()
+  }
+
+  function handleRejectAll() {
+    if (!editor) return
+    rejectAllChanges(editor)
+    onRejectAllChanges?.()
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -581,6 +858,34 @@ export function ContractEditor({
               <LinkIcon className="size-4" />
             </ToolbarButton>
 
+            {/* Comment button — only visible when text is selected */}
+            <ToolbarButton
+              onMouseDown={(e) => {
+                e.preventDefault()
+                onAddComment?.()
+              }}
+              title="Add comment"
+              disabled={!hasSelection}
+            >
+              <MessageSquare className="size-4" />
+            </ToolbarButton>
+
+            {/* Track Changes toggle */}
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); setTrackChanges((v) => !v) }}
+              title="Track Changes"
+              className={cn(
+                "h-8 px-2.5 inline-flex items-center gap-1.5 rounded text-xs font-medium transition-colors",
+                trackChanges
+                  ? "bg-primary/10 text-primary"
+                  : "text-zinc-600 hover:bg-zinc-100"
+              )}
+            >
+              <GitBranch className="size-3.5" />
+              Track
+            </button>
+
             <span className="w-px h-5 bg-zinc-200 mx-1" />
 
             {/* Alignment */}
@@ -718,6 +1023,29 @@ export function ContractEditor({
             >
               <ImageIcon className="size-4" />
             </ToolbarButton>
+
+            {/* Accept / Reject All — shown when track changes are active */}
+            {trackChanges && (
+              <>
+                <span className="w-px h-5 bg-zinc-200 mx-1" />
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleAcceptAll() }}
+                  className="h-8 px-2.5 inline-flex items-center gap-1 rounded text-xs font-medium text-green-700 hover:bg-green-50 transition-colors"
+                  title="Accept all changes"
+                >
+                  Accept All
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleRejectAll() }}
+                  className="h-8 px-2.5 inline-flex items-center gap-1 rounded text-xs font-medium text-red-700 hover:bg-red-50 transition-colors"
+                  title="Reject all changes"
+                >
+                  Reject All
+                </button>
+              </>
+            )}
           </>
         )}
 
@@ -836,20 +1164,24 @@ function ToolbarButton({
   onMouseDown,
   title,
   children,
+  disabled,
 }: {
   active?: boolean
   onMouseDown: React.MouseEventHandler<HTMLButtonElement>
   title?: string
   children: React.ReactNode
+  disabled?: boolean
 }) {
   return (
     <button
       type="button"
       title={title}
       onMouseDown={onMouseDown}
+      disabled={disabled}
       className={cn(
         "h-8 w-8 inline-flex items-center justify-center rounded text-zinc-700 hover:bg-zinc-100",
         active && "bg-zinc-100 text-indigo-600",
+        disabled && "opacity-40 cursor-not-allowed hover:bg-transparent",
       )}
     >
       {children}

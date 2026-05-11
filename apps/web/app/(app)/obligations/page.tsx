@@ -2,25 +2,18 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { Search, Target, CalendarDays, User, Flag, BookOpen, Bell, Square, CheckSquare, FileText, X, Pencil } from "lucide-react"
+import { Search, Target, CalendarDays, User, Flag, BookOpen, Bell, Square, CheckSquare, FileText, X, Pencil, Trash2, Loader2 } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { useSession } from "@/lib/auth/client"
 import { cn } from "@/lib/utils"
 import type { Obligation, ObligationStatus, ObligationPriority } from "@/components/obligations/types"
 import type { OrgMember } from "@/lib/types"
 import { ObligationSheet } from "@/components/obligations/obligation-sheet"
-
-const REMINDER_OPTIONS = [1, 3, 7, 14, 30] as const
+import { useTranslations } from "next-intl"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,47 +153,33 @@ function StatusBadge({
 function ObligationDetailSheet({
   obligation,
   onClose,
-  onUpdate,
   onEdit,
+  canDelete = false,
+  onDelete,
 }: {
   obligation: FlatObligation | null
   onClose: () => void
-  onUpdate: (updated: FlatObligation) => void
   onEdit: () => void
+  canDelete?: boolean
+  onDelete?: () => void
 }) {
   const ob = obligation
-  const [reminderDays, setReminderDays] = useState<number>(ob?.reminderDays ?? 7)
-  const [savingReminder, setSavingReminder] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
-  // Sync reminder state when obligation changes
-  useEffect(() => {
-    if (ob) setReminderDays(ob.reminderDays)
-  }, [ob?.id, ob?.reminderDays])
-
-  async function handleReminderChange(val: string | null) {
-    if (!ob || val === null) return
-    const days = Number(val)
-    const prev = reminderDays
-    setReminderDays(days) // optimistic
-    setSavingReminder(true)
+  async function handleDelete() {
+    if (!ob || !onDelete) return
+    setDeleting(true)
     try {
       const res = await fetch(
         `/api/contracts/${ob.contractId}/obligations/${ob.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reminderDays: days }),
-        },
+        { method: "DELETE" },
       )
-      if (!res.ok) throw new Error("Failed")
-      const updated = await res.json()
-      onUpdate({ ...ob, reminderDays: updated.reminderDays })
-      toast.success("Reminder updated")
+      if (!res.ok) throw new Error()
+      onDelete()
+      toast.success("Obligation deleted")
     } catch {
-      setReminderDays(prev) // roll back
-      toast.error("Failed to update reminder")
-    } finally {
-      setSavingReminder(false)
+      toast.error("Failed to delete obligation")
+      setDeleting(false)
     }
   }
 
@@ -311,26 +290,13 @@ function ObligationDetailSheet({
             </span>
           </div>
 
-          {/* Reminder — editable */}
+          {/* Reminder — read-only; edit via Edit Obligation */}
           <div className="flex items-start gap-3">
             <Bell className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
             <div className="flex flex-col gap-1 min-w-0">
-              <Select
-                value={String(reminderDays)}
-                onValueChange={handleReminderChange}
-                disabled={savingReminder}
-              >
-                <SelectTrigger className="h-8 w-40 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {REMINDER_OPTIONS.map((d) => (
-                    <SelectItem key={d} value={String(d)} className="text-sm">
-                      {d} day{d === 1 ? "" : "s"} before due
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <span className="text-sm text-foreground">
+                {ob.reminderDays} day{ob.reminderDays === 1 ? "" : "s"} before due
+              </span>
               {ob.reminderSentAt && (
                 <p className="text-xs text-muted-foreground">
                   Reminder sent{" "}
@@ -404,6 +370,21 @@ function ObligationDetailSheet({
             >
               Open in Contract →
             </Link>
+            {canDelete && (
+              <Button
+                variant="destructive"
+                size="icon"
+                disabled={deleting}
+                onClick={handleDelete}
+                title="Delete obligation"
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground text-center">
             Created by {ob.createdBy.name} · {formatDate(ob.createdAt)}
@@ -417,6 +398,7 @@ function ObligationDetailSheet({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ObligationsPage() {
+  const { data: session } = useSession()
   const [obligations, setObligations] = useState<FlatObligation[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -424,6 +406,8 @@ export default function ObligationsPage() {
   const [selected, setSelected] = useState<FlatObligation | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [members, setMembers] = useState<OrgMember[]>([])
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -513,23 +497,102 @@ export default function ObligationsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [obligations, activeFilter, search])
 
-  const FILTERS: FilterKey[] = ["All", "Overdue", "Due Soon", "Upcoming", "Completed"]
+  const canDelete = ["owner", "admin", "legal"].includes(
+    members.find((m) => m.userId === session?.user?.id)?.role ?? "",
+  )
+
+  // Single-row delete (called from detail sheet)
+  function handleDeleteSelected() {
+    if (!selected) return
+    setObligations((prev) => prev.filter((o) => o.id !== selected.id))
+    setCheckedIds((prev) => { const s = new Set(prev); s.delete(selected.id); return s })
+    setSelected(null)
+  }
+
+  // Bulk delete
+  async function handleBulkDelete() {
+    if (checkedIds.size === 0 || bulkDeleting) return
+    setBulkDeleting(true)
+    const ids = Array.from(checkedIds)
+    const targets = obligations.filter((o) => ids.includes(o.id))
+    const results = await Promise.allSettled(
+      targets.map((o) =>
+        fetch(`/api/contracts/${o.contractId}/obligations/${o.id}`, {
+          method: "DELETE",
+        }),
+      ),
+    )
+    const failed = results.filter(
+      (r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok),
+    ).length
+    const succeeded = ids.length - failed
+    if (succeeded > 0) {
+      const deletedIds = new Set(
+        targets
+          .filter((_, i) => {
+            const r = results[i]
+            return r.status === "fulfilled" && r.value.ok
+          })
+          .map((o) => o.id),
+      )
+      setObligations((prev) => prev.filter((o) => !deletedIds.has(o.id)))
+      setCheckedIds((prev) => { const s = new Set(prev); deletedIds.forEach((id) => s.delete(id)); return s })
+      if (selected && deletedIds.has(selected.id)) setSelected(null)
+      toast.success(`${succeeded} obligation${succeeded === 1 ? "" : "s"} deleted`)
+    }
+    if (failed > 0) toast.error(`${failed} deletion${failed === 1 ? "" : "s"} failed`)
+    setBulkDeleting(false)
+  }
+
+  // Checkbox helpers
+  const allFilteredIds = filtered.map((o) => o.id)
+  const allChecked = allFilteredIds.length > 0 && allFilteredIds.every((id) => checkedIds.has(id))
+  const someChecked = allFilteredIds.some((id) => checkedIds.has(id))
+
+  function toggleAll() {
+    if (allChecked) {
+      setCheckedIds((prev) => {
+        const s = new Set(prev)
+        allFilteredIds.forEach((id) => s.delete(id))
+        return s
+      })
+    } else {
+      setCheckedIds((prev) => new Set(Array.from(prev).concat(allFilteredIds)))
+    }
+  }
+
+  function toggleOne(id: string) {
+    setCheckedIds((prev) => {
+      const s = new Set(prev)
+      s.has(id) ? s.delete(id) : s.add(id)
+      return s
+    })
+  }
+
+  const t = useTranslations("obligations")
+  const FILTERS: Array<{ key: FilterKey; label: string }> = [
+    { key: "All",       label: t("filterAll") },
+    { key: "Overdue",   label: t("filterOverdue") },
+    { key: "Due Soon",  label: t("filterDueSoon") },
+    { key: "Upcoming",  label: t("filterUpcoming") },
+    { key: "Completed", label: t("filterCompleted") },
+  ]
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="relative flex flex-col h-full">
       {/* ── Page header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-7 py-4 border-b border-border shrink-0">
         <div>
-          <h1 className="text-xl font-semibold">Obligations</h1>
+          <h1 className="text-xl font-semibold">{t("title")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Track and manage contractual obligations and deadlines.
+            {t("subtitle")}
           </p>
         </div>
         <Link
           href="/contracts"
           className="inline-flex items-center gap-1.5 h-[34px] px-3 text-[13px] font-medium rounded-[var(--radius)] border border-border bg-background text-foreground transition-colors hover:bg-muted"
         >
-          Go to Contracts
+          {t("goToContracts")}
         </Link>
       </div>
 
@@ -537,25 +600,25 @@ export default function ObligationsPage() {
         {/* ── Stat cards ──────────────────────────────────────────────── */}
         <div className="grid grid-cols-4 gap-3">
           <StatCard
-            title="Overdue"
+            title={t("overdue")}
             value={stats.overdue}
-            sub="Requires immediate attention"
+            sub={t("overdueRequires")}
             trend="down"
           />
           <StatCard
-            title="Due This Week"
+            title={t("dueThisWeek")}
             value={stats.dueSoon}
-            sub="Action needed soon"
+            sub={t("actionNeeded")}
           />
           <StatCard
-            title="Upcoming"
+            title={t("upcoming")}
             value={stats.upcoming}
-            sub="Next 60 days"
+            sub={t("next60Days")}
           />
           <StatCard
-            title="Completed"
+            title={t("completed")}
             value={stats.completed}
-            sub="This quarter"
+            sub={t("thisQuarter")}
             trend="up"
           />
         </div>
@@ -566,7 +629,7 @@ export default function ObligationsPage() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <input
               type="text"
-              placeholder="Search obligations..."
+              placeholder={t("searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-8 pr-3 py-[6px] text-sm bg-background border border-border rounded-[var(--radius)] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
@@ -575,17 +638,17 @@ export default function ObligationsPage() {
           <div className="flex items-center gap-1.5">
             {FILTERS.map((f) => (
               <button
-                key={f}
+                key={f.key}
                 type="button"
-                onClick={() => setActiveFilter(f)}
+                onClick={() => setActiveFilter(f.key)}
                 className={cn(
                   "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                  activeFilter === f
+                  activeFilter === f.key
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground",
                 )}
               >
-                {f}
+                {f.label}
               </button>
             ))}
           </div>
@@ -594,17 +657,17 @@ export default function ObligationsPage() {
         {/* ── Table ────────────────────────────────────────────────────── */}
         {loading ? (
           <div className="rounded-[var(--radius)] border border-border bg-card p-10 text-center">
-            <p className="text-sm text-muted-foreground">Loading obligations...</p>
+            <p className="text-sm text-muted-foreground">{t("loading")}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-[var(--radius)] border border-dashed border-border bg-muted/20">
             <EmptyState
               icon={Target}
-              title="No obligations"
+              title={t("noObligations")}
               description={
                 search || activeFilter !== "All"
-                  ? "Try adjusting your search or filter."
-                  : "Obligations linked to your contracts will appear here."
+                  ? t("noObligationsFilter")
+                  : t("noObligationsDesc")
               }
             />
           </div>
@@ -613,7 +676,19 @@ export default function ObligationsPage() {
             <table className="w-full border-collapse" style={{ fontSize: "12.5px" }}>
               <thead>
                 <tr>
-                  {["Obligation", "Contract", "Assignee", "Due Date", "Priority", "Status"].map(
+                  {canDelete && (
+                    <th className="w-9 px-3 py-[7px] bg-muted border-b border-border">
+                      <input
+                        type="checkbox"
+                        checked={allChecked}
+                        ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked }}
+                        onChange={toggleAll}
+                        className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                        aria-label="Select all"
+                      />
+                    </th>
+                  )}
+                  {[t("tableObligation"), t("tableContract"), t("tableAssignee"), t("tableDueDate"), t("tablePriority"), t("tableStatus")].map(
                     (h) => (
                       <th
                         key={h}
@@ -638,9 +713,26 @@ export default function ObligationsPage() {
                   return (
                     <tr
                       key={ob.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer"
+                      className={cn(
+                        "border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer",
+                        checkedIds.has(ob.id) && "bg-primary/5",
+                      )}
                       onClick={() => setSelected(ob)}
                     >
+                      {canDelete && (
+                        <td
+                          className="w-9 px-3 py-2.5"
+                          onClick={(e) => { e.stopPropagation(); toggleOne(ob.id) }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checkedIds.has(ob.id)}
+                            onChange={() => toggleOne(ob.id)}
+                            className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                            aria-label={`Select ${ob.title}`}
+                          />
+                        </td>
+                      )}
                       {/* Obligation */}
                       <td className="px-3 py-2.5 font-medium max-w-[220px]">
                         <span className="truncate block">{ob.title}</span>
@@ -710,19 +802,46 @@ export default function ObligationsPage() {
         )}
       </div>
 
+      {/* ── Bulk action bar ─────────────────────────────────────────── */}
+      {canDelete && checkedIds.size > 0 && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-[var(--radius)] border border-border bg-card shadow-lg px-4 py-2.5">
+          <span className="text-sm font-medium text-foreground tabular-nums">
+            {checkedIds.size} selected
+          </span>
+          <div className="h-4 w-px bg-border" />
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={bulkDeleting}
+            onClick={handleBulkDelete}
+            className="gap-1.5"
+          >
+            {bulkDeleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+            Delete {checkedIds.size === 1 ? "obligation" : `${checkedIds.size} obligations`}
+          </Button>
+          <button
+            type="button"
+            onClick={() => setCheckedIds(new Set())}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <ObligationDetailSheet
         obligation={selected}
         onClose={() => setSelected(null)}
-        onUpdate={(updated) => {
-          setObligations((prev) =>
-            prev.map((o) => (o.id === updated.id ? { ...o, reminderDays: updated.reminderDays } : o)),
-          )
-          setSelected((prev) => (prev?.id === updated.id ? { ...prev, reminderDays: updated.reminderDays } : prev))
-        }}
         onEdit={() => {
           setSelected((prev) => prev) // keep selected
           setEditOpen(true)
         }}
+        canDelete={canDelete}
+        onDelete={handleDeleteSelected}
       />
 
       {selected && (

@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { GlobalProviders } from "@/components/global-providers"
 import { AakdLogoMark } from "@/components/aakd-logo"
+import { useTranslations } from "next-intl"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -43,36 +44,7 @@ interface NavSection {
   items: NavItem[]
 }
 
-// ─── Nav config ──────────────────────────────────────────────────────────────
-
-const NAV_SECTIONS: NavSection[] = [
-  {
-    title: "Core",
-    items: [
-      { label: "Dashboard",   href: "/dashboard",   icon: LayoutDashboard, exact: true },
-      { label: "Contracts",   href: "/contracts",   icon: FileText },
-      { label: "Templates",   href: "/templates",   icon: Layers },
-      { label: "Obligations", href: "/obligations", icon: Target },
-      { label: "Analytics",   href: "/analytics",   icon: BarChart2 },
-    ],
-  },
-  {
-    title: "AI",
-    items: [
-      { label: "AI Agents",      href: "/ai/agents", icon: Bot,          disabled: true },
-      { label: "Create with AI", href: "/ai/create", icon: MessageSquare, disabled: true },
-    ],
-  },
-  {
-    title: "Settings",
-    items: [
-      // Single entry — all sub-pages live inside the settings secondary sidebar.
-      // `matchPrefix` lets the active highlight cover all /settings/* routes
-      // even though the link destination is /settings/org.
-      { label: "Settings", href: "/settings/org", icon: Settings, matchPrefix: "/settings" },
-    ],
-  },
-]
+// ─── Nav config (moved inside component — see AppLayout below) ───────────────
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -146,6 +118,9 @@ function Sidebar({
   userImage,
   orgName,
   onSignOut,
+  navSections,
+  searchLabel,
+  themeLabel,
 }: {
   pathname: string
   userName: string
@@ -153,6 +128,9 @@ function Sidebar({
   userImage?: string | null
   orgName: string
   onSignOut: () => void
+  navSections: NavSection[]
+  searchLabel: string
+  themeLabel: string
 }) {
   return (
     <aside className="flex flex-col h-full w-[232px] shrink-0 bg-muted border-r border-border">
@@ -179,7 +157,7 @@ function Sidebar({
           }}
         >
           <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-          <span className="flex-1 text-left">Search...</span>
+          <span className="flex-1 text-left">{searchLabel}</span>
           <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-1 py-0.5 text-muted-foreground leading-none">
             ⌘K
           </kbd>
@@ -188,7 +166,7 @@ function Sidebar({
 
       {/* Nav sections */}
       <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-        {NAV_SECTIONS.map((section) => (
+        {navSections.map((section) => (
           <div key={section.title}>
             <p className="px-[10px] pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
               {section.title}
@@ -205,7 +183,7 @@ function Sidebar({
       {/* Theme toggle row */}
       <div className="flex items-center gap-2 px-3 py-2 border-t border-border">
         <ThemeToggle />
-        <span className="text-xs text-muted-foreground">Theme</span>
+        <span className="text-xs text-muted-foreground">{themeLabel}</span>
       </div>
 
       {/* User card */}
@@ -253,6 +231,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { data: session, isPending } = useSession()
   const { data: activeOrg, isPending: orgPending } = useActiveOrganization()
+  const t = useTranslations("nav")
+
+  const NAV_SECTIONS: NavSection[] = [
+    {
+      title: t("sections.core"),
+      items: [
+        { label: t("dashboard"),   href: "/dashboard",   icon: LayoutDashboard, exact: true },
+        { label: t("contracts"),   href: "/contracts",   icon: FileText },
+        { label: t("templates"),   href: "/templates",   icon: Layers },
+        { label: t("obligations"), href: "/obligations", icon: Target },
+        { label: t("analytics"),   href: "/analytics",   icon: BarChart2 },
+      ],
+    },
+    {
+      title: t("sections.ai"),
+      items: [
+        { label: t("aiAgents"),  href: "/ai/agents", icon: Bot,          disabled: true },
+        { label: t("aiCreate"),  href: "/ai/create", icon: MessageSquare, disabled: true },
+      ],
+    },
+    {
+      title: t("sections.settings"),
+      items: [
+        { label: t("settings"), href: "/settings/org", icon: Settings, matchPrefix: "/settings" },
+      ],
+    },
+  ]
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -296,6 +301,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         onSignOut={() =>
           signOut({ fetchOptions: { onSuccess: () => router.push("/login") } })
         }
+        navSections={NAV_SECTIONS}
+        searchLabel={t("search")}
+        themeLabel={t("theme")}
       />
 
       {/* Main content */}

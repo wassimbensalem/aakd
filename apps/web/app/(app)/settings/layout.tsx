@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { LocaleSwitcher } from "@/components/locale-switcher"
 import { cn } from "@/lib/utils"
+import { useTranslations } from "next-intl"
 
 interface SettingsLink {
   label: string
@@ -29,41 +30,42 @@ interface SettingsGroup {
   items: SettingsLink[]
 }
 
-const SETTINGS_GROUPS: SettingsGroup[] = [
-  {
-    title: "Workspace",
-    items: [
-      { label: "Organization",      href: "/settings/org",           icon: Building2 },
-      { label: "Members",           href: "/settings/members",       icon: Users },
-      { label: "API Keys",          href: "/settings/api-keys",      icon: Key },
-      { label: "Audit Log",         href: "/settings/audit-log",     icon: ClipboardList },
-      { label: "Billing",           href: "/settings/billing",       icon: CreditCard, disabled: true },
-    ],
-  },
-  {
-    title: "Integrations",
-    items: [
-      { label: "Integrations",  href: "/settings/integrations", icon: Plug2 },
-      { label: "Data Import",   href: "/settings/import",       icon: Upload },
-    ],
-  },
-  {
-    title: "Notifications",
-    items: [
-      { label: "Org Notifications", href: "/settings/notifications",              icon: Bell },
-      { label: "My Notifications",  href: "/settings/profile/notifications",      icon: Mail },
-    ],
-  },
-  {
-    title: "Account",
-    items: [
-      { label: "My Profile", href: "/settings/profile", icon: User },
-    ],
-  },
-]
-
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const t = useTranslations("nav")
+
+  const SETTINGS_GROUPS: SettingsGroup[] = [
+    {
+      title: t("sections.workspace"),
+      items: [
+        { label: t("organization"),      href: "/settings/org",           icon: Building2 },
+        { label: t("members"),           href: "/settings/members",       icon: Users },
+        { label: t("apiKeys"),           href: "/settings/api-keys",      icon: Key },
+        { label: t("auditLog"),          href: "/settings/audit-log",     icon: ClipboardList },
+        { label: t("billing"),           href: "/settings/billing",       icon: CreditCard, disabled: true },
+      ],
+    },
+    {
+      title: t("sections.integrations"),
+      items: [
+        { label: t("integrations"),  href: "/settings/integrations", icon: Plug2 },
+        { label: t("import"),        href: "/settings/import",       icon: Upload },
+      ],
+    },
+    {
+      title: t("sections.notifications"),
+      items: [
+        { label: t("orgNotifications"), href: "/settings/notifications",         icon: Bell },
+        { label: t("myNotifications"),  href: "/settings/profile/notifications", icon: Mail },
+      ],
+    },
+    {
+      title: t("sections.account"),
+      items: [
+        { label: t("myProfile"), href: "/settings/profile", icon: User },
+      ],
+    },
+  ]
 
   return (
     <div className="flex min-h-full">
@@ -115,7 +117,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
         <div className="mt-auto pt-3 border-t border-border space-y-2">
           <p className="px-[10px] text-[10px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
-            Language
+            {t("sections.language")}
           </p>
           <div className="px-[10px]">
             <LocaleSwitcher className="w-full" />

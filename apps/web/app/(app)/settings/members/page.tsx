@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table"
 import { OrgMember } from "@/lib/types"
 import { useSession } from "@/lib/auth/client"
+import { useTranslations } from "next-intl"
 
 const ROLES = ["admin", "legal", "member", "viewer"] as const
 
@@ -79,6 +80,7 @@ function RoleBadge({ role }: { role: string }) {
 
 export default function MembersPage() {
   const { data: session } = useSession()
+  const t = useTranslations("members")
   const [members, setMembers] = useState<OrgMember[]>([])
   const [invitations, setInvitations] = useState<PendingInvitation[]>([])
   const [loading, setLoading] = useState(true)
@@ -105,7 +107,7 @@ export default function MembersPage() {
       }
     } catch (e) {
       if ((e as Error).name === "AbortError") return
-      toast.error("Failed to load members")
+      toast.error(t("failedToLoad"))
     } finally {
       setLoading(false)
     }
@@ -141,12 +143,12 @@ export default function MembersPage() {
         toast.error(msg[body?.error] ?? body?.error ?? "Failed to send invitation")
         return
       }
-      toast.success(`Invitation sent to ${inviteEmail}`)
+      toast.success(t("inviteSent", { email: inviteEmail }))
       setInviteEmail("")
       setShowInviteModal(false)
       fetchMembers()
     } catch {
-      toast.error("Failed to send invitation")
+      toast.error(t("failedToInvite"))
     } finally {
       setInviting(false)
     }
@@ -163,13 +165,13 @@ export default function MembersPage() {
         const body = await res.json().catch(() => ({}))
         toast.error(body?.error === "cannot_demote_last_admin"
           ? "Can't change — this is the last admin"
-          : body?.error ?? "Failed to update role")
+          : body?.error ?? t("failedToChangeRole"))
         return
       }
-      toast.success("Role updated")
+      toast.success(t("roleUpdated"))
       fetchMembers()
     } catch {
-      toast.error("Failed to update role")
+      toast.error(t("failedToChangeRole"))
     }
   }
 
@@ -183,13 +185,13 @@ export default function MembersPage() {
       const res = await fetch(`/api/org/members/${memberId}`, { method: "DELETE" })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        toast.error(body?.error ?? "Failed to remove member")
+        toast.error(body?.error ?? t("failedToRemove"))
         return
       }
-      toast.success(`${memberName} removed`)
+      toast.success(t("removed", { name: memberName }))
       fetchMembers()
     } catch {
-      toast.error("Failed to remove member")
+      toast.error(t("failedToRemove"))
     }
   }
 
@@ -199,13 +201,13 @@ export default function MembersPage() {
       const res = await fetch(`/api/org/invitations/${invitationId}`, { method: "POST" })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        toast.error(body?.error ?? "Failed to resend")
+        toast.error(body?.error ?? t("failedToResend"))
         return
       }
-      toast.success(`Invitation resent to ${email}`)
+      toast.success(t("inviteResent", { email }))
       fetchMembers()
     } catch {
-      toast.error("Failed to resend invitation")
+      toast.error(t("failedToResend"))
     } finally {
       setResendingId(null)
     }
@@ -220,10 +222,10 @@ export default function MembersPage() {
     try {
       const res = await fetch(`/api/org/invitations/${invitationId}`, { method: "DELETE" })
       if (!res.ok) return
-      toast.success("Invitation cancelled")
+      toast.success(t("inviteCancelled"))
       fetchMembers()
     } catch {
-      toast.error("Failed to cancel invitation")
+      toast.error(t("failedToCancel"))
     }
   }
 
@@ -238,13 +240,13 @@ export default function MembersPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Team Members</h1>
-          <p className="text-sm text-muted-foreground">Manage who has access to your organization</p>
+          <h1 className="text-xl font-semibold text-foreground">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         {canManageMembers && (
           <Button onClick={() => setShowInviteModal(true)}>
             <UserPlus className="h-4 w-4 mr-2" />
-            Invite Member
+            {t("inviteMember")}
           </Button>
         )}
       </div>
@@ -254,10 +256,10 @@ export default function MembersPage() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead>Member</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Joined</TableHead>
+              <TableHead>{t("tableMember")}</TableHead>
+              <TableHead>{t("tableRole")}</TableHead>
+              <TableHead>{t("tableStatus")}</TableHead>
+              <TableHead>{t("tableJoined")}</TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
@@ -309,7 +311,7 @@ export default function MembersPage() {
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-green-100 text-green-700">
-                      Active
+                      {t("active")}
                     </span>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -341,7 +343,7 @@ export default function MembersPage() {
       {canManageMembers && invitations.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-foreground mb-2">
-            Pending Invitations
+            {t("pendingInvitations")}
             <span className="ml-2 text-xs font-normal text-muted-foreground">
               ({invitations.length})
             </span>
@@ -350,9 +352,9 @@ export default function MembersPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Expires</TableHead>
+                  <TableHead>{t("tableEmail")}</TableHead>
+                  <TableHead>{t("tableRole")}</TableHead>
+                  <TableHead>{t("tableExpires")}</TableHead>
                   <TableHead className="w-24" />
                 </TableRow>
               </TableHeader>
@@ -410,18 +412,18 @@ export default function MembersPage() {
       <Dialog open={!!confirmRemove} onOpenChange={(open) => { if (!open) setConfirmRemove(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove member</DialogTitle>
+            <DialogTitle>{t("removeMemberTitle")}</DialogTitle>
             <DialogDescription>
-              Remove <span className="font-medium text-foreground">{confirmRemove?.name}</span> from the organization? They will lose all access immediately.
+              {t("removeMemberDesc", { name: confirmRemove?.name ?? "" })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmRemove(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setConfirmRemove(null)}>{t("cancel")}</Button>
             <Button
               variant="destructive"
               onClick={() => confirmRemove && doRemoveMember(confirmRemove.id, confirmRemove.name)}
             >
-              Remove
+              {t("remove")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -431,18 +433,18 @@ export default function MembersPage() {
       <Dialog open={!!confirmCancelInvite} onOpenChange={(open) => { if (!open) setConfirmCancelInvite(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel invitation</DialogTitle>
+            <DialogTitle>{t("cancelInviteTitle")}</DialogTitle>
             <DialogDescription>
-              Cancel the invitation for <span className="font-medium text-foreground">{confirmCancelInvite?.email}</span>? The invite link will stop working.
+              {t("cancelInviteDesc", { email: confirmCancelInvite?.email ?? "" })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmCancelInvite(null)}>Keep</Button>
+            <Button variant="outline" onClick={() => setConfirmCancelInvite(null)}>{t("keepInvite")}</Button>
             <Button
               variant="destructive"
               onClick={() => confirmCancelInvite && doCancelInvitation(confirmCancelInvite.id)}
             >
-              Cancel invitation
+              {t("cancelInviteAction")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -452,12 +454,12 @@ export default function MembersPage() {
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite Member</DialogTitle>
+            <DialogTitle>{t("inviteModalTitle")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={invite} className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label htmlFor="inviteEmail" className="text-sm font-medium text-foreground">
-                Email Address
+                {t("emailAddress")}
               </Label>
               <Input
                 id="inviteEmail"
@@ -470,7 +472,7 @@ export default function MembersPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="inviteRole" className="text-sm font-medium text-foreground">
-                Role
+                {t("role")}
               </Label>
               <Select value={inviteRole} onValueChange={(v) => v != null && setInviteRole(v)}>
                 <SelectTrigger id="inviteRole">
@@ -504,15 +506,15 @@ export default function MembersPage() {
               )}
 
               <p className="text-xs text-muted-foreground">
-                The invitation link will be valid for 30 days.
+                {t("inviteExpiry")}
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowInviteModal(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button type="submit" disabled={inviting}>
-                {inviting ? "Sending..." : "Send Invite"}
+                {inviting ? t("sending") : t("sendInvite")}
               </Button>
             </div>
           </form>

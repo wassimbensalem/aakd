@@ -43,6 +43,8 @@ model User {
   importJobsCreated           ImportJob[]              @relation("ImportJobCreator")
   googleDriveConnected        GoogleDriveIntegration[] @relation("GoogleDriveConnectedBy")
   notifications               Notification[]
+  commentsAuthored            ContractComment[]        @relation("CommentAuthor")
+  commentsResolved            ContractComment[]        @relation("CommentResolver")
 }
 
 model Session {
@@ -184,6 +186,7 @@ model Contract {
   approvals           Approval[]
   embedding           ContractEmbedding?
   document              ContractDocument?
+  comments              ContractComment[]
   obligations           ContractObligation[]
   crmLinks              CrmLink[]
   notifications         Notification[]
@@ -490,6 +493,24 @@ model ContractDocument {
   savedBy      User     @relation("DocumentSaver", fields: [savedById], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model ContractComment {
+  id           String    @id @default(cuid())
+  contractId   String
+  contract     Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User      @relation("CommentAuthor", fields: [authorId], references: [id])
+  body         String
+  markId       String?   // TipTap comment mark ID linking this comment to highlighted text
+  resolved     Boolean   @default(false)
+  resolvedById String?
+  resolvedBy   User?     @relation("CommentResolver", fields: [resolvedById], references: [id])
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([contractId])
 }
 
 model ContractTemplate {

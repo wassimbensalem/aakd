@@ -8,11 +8,14 @@ import { authClient } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useTranslations } from "next-intl"
 
 function ResetPasswordForm() {
   const router = useRouter()
   const params = useSearchParams()
   const token = params.get("token") ?? ""
+  const t = useTranslations("auth")
+  const tc = useTranslations("common")
 
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
@@ -21,28 +24,28 @@ function ResetPasswordForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (password !== confirm) {
-      toast.error("Passwords do not match")
+      toast.error(t("passwordMismatch"))
       return
     }
     if (password.length < 8) {
-      toast.error("Password must be at least 8 characters")
+      toast.error(t("passwordTooShort"))
       return
     }
     if (!token) {
-      toast.error("Invalid or missing reset token")
+      toast.error(t("missingToken"))
       return
     }
     setLoading(true)
     try {
       const result = await authClient.resetPassword({ newPassword: password, token })
       if (result.error) {
-        toast.error(result.error.message ?? "Reset failed — the link may have expired")
+        toast.error(result.error.message ?? t("resetFailed"))
       } else {
-        toast.success("Password updated. Please sign in.")
+        toast.success(t("passwordUpdated"))
         router.push("/login")
       }
     } catch {
-      toast.error("Something went wrong. Please try again.")
+      toast.error(tc("error"))
     } finally {
       setLoading(false)
     }
@@ -52,11 +55,11 @@ function ResetPasswordForm() {
     return (
       <>
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-zinc-900">Invalid link</h1>
-          <p className="text-sm text-zinc-500">This reset link is missing a token. Please request a new one.</p>
+          <h1 className="text-xl font-semibold text-zinc-900">{t("invalidLinkTitle")}</h1>
+          <p className="text-sm text-zinc-500">{t("invalidLinkSubtitle")}</p>
         </div>
         <Link href="/forgot-password" className="text-indigo-600 hover:underline text-sm">
-          Request new reset link
+          {t("requestNewLink")}
         </Link>
       </>
     )
@@ -65,12 +68,12 @@ function ResetPasswordForm() {
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-zinc-900">Set new password</h1>
-        <p className="text-sm text-zinc-500">Choose a strong password for your account.</p>
+        <h1 className="text-xl font-semibold text-zinc-900">{t("resetPasswordTitle")}</h1>
+        <p className="text-sm text-zinc-500">{t("resetPasswordSubtitle")}</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="password">New password</Label>
+          <Label htmlFor="password">{t("newPassword")}</Label>
           <Input
             id="password"
             type="password"
@@ -83,7 +86,7 @@ function ResetPasswordForm() {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="confirm">Confirm password</Label>
+          <Label htmlFor="confirm">{t("confirmPassword")}</Label>
           <Input
             id="confirm"
             type="password"
@@ -95,7 +98,7 @@ function ResetPasswordForm() {
           />
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Updating..." : "Set new password"}
+          {loading ? t("updating") : t("setNewPassword")}
         </Button>
       </form>
     </>

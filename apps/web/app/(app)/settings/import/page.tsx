@@ -15,6 +15,7 @@ import { GoogleDriveTab } from "@/components/import/gdrive-tab"
 import { PandaDocTab } from "@/components/import/pandadoc-tab"
 import { ClmExportTab } from "@/components/import/clm-export-tab"
 import { ImportHistory } from "@/components/import/import-history"
+import { useTranslations } from "next-intl"
 
 const VALID_TABS = new Set(["csv", "batch", "gdrive", "pandadoc", "clm"])
 
@@ -22,6 +23,7 @@ function ImportPageBody() {
   const searchParams = useSearchParams()
   const initialTab = searchParams.get("tab")
   const defaultTab = initialTab && VALID_TABS.has(initialTab) ? initialTab : "csv"
+  const t = useTranslations("import")
 
   const [historyKey, setHistoryKey] = useState(0)
   const refreshHistory = () => setHistoryKey((k) => k + 1)
@@ -39,19 +41,19 @@ function ImportPageBody() {
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Import contracts</h1>
+        <h1 className="text-xl font-semibold text-foreground">{t("title")}</h1>
         <p className="text-sm text-muted-foreground">
-          Migrate your existing contracts into Aakd from spreadsheets, PandaDoc, ContractBook, DocuSign CLM, or any tool that can export files.
+          {t("subtitle")}
         </p>
       </div>
 
       <Tabs defaultValue={defaultTab}>
         <TabsList>
-          <TabsTrigger value="csv">Spreadsheet (CSV)</TabsTrigger>
-          <TabsTrigger value="batch">Batch Files</TabsTrigger>
-          <TabsTrigger value="gdrive">Google Drive</TabsTrigger>
-          <TabsTrigger value="pandadoc">PandaDoc</TabsTrigger>
-          <TabsTrigger value="clm">CLM Export</TabsTrigger>
+          <TabsTrigger value="csv">{t("tabs.csv")}</TabsTrigger>
+          <TabsTrigger value="batch">{t("tabs.batch")}</TabsTrigger>
+          <TabsTrigger value="gdrive">{t("tabs.gdrive")}</TabsTrigger>
+          <TabsTrigger value="pandadoc">{t("tabs.pandadoc")}</TabsTrigger>
+          <TabsTrigger value="clm">{t("tabs.clm")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="csv" className="mt-4">

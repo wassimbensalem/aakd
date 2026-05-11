@@ -30,6 +30,8 @@ import {
   Pen,
   Pencil,
   Loader2,
+  User,
+  Shield,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,7 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -136,6 +138,119 @@ function SigningStatusBadge({ status }: { status: SigningStatus }) {
     >
       {SIGNING_STATUS_LABELS[status]}
     </span>
+  )
+}
+
+// ─── Reviewer Picker ─────────────────────────────────────────────────────────
+
+function ReviewerPicker({
+  value,
+  members,
+  currentUserId,
+  onChange,
+}: {
+  value: string
+  members: OrgMember[]
+  currentUserId?: string
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const eligible = members.filter((m) => m.userId !== currentUserId)
+  const selected = eligible.find((m) => m.userId === value) ?? null
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(e: PointerEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointer)
+    return () => document.removeEventListener("pointerdown", onPointer)
+  }, [open])
+
+  function initials(m: OrgMember) {
+    const name = m.user.name ?? m.user.email
+    return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      {/* Trigger button */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "w-full flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 text-sm transition-all",
+          open
+            ? "border-primary ring-2 ring-primary/20"
+            : "border-input hover:border-muted-foreground/40",
+        )}
+      >
+        {selected ? (
+          <>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+              {initials(selected)}
+            </div>
+            <span className="flex-1 text-left font-medium truncate">
+              {selected.user.name ?? selected.user.email}
+            </span>
+            {selected.user.name && (
+              <span className="text-xs text-muted-foreground hidden sm:block truncate max-w-[140px]">
+                {selected.user.email}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-muted-foreground/30">
+              <User className="h-3.5 w-3.5 text-muted-foreground/40" />
+            </div>
+            <span className="flex-1 text-left text-muted-foreground">Choose a reviewer…</span>
+          </>
+        )}
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-150",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-[60] bg-background border border-border rounded-lg shadow-lg overflow-hidden">
+          <div className="max-h-52 overflow-y-auto">
+            {eligible.length === 0 ? (
+              <p className="px-3 py-4 text-sm text-center text-muted-foreground">
+                No other members in this organization.
+              </p>
+            ) : (
+              eligible.map((m) => (
+                <button
+                  key={m.userId}
+                  type="button"
+                  onClick={() => { onChange(m.userId); setOpen(false) }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors"
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                    {initials(m)}
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="font-medium truncate">{m.user.name ?? m.user.email}</p>
+                    {m.user.name && (
+                      <p className="text-xs text-muted-foreground truncate">{m.user.email}</p>
+                    )}
+                  </div>
+                  {value === m.userId && (
+                    <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1752,51 +1867,66 @@ export default function ContractDetailPage() {
 
       {/* Request Approval Dialog */}
       <Dialog open={approvalOpen} onOpenChange={(open) => { setApprovalOpen(open); if (!open) setApprovalRequired(true) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Request Approval</DialogTitle>
-          </DialogHeader>
-          <div className="mt-2 space-y-4">
-            <div className="space-y-1.5">
-              <Label>Reviewer</Label>
-              <Select value={approvalAssigneeId} onValueChange={(v) => setApprovalAssigneeId(v ?? "")}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select reviewer...">
-                    {approvalAssigneeId
-                      ? (() => {
-                          const m = members.find((m) => m.userId === approvalAssigneeId)
-                          return m ? `${m.user.name} (${m.user.email})` : "Select reviewer..."
-                        })()
-                      : "Select reviewer..."}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {members
-                    .filter((m) => m.userId !== session?.user?.id)
-                    .map((m) => (
-                      <SelectItem key={m.userId} value={m.userId}>
-                        {m.user.name} ({m.user.email})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+        <DialogContent className="sm:max-w-md gap-0 p-0 overflow-visible" showCloseButton={false}>
+
+          {/* ── Header ────────────────────────────────────────────── */}
+          <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-border">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Shield className="h-[18px] w-[18px] text-primary" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Message (optional)</Label>
-              <Textarea
-                rows={3}
-                placeholder="Any notes for the reviewer..."
-                value={approvalMessage}
-                onChange={(e) => setApprovalMessage(e.target.value)}
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-[15px] font-semibold">Request Approval</DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Ask a team member to review and approve this contract.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setApprovalOpen(false); setApprovalRequired(true) }}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0 mt-0.5"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* ── Body ──────────────────────────────────────────────── */}
+          <div className="px-5 py-5 space-y-5">
+
+            {/* Reviewer picker */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70 mb-2">
+                Reviewer <span className="text-rose-400">*</span>
+              </p>
+              <ReviewerPicker
+                value={approvalAssigneeId}
+                members={members}
+                currentUserId={session?.user?.id}
+                onChange={(id) => setApprovalAssigneeId(id)}
               />
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-              <div>
+
+            {/* Message */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70 mb-2">
+                Message <span className="font-normal normal-case tracking-normal text-muted-foreground/50">(optional)</span>
+              </p>
+              <Textarea
+                rows={3}
+                placeholder="Any context or notes for the reviewer…"
+                value={approvalMessage}
+                onChange={(e) => setApprovalMessage(e.target.value)}
+                className="text-sm resize-none"
+              />
+            </div>
+
+            {/* Required approver toggle */}
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-3.5 py-3">
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">Required approver</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
                   {approvalRequired
-                    ? "Must approve before the contract can move forward"
-                    : "FYI only — their decision won't block the workflow"}
+                    ? "Must approve before the contract can move forward."
+                    : "FYI only — their decision won't block the workflow."}
                 </p>
               </div>
               <button
@@ -1805,27 +1935,41 @@ export default function ContractDetailPage() {
                 aria-checked={approvalRequired}
                 onClick={() => setApprovalRequired((v) => !v)}
                 className={cn(
-                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  approvalRequired ? "bg-primary" : "bg-input"
+                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1",
+                  approvalRequired ? "bg-primary" : "bg-input",
                 )}
               >
                 <span
                   className={cn(
-                    "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform",
-                    approvalRequired ? "translate-x-4" : "translate-x-0"
+                    "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-150",
+                    approvalRequired ? "translate-x-4" : "translate-x-0",
                   )}
                 />
               </button>
             </div>
-            <div className="flex gap-3">
-              <Button onClick={requestApproval} disabled={!approvalAssigneeId || requestingApproval}>
-                {requestingApproval ? "Requesting..." : "Request Approval"}
-              </Button>
-              <Button variant="outline" onClick={() => { setApprovalOpen(false); setApprovalRequired(true) }}>
-                Cancel
-              </Button>
-            </div>
           </div>
+
+          {/* ── Footer ────────────────────────────────────────────── */}
+          <DialogFooter className="px-5 py-3.5 gap-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setApprovalOpen(false); setApprovalRequired(true) }}
+              className="min-w-[80px]"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={requestApproval}
+              disabled={!approvalAssigneeId || requestingApproval}
+              className="min-w-[130px]"
+            >
+              {requestingApproval ? "Requesting…" : "Request Approval"}
+            </Button>
+          </DialogFooter>
+
         </DialogContent>
       </Dialog>
     </div>

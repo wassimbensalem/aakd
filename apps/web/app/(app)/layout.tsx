@@ -142,12 +142,14 @@ function Sidebar({
   pathname,
   userName,
   userEmail,
+  userImage,
   orgName,
   onSignOut,
 }: {
   pathname: string
   userName: string
   userEmail: string
+  userImage?: string | null
   orgName: string
   onSignOut: () => void
 }) {
@@ -211,11 +213,15 @@ function Sidebar({
       <div className="px-2 pb-2">
         <div className="bg-background border border-border rounded-md p-2 flex items-center gap-2">
           {/* Avatar */}
-          <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-            <span className="text-[10px] font-bold text-primary">
-              {getInitials(userName || userEmail)}
-            </span>
-          </div>
+          {userImage ? (
+            <img src={userImage} className="h-7 w-7 rounded-full object-cover shrink-0" alt="avatar" />
+          ) : (
+            <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+              <span className="text-[10px] font-bold text-primary">
+                {getInitials(userName || userEmail)}
+              </span>
+            </div>
+          )}
           {/* Info */}
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-xs truncate leading-tight">
@@ -277,6 +283,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const userName = session.user.name ?? ""
   const userEmail = session.user.email ?? ""
+  const userImage = (session.user as { image?: string | null }).image ?? null
   const orgName = activeOrg?.name ?? ""
 
   return (
@@ -285,6 +292,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         pathname={pathname}
         userName={userName}
         userEmail={userEmail}
+        userImage={userImage}
         orgName={orgName}
         onSignOut={() =>
           signOut({ fetchOptions: { onSuccess: () => router.push("/login") } })

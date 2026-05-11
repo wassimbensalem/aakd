@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { z } from "zod"
 
-const USER_SELECT = { id: true, name: true, email: true } as const
+const USER_SELECT = { id: true, name: true, email: true, image: true } as const
 const COMPLETED_BY_SELECT = { id: true, name: true } as const
 
 const ROLES_CAN_WRITE = new Set(["admin", "legal", "member"])
@@ -115,6 +115,7 @@ export async function PATCH(
           data.clauseReference === undefined ? undefined : data.clauseReference,
         priority: data.priority,
         dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+        reminderSentAt: data.dueDate !== undefined ? null : undefined,
         assigneeId:
           data.assigneeId === undefined ? undefined : data.assigneeId,
         reminderDays: data.reminderDays,

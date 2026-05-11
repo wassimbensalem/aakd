@@ -6,6 +6,9 @@ import { z } from "zod"
 
 const UpdateOrgSchema = z.object({
   name: z.string().min(1).max(200).optional(),
+  domain: z.string().max(200).optional(),
+  timezone: z.string().max(100).optional(),
+  industry: z.string().max(100).optional(),
 })
 
 export async function GET(req: Request) {
@@ -18,7 +21,8 @@ export async function GET(req: Request) {
       include: { _count: { select: { members: true } } },
     })
     if (!org) return new Response("Not Found", { status: 404 })
-    return Response.json(org)
+    const meta = org.metadata ? (JSON.parse(org.metadata) as Record<string, unknown>) : {}
+    return Response.json({ ...org, meta })
   })
 }
 
@@ -45,11 +49,25 @@ export async function PATCH(req: Request) {
       return Response.json({ error: parsed.error.flatten() }, { status: 422 })
     }
 
+    const existing = await prisma.organization.findUnique({
+      where: { id: ctx.organizationId },
+      select: { metadata: true },
+    })
+    const meta = existing?.metadata
+      ? (JSON.parse(existing.metadata) as Record<string, unknown>)
+      : {}
+    if (parsed.data.domain !== undefined) meta.domain = parsed.data.domain
+    if (parsed.data.timezone !== undefined) meta.timezone = parsed.data.timezone
+    if (parsed.data.industry !== undefined) meta.industry = parsed.data.industry
+
     const org = await prisma.organization.update({
       where: { id: ctx.organizationId },
-      data: { name: parsed.data.name },
+      data: {
+        ...(parsed.data.name ? { name: parsed.data.name } : {}),
+        metadata: JSON.stringify(meta),
+      },
     })
 
-    return Response.json(org)
+    return Response.json({ ...org, meta })
   })
 }

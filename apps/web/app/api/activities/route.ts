@@ -37,7 +37,7 @@ export async function GET(req: Request) {
       prisma.activity.findMany({
         where,
         include: {
-          user:     { select: { id: true, name: true } },
+          user:     { select: { id: true, name: true, image: true } },
           contract: { select: { id: true, title: true } },
         },
         orderBy: { createdAt: "desc" },

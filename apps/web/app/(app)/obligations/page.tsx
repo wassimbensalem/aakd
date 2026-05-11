@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Plus, Search, Target } from "lucide-react"
+import Link from "next/link"
+import { Search, Target } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +14,7 @@ import type { Obligation, ObligationStatus, ObligationPriority } from "@/compone
 type FlatObligation = Obligation & {
   contractTitle: string
   contractCounterparty: string | null
+  contract: { id: string; title: string; counterpartyName: string | null }
 }
 
 type FilterKey = "All" | "Overdue" | "Due Soon" | "Upcoming" | "Completed"
@@ -53,6 +55,15 @@ function formatDate(dateStr: string): string {
   } catch {
     return "—"
   }
+}
+
+function isThisQuarter(dateStr: string | null): boolean {
+  if (!dateStr) return false
+  const d = new Date(dateStr)
+  const now = new Date()
+  const qStart = new Date(Date.UTC(now.getUTCFullYear(), Math.floor(now.getUTCMonth() / 3) * 3, 1))
+  const qEnd = new Date(Date.UTC(now.getUTCFullYear(), Math.floor(now.getUTCMonth() / 3) * 3 + 3, 1))
+  return d >= qStart && d < qEnd
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -142,34 +153,16 @@ export default function ObligationsPage() {
   useEffect(() => {
     async function load() {
       try {
-        // 1. Fetch contracts
-        const cRes = await fetch("/api/contracts?limit=100")
-        if (!cRes.ok) throw new Error("contracts")
-        const cData = await cRes.json()
-        const contracts: Array<{
-          id: string
-          title: string
-          counterpartyName: string | null
-        }> = cData.contracts ?? cData ?? []
-
-        // 2. Fetch obligations for each contract
-        const results = await Promise.allSettled(
-          contracts.map(async (c) => {
-            const oRes = await fetch(`/api/contracts/${c.id}/obligations`)
-            if (!oRes.ok) return []
-            const data = await oRes.json()
-            const list: Obligation[] = data.obligations ?? data ?? []
-            return list.map((o) => ({
-              ...o,
-              contractTitle: c.title,
-              contractCounterparty: c.counterpartyName,
-            }))
-          }),
-        )
-
-        const flat: FlatObligation[] = results.flatMap((r) =>
-          r.status === "fulfilled" ? r.value : [],
-        )
+        const res = await fetch("/api/obligations")
+        if (!res.ok) throw new Error("obligations")
+        const data = await res.json()
+        const list: Array<Obligation & { contract: { id: string; title: string; counterpartyName: string | null } }> =
+          data.obligations ?? []
+        const flat: FlatObligation[] = list.map((o) => ({
+          ...o,
+          contractTitle: o.contract.title,
+          contractCounterparty: o.contract.counterpartyName,
+        }))
         setObligations(flat)
       } catch {
         toast.error("Failed to load obligations")
@@ -193,9 +186,12 @@ export default function ObligationsPage() {
     const upcoming = obligations.filter(
       (o) =>
         (o.status === "PENDING" || o.status === "IN_PROGRESS") &&
-        new Date(o.dueDate) > d7,
+        new Date(o.dueDate) > d7 &&
+        new Date(o.dueDate) <= new Date(now.getTime() + 60 * 86_400_000),
     ).length
-    const completed = obligations.filter((o) => o.status === "COMPLETED").length
+    const completed = obligations.filter(
+      (o) => o.status === "COMPLETED" && isThisQuarter(o.completedAt),
+    ).length
     return { overdue, dueSoon, upcoming, completed }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [obligations])
@@ -216,7 +212,8 @@ export default function ObligationsPage() {
       list = list.filter(
         (o) =>
           (o.status === "PENDING" || o.status === "IN_PROGRESS") &&
-          new Date(o.dueDate) > d7,
+          new Date(o.dueDate) > d7 &&
+          new Date(o.dueDate) <= new Date(now.getTime() + 60 * 86_400_000),
       )
     } else if (activeFilter === "Completed") {
       list = list.filter((o) => o.status === "COMPLETED")
@@ -249,14 +246,12 @@ export default function ObligationsPage() {
             Track and manage contractual obligations and deadlines.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => toast.info("Add Obligation is available from within a contract.")}
-          className="inline-flex items-center gap-1.5 h-[34px] px-3 text-[13px] font-medium rounded-[var(--radius)] bg-primary text-primary-foreground transition-opacity hover:opacity-90"
+        <Link
+          href="/contracts"
+          className="inline-flex items-center gap-1.5 h-[34px] px-3 text-[13px] font-medium rounded-[var(--radius)] border border-border bg-background text-foreground transition-colors hover:bg-muted"
         >
-          <Plus className="h-3.5 w-3.5" />
-          Add Obligation
-        </button>
+          Go to Contracts
+        </Link>
       </div>
 
       <div className="flex-1 overflow-y-auto px-7 py-5 space-y-5">
@@ -385,11 +380,20 @@ export default function ObligationsPage() {
                       <td className="px-3 py-2.5">
                         {assigneeInitials ? (
                           <div className="flex items-center gap-2">
-                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
-                              <span style={{ fontSize: "9px", fontWeight: 700 }}>
-                                {assigneeInitials}
-                              </span>
-                            </div>
+                            {ob.assignee?.image ? (
+                              <img
+                                src={ob.assignee.image}
+                                className="w-full h-full object-cover rounded-full"
+                                alt={assigneeName ?? ""}
+                                style={{ width: "24px", height: "24px" }}
+                              />
+                            ) : (
+                              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                                <span style={{ fontSize: "9px", fontWeight: 700 }}>
+                                  {assigneeInitials}
+                                </span>
+                              </div>
+                            )}
                             <span className="text-foreground/80">
                               {assigneeName ?? "—"}
                             </span>

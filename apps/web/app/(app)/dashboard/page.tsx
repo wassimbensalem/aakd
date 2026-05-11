@@ -241,11 +241,21 @@ export default function DashboardPage() {
                       <td className="px-3 py-2.5"><ContractStatusBadge status={c.status} /></td>
                       <td className="px-3 py-2.5">
                         {c.owner && (
-                          <div title={c.owner.name || c.owner.email}
-                            className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-primary/12 text-primary shrink-0"
-                            style={{ fontSize: "9px", fontWeight: 700 }}>
-                            {getInitials(c.owner.name || c.owner.email)}
-                          </div>
+                          c.owner.image ? (
+                            <img
+                              src={c.owner.image}
+                              className="w-full h-full object-cover rounded-full"
+                              alt={c.owner.name || c.owner.email}
+                              title={c.owner.name || c.owner.email}
+                              style={{ width: "22px", height: "22px" }}
+                            />
+                          ) : (
+                            <div title={c.owner.name || c.owner.email}
+                              className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-primary/12 text-primary shrink-0"
+                              style={{ fontSize: "9px", fontWeight: 700 }}>
+                              {getInitials(c.owner.name || c.owner.email)}
+                            </div>
+                          )
                         )}
                       </td>
                     </tr>

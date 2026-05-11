@@ -59,7 +59,7 @@ interface ActivityItem {
   actorLabel: string
   detail: string | null
   createdAt: string
-  user: { id: string; name: string } | null
+  user: { id: string; name: string; image?: string | null } | null
   contract: { id: string; title: string } | null
 }
 
@@ -255,9 +255,18 @@ export default function AuditLogPage() {
                       {/* Actor */}
                       <td className="py-3 px-4 text-[13px]">
                         <div className="flex items-center gap-2">
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold shrink-0">
-                            {getInitials(displayName)}
-                          </span>
+                          {entry.user?.image ? (
+                            <img
+                              src={entry.user.image}
+                              className="w-full h-full object-cover rounded-full"
+                              alt={displayName}
+                              style={{ width: "24px", height: "24px" }}
+                            />
+                          ) : (
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold shrink-0">
+                              {getInitials(displayName)}
+                            </span>
+                          )}
                           <span className="text-foreground">{displayName}</span>
                         </div>
                       </td>

@@ -50,9 +50,11 @@ function getInitials(name: string): string {
 function StepAvatar({
   status,
   name,
+  image,
 }: {
   status: "approved" | "pending" | "waiting" | "rejected"
   name: string
+  image?: string | null
 }) {
   if (status === "approved") {
     return (
@@ -73,7 +75,11 @@ function StepAvatar({
   if (status === "pending") {
     return (
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 ring-2 ring-amber-300">
-        <span className="text-sm font-bold text-amber-800">{getInitials(name)}</span>
+        {image ? (
+          <img src={image} className="w-full h-full object-cover rounded-full" alt={name} />
+        ) : (
+          <span className="text-sm font-bold text-amber-800">{getInitials(name)}</span>
+        )}
       </div>
     )
   }
@@ -81,7 +87,11 @@ function StepAvatar({
   // waiting
   return (
     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted ring-2 ring-border">
-      <span className="text-sm font-bold text-muted-foreground">{getInitials(name)}</span>
+      {image ? (
+        <img src={image} className="w-full h-full object-cover rounded-full" alt={name} />
+      ) : (
+        <span className="text-sm font-bold text-muted-foreground">{getInitials(name)}</span>
+      )}
     </div>
   )
 }
@@ -350,6 +360,7 @@ export default function ApprovalPage() {
                         <StepAvatar
                           status={stepStatus}
                           name={approval.assignedTo?.name ?? "Approver"}
+                          image={approval.assignedTo?.image}
                         />
 
                         <div className="flex-1 min-w-0 pb-1">

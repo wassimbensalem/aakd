@@ -7,7 +7,7 @@ import { ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useActiveOrganization } from "@/lib/auth/client"
+import { useActiveOrganization, organization } from "@/lib/auth/client"
 
 type AIStatus = { provider: string | null; model: string | null }
 
@@ -53,6 +53,18 @@ export default function OrgSettingsPage() {
   }, [activeOrg])
 
   useEffect(() => {
+    fetch("/api/org")
+      .then((r) => r.json())
+      .then((data: { name?: string; meta?: Record<string, unknown> }) => {
+        if (data.name) setName(data.name)
+        if (data.meta?.domain) setDomain(data.meta.domain as string)
+        if (data.meta?.timezone) setTimezone(data.meta.timezone as string)
+        if (data.meta?.industry) setIndustry(data.meta.industry as string)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
     fetch("/api/ai-status")
       .then((r) => r.json())
       .then((data: AIStatus) => setAiStatus(data))
@@ -86,6 +98,9 @@ export default function OrgSettingsPage() {
       })
       if (!res.ok) throw new Error("Failed to update")
       toast.success("Organization updated")
+      if (activeOrg?.id) {
+        await organization.setActive({ organizationId: activeOrg.id }).catch(() => {})
+      }
     } catch {
       toast.error("Failed to update organization")
     } finally {

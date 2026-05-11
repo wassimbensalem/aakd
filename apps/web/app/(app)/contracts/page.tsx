@@ -415,13 +415,23 @@ export default function ContractsPage() {
 
                     {/* ── Owner avatar ───────────────────────────────────── */}
                     <TableCell className="py-2">
-                      <div
-                        title={c.owner?.name ?? c.ownerId}
-                        className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
-                        style={{ fontSize: 9, fontWeight: 700 }}
-                      >
-                        {ownerInitials(c.owner?.name)}
-                      </div>
+                      {c.owner?.image ? (
+                        <img
+                          src={c.owner.image}
+                          className="w-full h-full object-cover rounded-full"
+                          alt={c.owner?.name ?? c.ownerId}
+                          title={c.owner?.name ?? c.ownerId}
+                          style={{ width: "22px", height: "22px" }}
+                        />
+                      ) : (
+                        <div
+                          title={c.owner?.name ?? c.ownerId}
+                          className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                          style={{ fontSize: 9, fontWeight: 700 }}
+                        >
+                          {ownerInitials(c.owner?.name)}
+                        </div>
+                      )}
                     </TableCell>
 
                     {/* ── Row menu ───────────────────────────────────────── */}

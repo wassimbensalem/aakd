@@ -73,7 +73,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         signingStatus: true,
         createdAt: true,
         updatedAt: true,
-        owner: { select: { id: true, name: true, email: true } },
+        owner: { select: { id: true, name: true, email: true, image: true } },
         tags: true,
         folder: true,
         files: {
@@ -202,7 +202,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           tags: tagIds !== undefined ? { set: tagIds.map((id) => ({ id })) } : undefined,
         },
         include: {
-          owner: { select: { id: true, name: true, email: true } },
+          owner: { select: { id: true, name: true, email: true, image: true } },
           tags: true,
           folder: true,
         },

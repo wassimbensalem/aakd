@@ -20,7 +20,7 @@ export interface Obligation {
   priority: ObligationPriority
   status: ObligationStatus
   dueDate: string
-  assignee: { id: string; name: string; email: string } | null
+  assignee: { id: string; name: string; email: string; image?: string | null } | null
   reminderDays: number
   reminderSentAt: string | null
   completedAt: string | null

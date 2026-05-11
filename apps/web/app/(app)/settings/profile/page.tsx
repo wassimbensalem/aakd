@@ -1,12 +1,31 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "sonner"
-import { Lock, Monitor } from "lucide-react"
+import { Lock, Monitor, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
-import { useSession } from "@/lib/auth/client"
+import { authClient, useSession } from "@/lib/auth/client"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DICEBEAR_SEEDS = [
+  "Biscuit", "Noodle", "Mochi", "Boba",
+  "Waffles", "Dumpling", "Cookie", "Pretzel",
+  "Nacho", "Croissant", "Tapioca", "Pancake",
+]
+
+function dicebearUrl(seed: string): string {
+  return `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffdfbf`
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,6 +58,172 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
+// ─── Avatar display ───────────────────────────────────────────────────────────
+
+function AvatarDisplay({
+  imageUrl,
+  initials,
+  isPending,
+}: {
+  imageUrl: string | null | undefined
+  initials: string
+  isPending: boolean
+}) {
+  if (!isPending && imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt="Avatar"
+        className="w-20 h-20 rounded-full object-cover"
+      />
+    )
+  }
+  return (
+    <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-2xl font-bold select-none">
+      {isPending ? "?" : initials}
+    </div>
+  )
+}
+
+// ─── Avatar picker modal ──────────────────────────────────────────────────────
+
+function AvatarPickerDialog({
+  open,
+  onOpenChange,
+  currentImage,
+  onApply,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  currentImage: string | null | undefined
+  onApply: (url: string) => Promise<void>
+}) {
+  const [pendingImage, setPendingImage] = useState<string | null>(currentImage ?? null)
+  const [uploading, setUploading] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Sync when dialog opens
+  useEffect(() => {
+    if (open) setPendingImage(currentImage ?? null)
+  }, [open, currentImage])
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append("file", file)
+      const res = await fetch("/api/user/avatar", { method: "POST", body: form })
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string }
+        toast.error(data.error ?? "Upload failed")
+        return
+      }
+      const data = (await res.json()) as { url: string }
+      setPendingImage(data.url)
+    } catch {
+      toast.error("Upload failed")
+    } finally {
+      setUploading(false)
+      // Reset so the same file can be re-selected if needed
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  async function handleApply() {
+    if (!pendingImage) return
+    setApplying(true)
+    try {
+      await onApply(pendingImage)
+      onOpenChange(false)
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Choose Avatar</DialogTitle>
+        </DialogHeader>
+
+        {/* Section A: Presets */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Presets</p>
+          <div className="grid grid-cols-6 gap-2">
+            {DICEBEAR_SEEDS.map((seed) => {
+              const url = dicebearUrl(seed)
+              const isSelected = pendingImage === url
+              return (
+                <button
+                  key={seed}
+                  type="button"
+                  onClick={() => setPendingImage(url)}
+                  className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    isSelected
+                      ? "ring-2 ring-primary border-primary"
+                      : "border-transparent hover:border-muted-foreground/30"
+                  }`}
+                  title={seed}
+                >
+                  <img src={url} alt={seed} className="w-full h-full" />
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Section B: Upload */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Upload your own</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="gap-2"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {uploading ? "Uploading…" : "Choose file"}
+          </Button>
+          <p className="text-[11px] text-muted-foreground">JPEG, PNG, WebP, GIF — max 5 MB</p>
+          {pendingImage && !DICEBEAR_SEEDS.map(dicebearUrl).includes(pendingImage) && (
+            <div className="flex items-center gap-2 mt-1">
+              <img
+                src={pendingImage}
+                alt="Preview"
+                className="w-10 h-10 rounded-full object-cover ring-2 ring-primary"
+              />
+              <span className="text-xs text-muted-foreground">Custom upload</span>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            size="sm"
+            disabled={!pendingImage || applying}
+            onClick={handleApply}
+          >
+            {applying ? "Applying…" : "Apply"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
@@ -50,6 +235,9 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("")
   const [jobTitle, setJobTitle] = useState("")
   const [department, setDepartment] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
 
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [currentPassword, setCurrentPassword] = useState("")
@@ -64,8 +252,30 @@ export default function ProfilePage() {
     setEmail(session.user.email ?? "")
   }, [session])
 
-  function handleSave() {
-    toast.success("Saved!")
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const name = `${firstName} ${lastName}`.trim()
+      const result = await authClient.updateUser({ name })
+      if (result.error) {
+        toast.error(result.error.message ?? "Failed to save changes")
+      } else {
+        toast.success("Profile saved")
+      }
+    } catch {
+      toast.error("Failed to save changes")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleApplyAvatar(imageUrl: string) {
+    const result = await authClient.updateUser({ image: imageUrl })
+    if (result.error) {
+      toast.error(result.error.message ?? "Failed to update avatar")
+    } else {
+      toast.success("Avatar updated")
+    }
   }
 
   function handleUpdatePassword(e: React.FormEvent) {
@@ -80,6 +290,7 @@ export default function ProfilePage() {
   const initials = session?.user?.name ? getInitials(session.user.name) : "?"
   const displayName = session?.user?.name ?? "—"
   const displayEmail = session?.user?.email ?? "—"
+  const currentImage = session?.user?.image
 
   return (
     <div className="flex flex-col h-full">
@@ -97,16 +308,17 @@ export default function ProfilePage() {
         {/* Profile header */}
         <div className="flex items-center gap-5">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-2xl font-bold select-none">
-              {isPending ? "?" : initials}
-            </div>
+            <AvatarDisplay
+              imageUrl={currentImage}
+              initials={isPending ? "?" : initials}
+              isPending={isPending}
+            />
             <div className="mt-2">
               <Button
                 variant="outline"
                 size="sm"
-                disabled
-                className="opacity-50 text-xs"
-                title="Soon"
+                className="text-xs"
+                onClick={() => setAvatarPickerOpen(true)}
               >
                 Change Avatar
               </Button>
@@ -178,8 +390,8 @@ export default function ProfilePage() {
             </div>
           </div>
           <div className="flex justify-end mt-5">
-            <Button onClick={handleSave} size="sm">
-              Save Changes
+            <Button onClick={handleSave} size="sm" disabled={saving}>
+              {saving ? "Saving…" : "Save Changes"}
             </Button>
           </div>
         </SectionCard>
@@ -282,6 +494,14 @@ export default function ProfilePage() {
           </div>
         </SectionCard>
       </div>
+
+      {/* Avatar picker dialog */}
+      <AvatarPickerDialog
+        open={avatarPickerOpen}
+        onOpenChange={setAvatarPickerOpen}
+        currentImage={currentImage}
+        onApply={handleApplyAvatar}
+      />
     </div>
   )
 }

@@ -64,7 +64,7 @@ export async function GET(req: Request) {
       prisma.contract.findMany({
         where,
         include: {
-          owner: { select: { id: true, name: true, email: true } },
+          owner: { select: { id: true, name: true, email: true, image: true } },
           tags: true,
           folder: true,
           crmLinks: { select: { provider: true } },
@@ -149,7 +149,7 @@ export async function POST(req: Request) {
       // organizationId is injected by the Prisma middleware from AsyncLocalStorage.
       data,
       include: {
-        owner: { select: { id: true, name: true, email: true } },
+        owner: { select: { id: true, name: true, email: true, image: true } },
         tags: true,
         folder: true,
       },

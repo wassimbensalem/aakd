@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { Search, Target } from "lucide-react"
+import { Search, Target, CalendarDays, User, Flag, BookOpen, Bell, Square, CheckSquare, FileText, X } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 import type { Obligation, ObligationStatus, ObligationPriority } from "@/components/obligations/types"
 
@@ -142,6 +144,192 @@ function StatusBadge({
   )
 }
 
+// ─── Obligation Detail Sheet ──────────────────────────────────────────────────
+
+function ObligationDetailSheet({
+  obligation,
+  onClose,
+}: {
+  obligation: FlatObligation | null
+  onClose: () => void
+}) {
+  const ob = obligation
+  if (!ob) return null
+
+  const overdue = isOverdue(ob.dueDate, ob.status)
+  const assigneeName = ob.assignee?.name ?? null
+  const assigneeInitials = assigneeName
+    ? getInitials(assigneeName)
+    : ob.assignee?.id
+    ? ob.assignee.id.slice(0, 2).toUpperCase()
+    : null
+
+  return (
+    <Sheet open={!!obligation} onOpenChange={(open) => { if (!open) onClose() }}>
+      <SheetContent side="right" className="sm:max-w-md flex flex-col gap-0 p-0">
+        {/* Header */}
+        <div className="flex flex-col gap-3 px-5 pt-5 pb-4 border-b border-border">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-lg font-semibold leading-snug">{ob.title}</p>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 -mt-1 -mr-1"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <StatusBadge status={ob.status} dueDate={ob.dueDate} />
+            <PriorityBadge priority={ob.priority} />
+          </div>
+        </div>
+
+        {/* Detail rows */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/* Contract */}
+          <div className="flex items-start gap-3">
+            <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <Link
+                href={`/contracts/${ob.contract.id}?tab=obligations`}
+                className="text-sm font-medium text-primary hover:underline truncate block"
+              >
+                {ob.contractTitle}
+              </Link>
+              {ob.contractCounterparty && (
+                <span className="text-xs text-muted-foreground">{ob.contractCounterparty}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Due date */}
+          <div className="flex items-start gap-3">
+            <CalendarDays className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <span
+              className={cn(
+                "text-sm tabular-nums",
+                overdue ? "text-destructive font-semibold" : "text-foreground",
+              )}
+            >
+              {formatDate(ob.dueDate)}
+              {overdue && (
+                <span className="ml-1.5 text-xs font-normal text-destructive">
+                  (Overdue)
+                </span>
+              )}
+            </span>
+          </div>
+
+          {/* Assignee */}
+          <div className="flex items-start gap-3">
+            <User className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            {assigneeInitials ? (
+              <div className="flex items-center gap-2">
+                {ob.assignee?.image ? (
+                  <img
+                    src={ob.assignee.image}
+                    className="w-6 h-6 rounded-full object-cover"
+                    alt={assigneeName ?? ""}
+                  />
+                ) : (
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                    <span style={{ fontSize: "9px", fontWeight: 700 }}>
+                      {assigneeInitials}
+                    </span>
+                  </div>
+                )}
+                <span className="text-sm text-foreground">{assigneeName}</span>
+              </div>
+            ) : (
+              <span className="text-sm text-muted-foreground">Unassigned</span>
+            )}
+          </div>
+
+          {/* Priority */}
+          <div className="flex items-start gap-3">
+            <Flag className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <PriorityBadge priority={ob.priority} />
+          </div>
+
+          {/* Clause reference */}
+          <div className="flex items-start gap-3">
+            <BookOpen className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <span className="text-sm text-foreground">
+              {ob.clauseReference ?? "—"}
+            </span>
+          </div>
+
+          {/* Reminder */}
+          <div className="flex items-start gap-3">
+            <Bell className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <span className="text-sm text-foreground">
+              {ob.reminderDays > 0 ? `${ob.reminderDays} days before due` : "None"}
+            </span>
+          </div>
+
+          {/* Description */}
+          {ob.description && (
+            <div className="pt-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                Description
+              </p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{ob.description}</p>
+            </div>
+          )}
+
+          {/* Sub-tasks */}
+          {ob.subTasks.length > 0 && (
+            <div className="pt-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                Sub-tasks
+                <span className="inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                  {ob.subTasks.length}
+                </span>
+              </p>
+              <ul className="space-y-1.5">
+                {ob.subTasks.map((st) => (
+                  <li key={st.id} className="flex items-center gap-2">
+                    {st.isCompleted ? (
+                      <CheckSquare className="h-4 w-4 text-success shrink-0" />
+                    ) : (
+                      <Square className="h-4 w-4 text-muted-foreground shrink-0" />
+                    )}
+                    <span
+                      className={cn(
+                        "text-sm",
+                        st.isCompleted
+                          ? "line-through text-muted-foreground"
+                          : "text-foreground",
+                      )}
+                    >
+                      {st.title}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-border pt-4 mt-4 px-5 pb-5 space-y-3">
+          <Link
+            href={`/contracts/${ob.contract.id}?tab=obligations`}
+            className="flex items-center justify-center w-full h-9 rounded-[var(--radius)] border border-border bg-background text-sm font-medium hover:bg-muted transition-colors"
+          >
+            Open in Contract →
+          </Link>
+          <p className="text-xs text-muted-foreground text-center">
+            Created by {ob.createdBy.name} · {formatDate(ob.createdAt)}
+          </p>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ObligationsPage() {
@@ -149,6 +337,7 @@ export default function ObligationsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [activeFilter, setActiveFilter] = useState<FilterKey>("All")
+  const [selected, setSelected] = useState<FlatObligation | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -359,7 +548,8 @@ export default function ObligationsPage() {
                   return (
                     <tr
                       key={ob.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
+                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer"
+                      onClick={() => setSelected(ob)}
                     >
                       {/* Obligation */}
                       <td className="px-3 py-2.5 font-medium max-w-[220px]">
@@ -429,6 +619,8 @@ export default function ObligationsPage() {
           </div>
         )}
       </div>
+
+      <ObligationDetailSheet obligation={selected} onClose={() => setSelected(null)} />
     </div>
   )
 }

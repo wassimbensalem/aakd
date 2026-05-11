@@ -863,6 +863,13 @@ async function syncDocuSealContract(contract: SyncableContract) {
       where: { id: contract.id },
       data: { signingStatus },
     })
+    // Fire declined/expired notification — mirrors what the webhook handler does.
+    // This path runs when DocuSeal can't reach the webhook (e.g. local dev behind NAT).
+    if (signingStatus === "declined" || signingStatus === "expired") {
+      await enqueueNotification("contract.signing_declined", contract.id, null, {
+        signingStatus,
+      })
+    }
     return
   }
 

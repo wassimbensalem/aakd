@@ -7,7 +7,7 @@ import { z } from "zod"
 const USER_SELECT = { id: true, name: true, email: true, image: true } as const
 const COMPLETED_BY_SELECT = { id: true, name: true } as const
 
-const ROLES_CAN_WRITE = new Set(["admin", "legal", "member"])
+const ROLES_CAN_WRITE = new Set(["owner", "admin", "legal", "member"])
 
 const OBLIGATION_INCLUDE = {
   assignee: { select: USER_SELECT },

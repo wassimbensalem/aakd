@@ -4,7 +4,7 @@ import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 
-const ROLES_CAN_WRITE = new Set(["admin", "legal", "member"])
+const ROLES_CAN_WRITE = new Set(["owner", "admin", "legal", "member"])
 
 const OBLIGATION_EXTRACTION_PROMPT = `You are a contract analysis assistant. Identify all obligations, commitments, deliverables, and deadlines in this contract.
 

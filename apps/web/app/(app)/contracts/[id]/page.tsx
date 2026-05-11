@@ -1584,14 +1584,12 @@ export default function ContractDetailPage() {
 
 
         {/* Editor */}
-        <TabsContent value="editor" className="flex-1 overflow-auto m-0 border-0">
-          <div className="p-7">
-            <EditorTab
-              contractId={contract.id}
-              contractStatus={contract.status}
-              role={currentMember?.role ?? "member"}
-            />
-          </div>
+        <TabsContent value="editor" className="flex-1 overflow-hidden m-0 border-0 flex flex-col">
+          <EditorTab
+            contractId={contract.id}
+            contractStatus={contract.status}
+            role={currentMember?.role ?? "member"}
+          />
         </TabsContent>
 
         {/* Obligations */}

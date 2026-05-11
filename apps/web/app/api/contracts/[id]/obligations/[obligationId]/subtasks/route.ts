@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/client"
 import { z } from "zod"
 
 const COMPLETED_BY_SELECT = { id: true, name: true } as const
-const ROLES_CAN_WRITE = new Set(["admin", "legal", "member"])
+const ROLES_CAN_WRITE = new Set(["owner", "admin", "legal", "member"])
 
 const CreateSubTaskSchema = z.object({
   title: z.string().min(1).max(200),

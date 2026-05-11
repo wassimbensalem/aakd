@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { X, CalendarDays, User, Tag, Bell, AlignLeft, Type } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -13,12 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { cn } from "@/lib/utils"
 import type { Obligation, ObligationPriority } from "./types"
 import type { OrgMember } from "@/lib/types"
 
@@ -66,6 +62,24 @@ function obligationToForm(o: Obligation): FormState {
   }
 }
 
+const PRIORITY_OPTIONS: { value: ObligationPriority; label: string; colors: string }[] = [
+  { value: "LOW",    label: "Low",    colors: "border-emerald-200 bg-emerald-50 text-emerald-700 data-[active=true]:bg-emerald-100 data-[active=true]:border-emerald-400" },
+  { value: "MEDIUM", label: "Medium", colors: "border-amber-200 bg-amber-50 text-amber-700 data-[active=true]:bg-amber-100 data-[active=true]:border-amber-400" },
+  { value: "HIGH",   label: "High",   colors: "border-rose-200 bg-rose-50 text-rose-700 data-[active=true]:bg-rose-100 data-[active=true]:border-rose-400" },
+]
+
+function FieldLabel({ icon: Icon, label, required }: { icon: React.ElementType; label: string; required?: boolean }) {
+  return (
+    <div className="flex items-center gap-1.5 mb-1.5">
+      <Icon className="h-3.5 w-3.5 text-muted-foreground/60" />
+      <span className="text-xs font-medium text-muted-foreground">
+        {label}
+        {required && <span className="ml-0.5 text-rose-400">*</span>}
+      </span>
+    </div>
+  )
+}
+
 export function ObligationSheet({
   open,
   onOpenChange,
@@ -98,9 +112,6 @@ export function ObligationSheet({
 
     setSaving(true)
     try {
-      // Send midnight UTC of the chosen date so server-side `z.string().datetime()`
-      // accepts it. Free-text fields collapse to undefined when empty so PATCH
-      // doesn't overwrite an existing value with a blank string.
       const body: Record<string, unknown> = {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
@@ -116,7 +127,6 @@ export function ObligationSheet({
         : `/api/contracts/${contractId}/obligations`
       const method = obligation ? "PATCH" : "POST"
 
-      // PATCH uses `null` to clear an assignee; POST uses `undefined` to skip it.
       if (obligation && form.assigneeId === UNASSIGNED) body.assigneeId = null
 
       const res = await fetch(url, {
@@ -148,130 +158,181 @@ export function ObligationSheet({
     }
   }
 
+  const isEditing = obligation !== null
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>{obligation ? "Edit Obligation" : "New Obligation"}</SheetTitle>
-        </SheetHeader>
+      <SheetContent className="flex flex-col w-full gap-0 p-0 sm:max-w-md">
 
-        <div className="mt-6 space-y-4 px-1 pb-2">
-          <div className="space-y-1.5">
-            <Label>Title</Label>
+        {/* ── Header ─────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {isEditing ? "Edit Obligation" : "New Obligation"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isEditing ? "Update the details below" : "Track a commitment or deliverable"}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* ── Body ───────────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {/* Title */}
+          <div>
+            <FieldLabel icon={Type} label="Title" required />
             <Input
               value={form.title}
               maxLength={300}
               onChange={(e) => update("title", e.target.value)}
-              placeholder="e.g. Pay Q2 invoice"
+              placeholder="e.g. Submit quarterly compliance report"
+              className="text-sm"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Description</Label>
+          {/* Description */}
+          <div>
+            <FieldLabel icon={AlignLeft} label="Description" />
             <Textarea
               rows={3}
               value={form.description}
               maxLength={2000}
               onChange={(e) => update("description", e.target.value)}
               placeholder="Optional context for whoever owns this obligation"
+              className="text-sm resize-none"
             />
           </div>
 
+          {/* Priority — pill toggle */}
+          <div>
+            <FieldLabel icon={Tag} label="Priority" />
+            <div className="flex gap-2">
+              {PRIORITY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  data-active={form.priority === opt.value}
+                  onClick={() => update("priority", opt.value)}
+                  className={cn(
+                    "flex-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-all",
+                    opt.colors,
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-border" />
+
+          {/* Due date + Reminder */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Due Date</Label>
+            <div>
+              <FieldLabel icon={CalendarDays} label="Due Date" required />
               <Input
                 type="date"
                 value={form.dueDate}
                 onChange={(e) => update("dueDate", e.target.value)}
+                className="text-sm"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Priority</Label>
+            <div>
+              <FieldLabel icon={Bell} label="Remind me" />
               <Select
-                value={form.priority}
-                onValueChange={(v) => update("priority", v as ObligationPriority)}
+                value={String(form.reminderDays)}
+                onValueChange={(v) => update("reminderDays", Number(v))}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="LOW">Low</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="HIGH">High</SelectItem>
+                  {REMINDER_OPTIONS.map((d) => (
+                    <SelectItem key={d} value={String(d)} className="text-sm">
+                      {d} day{d === 1 ? "" : "s"} before
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {obligation?.reminderSentAt && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sent{" "}
+                  {new Date(obligation.reminderSentAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Assignee</Label>
+          <div className="border-t border-border" />
+
+          {/* Assignee */}
+          <div>
+            <FieldLabel icon={User} label="Assignee" />
             <Select
               value={form.assigneeId}
               onValueChange={(v) => update("assigneeId", v ?? UNASSIGNED)}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full text-sm">
                 <SelectValue placeholder="Unassigned" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                <SelectItem value={UNASSIGNED} className="text-sm">
+                  <span className="text-muted-foreground">Unassigned</span>
+                </SelectItem>
                 {members.map((m) => (
-                  <SelectItem key={m.userId} value={m.userId}>
-                    {m.user.name} ({m.user.email})
+                  <SelectItem key={m.userId} value={m.userId} className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                        {(m.user.name ?? m.user.email).charAt(0).toUpperCase()}
+                      </div>
+                      <span>{m.user.name ?? m.user.email}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Clause Reference</Label>
+          {/* Clause reference */}
+          <div>
+            <FieldLabel icon={Tag} label="Clause Reference" />
             <Input
               value={form.clauseReference}
               maxLength={200}
               onChange={(e) => update("clauseReference", e.target.value)}
               placeholder="e.g. Section 4.2"
+              className="text-sm"
             />
           </div>
-
-          <div className="space-y-1.5">
-            <Label>Reminder</Label>
-            <Select
-              value={String(form.reminderDays)}
-              onValueChange={(v) => update("reminderDays", Number(v))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {REMINDER_OPTIONS.map((d) => (
-                  <SelectItem key={d} value={String(d)}>
-                    {d} day{d === 1 ? "" : "s"} before due
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {obligation?.reminderSentAt && (
-              <p className="text-xs text-muted-foreground">
-                Reminder sent on{" "}
-                {new Date(obligation.reminderSentAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </p>
-            )}
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <Button onClick={save} disabled={saving}>
-              {saving ? "Saving..." : obligation ? "Save Changes" : "Create Obligation"}
-            </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancel
-            </Button>
-          </div>
         </div>
+
+        {/* ── Footer ─────────────────────────────────────────────── */}
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : isEditing ? "Save Changes" : "Create Obligation"}
+          </Button>
+        </div>
+
       </SheetContent>
     </Sheet>
   )

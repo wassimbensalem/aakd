@@ -74,8 +74,8 @@ export function ObligationList({
   const [acceptingIdx, setAcceptingIdx] = useState<number | null>(null)
   const [acceptingAll, setAcceptingAll] = useState(false)
 
-  const canWrite = role === "admin" || role === "legal" || role === "member"
-  const canDelete = role === "admin" || role === "legal"
+  const canWrite = role === "owner" || role === "admin" || role === "legal" || role === "member"
+  const canDelete = role === "owner" || role === "admin" || role === "legal"
   const canCreate = canWrite && !contractArchived
 
   const visible = useMemo(() => {

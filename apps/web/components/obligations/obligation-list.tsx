@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { format, differenceInCalendarDays } from "date-fns"
 import { Check, CheckSquare, Loader2, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react"
+import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -477,7 +478,12 @@ export function ObligationList({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-zinc-900">{ob.title}</p>
+                      <Link
+                        href={`/contracts/${contractId}/obligations/${ob.id}`}
+                        className="text-sm font-semibold text-zinc-900 hover:text-primary hover:underline underline-offset-2 transition-colors"
+                      >
+                        {ob.title}
+                      </Link>
                       <span
                         className={cn(
                           "rounded-full px-2 py-0.5 text-xs font-medium",

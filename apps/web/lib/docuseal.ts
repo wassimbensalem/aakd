@@ -182,6 +182,23 @@ export async function createSubmission(
   }
 
   const data = await res.json()
+
+  // DocuSeal Cloud POST /submissions returns a flat array of submitter objects:
+  //   [{ id: <submitterId>, submission_id: <submissionId>, slug, embed_src, ... }]
+  // Self-hosted returns:
+  //   { id: <submissionId>, submitters: [{ slug, embed_src, ... }] }
+  // Handle both shapes.
+  if (Array.isArray(data)) {
+    const submissionId = (data[0]?.submission_id ?? data[0]?.id) as number
+    return {
+      id: submissionId,
+      submitters: data.map((s: Record<string, unknown>) => ({
+        slug: String(s.slug ?? ""),
+        embed_src: String(s.embed_src ?? ""),
+      })),
+    }
+  }
+
   return {
     id: data.id as number,
     submitters: (data.submitters ?? []) as DocuSealSubmitter[],

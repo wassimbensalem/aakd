@@ -32,7 +32,7 @@ vi.mock("@/lib/storage", () => ({
 }))
 
 vi.mock("@/lib/docuseal", () => ({
-  createTemplate: vi.fn().mockResolvedValue({ id: 42 }),
+  createTemplate: vi.fn().mockResolvedValue({ id: 42, attachmentUuid: null }),
   createSubmission: vi.fn().mockResolvedValue({
     id: 99,
     submitters: [{ slug: "abc123", embed_src: "https://docuseal.com/s/abc123" }],
@@ -192,7 +192,7 @@ describe("POST /api/contracts/[id]/sign", () => {
     } as any)
 
     const { createTemplate, createSubmission } = await import("@/lib/docuseal")
-    vi.mocked(createTemplate).mockResolvedValueOnce({ id: 42 })
+    vi.mocked(createTemplate).mockResolvedValueOnce({ id: 42, attachmentUuid: null })
     vi.mocked(createSubmission).mockResolvedValueOnce({
       id: 99,
       submitters: [{ slug: "abc123", embed_src: "https://docuseal.com/s/abc123" }],

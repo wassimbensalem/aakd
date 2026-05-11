@@ -3,7 +3,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
-import { createTemplate, createSubmission } from "@/lib/docuseal"
+import { createTemplate, addFieldsToTemplate, createSubmission } from "@/lib/docuseal"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 
 // ─── POST /api/contracts/[id]/signing/send ────────────────────────────────────
@@ -103,10 +103,25 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return Response.json({ error: "Failed to create DocuSeal template" }, { status: 500 })
     }
 
+    // ── assign a unique role to each signer ───────────────────────────────────
+    // DocuSeal requires every submitter in a submission to have a distinct role,
+    // and each role must correspond to a field on the template.
+    const signerRoles = signers.map((_, i) => `Signer ${i + 1}`)
+
+    // ── add one signature field per role to the template ─────────────────────
+    // Templates created from a PDF have no fields by default; DocuSeal will
+    // reject a submission on a field-less template with 422.
+    if (template.attachmentUuid) {
+      const fieldsOk = await addFieldsToTemplate(template.id, template.attachmentUuid, signerRoles)
+      if (!fieldsOk) {
+        return Response.json({ error: "Failed to configure signing fields on template" }, { status: 500 })
+      }
+    }
+
     // ── create submission with ALL signers simultaneously ─────────────────────
     const submission = await createSubmission(
       template.id,
-      signers.map((s) => ({ email: s.email, name: s.name })),
+      signers.map((s, i) => ({ email: s.email, name: s.name, role: signerRoles[i] })),
     )
 
     if (!submission) {

@@ -55,7 +55,7 @@ function warnMissing(): null {
 export async function createTemplate(
   name: string,
   pdfBuffer: Buffer,
-): Promise<{ id: number } | null> {
+): Promise<{ id: number; attachmentUuid: string | null } | null> {
   if (!KEY) return warnMissing()
 
   const base64File = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`
@@ -79,7 +79,60 @@ export async function createTemplate(
   }
 
   const data = await res.json()
-  return { id: data.id as number }
+  const attachmentUuid = (data.schema?.[0]?.attachment_uuid ?? null) as string | null
+  return { id: data.id as number, attachmentUuid }
+}
+
+// ─── addFieldsToTemplate ─────────────────────────────────────────────────────
+
+/**
+ * Add one signature field per role to a template.
+ * Must be called before createSubmission — DocuSeal rejects submissions
+ * on templates with no fields.
+ *
+ * Fields are stacked near the bottom-right of the first page,
+ * one per signer role, spaced 8% of page height apart.
+ */
+export async function addFieldsToTemplate(
+  templateId: number,
+  attachmentUuid: string,
+  roles: string[],
+): Promise<boolean> {
+  if (!KEY) return false
+
+  const fields = roles.map((role, i) => ({
+    name: `Signature ${i + 1}`,
+    type: "signature",
+    role,
+    required: true,
+    areas: [
+      {
+        x: 0.55,
+        y: Math.max(0.88 - i * 0.10, 0.05), // stack upward, clamp to top
+        w: 0.38,
+        h: 0.06,
+        page: 0,
+        attachment_uuid: attachmentUuid,
+      },
+    ],
+  }))
+
+  const res = await fetch(`${BASE}/templates/${templateId}`, {
+    method: "PUT",
+    headers: {
+      ...authHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ fields }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    console.error(`[docuseal] addFieldsToTemplate failed: ${res.status} ${text}`)
+    return false
+  }
+
+  return true
 }
 
 // ─── createSubmission ─────────────────────────────────────────────────────────
@@ -101,7 +154,7 @@ export interface DocuSealSubmission {
  */
 export async function createSubmission(
   templateId: number,
-  signers: { email: string; name: string }[],
+  signers: { email: string; name: string; role: string }[],
 ): Promise<DocuSealSubmission | null> {
   if (!KEY) return warnMissing()
 
@@ -117,7 +170,7 @@ export async function createSubmission(
       submitters: signers.map((s) => ({
         email: s.email,
         name: s.name,
-        role: "First Party",
+        role: s.role,
       })),
     }),
   })

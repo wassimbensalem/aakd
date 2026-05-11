@@ -104,7 +104,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     // ── create submission ─────────────────────────────────────────────────────
     const submission = await createSubmission(template.id, [
-      { email: signerEmail, name: signerName },
+      { email: signerEmail, name: signerName, role: "Signer 1" },
     ])
 
     if (!submission) {

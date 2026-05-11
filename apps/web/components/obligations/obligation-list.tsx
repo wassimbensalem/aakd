@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { format, differenceInCalendarDays } from "date-fns"
-import { Check, CheckSquare, Pencil, Plus, Trash2 } from "lucide-react"
+import { Check, CheckSquare, Loader2, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -10,6 +10,14 @@ import { ObligationSheet } from "./obligation-sheet"
 import { SubTaskList } from "./subtask-list"
 import type { Obligation, ObligationStatus } from "./types"
 import type { OrgMember } from "@/lib/types"
+
+interface AISuggestion {
+  title: string
+  description?: string
+  clauseReference?: string
+  priority: "HIGH" | "MEDIUM" | "LOW"
+  suggestedDueDays: number
+}
 
 interface Props {
   contractId: string
@@ -59,6 +67,10 @@ export function ObligationList({
   const [filter, setFilter] = useState<"ALL" | ObligationStatus>("ALL")
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Obligation | null>(null)
+  const [extracting, setExtracting] = useState(false)
+  const [suggestions, setSuggestions] = useState<AISuggestion[]>([])
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set())
+  const [acceptingIdx, setAcceptingIdx] = useState<number | null>(null)
 
   const canWrite = role === "admin" || role === "legal" || role === "member"
   const canDelete = role === "admin" || role === "legal"
@@ -72,6 +84,66 @@ export function ObligationList({
   function openCreate() {
     setEditing(null)
     setSheetOpen(true)
+  }
+
+  async function extractWithAI() {
+    setExtracting(true)
+    setSuggestions([])
+    setDismissedIds(new Set())
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/obligations/extract`, { method: "POST" })
+      if (res.status === 422) {
+        const body = await res.json()
+        if (body.error === "no_extracted_text") {
+          toast.error("Contract text not yet extracted. Upload a PDF or DOCX first.")
+        } else if (body.error === "no_ai_provider") {
+          toast.error("No AI provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
+        } else {
+          toast.error("Could not extract obligations.")
+        }
+        return
+      }
+      if (!res.ok) throw new Error()
+      const { suggestions: s } = await res.json()
+      if (!s || s.length === 0) {
+        toast.info("No obligations found in this contract.")
+        return
+      }
+      setSuggestions(s)
+    } catch {
+      toast.error("Failed to extract obligations.")
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  async function acceptSuggestion(idx: number, s: AISuggestion) {
+    setAcceptingIdx(idx)
+    try {
+      const dueDate = new Date()
+      dueDate.setDate(dueDate.getDate() + s.suggestedDueDays)
+      const res = await fetch(`/api/contracts/${contractId}/obligations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: s.title,
+          description: s.description,
+          clauseReference: s.clauseReference,
+          priority: s.priority,
+          dueDate: dueDate.toISOString(),
+          reminderDays: 7,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const created = await res.json()
+      onChange([...obligations, created])
+      setDismissedIds((prev) => new Set(prev).add(idx))
+      toast.success(`Obligation "${s.title}" created.`)
+    } catch {
+      toast.error("Failed to create obligation.")
+    } finally {
+      setAcceptingIdx(null)
+    }
   }
 
   function openEdit(ob: Obligation) {
@@ -117,7 +189,7 @@ export function ObligationList({
     }
   }
 
-  if (obligations.length === 0) {
+  if (obligations.length === 0 && suggestions.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-12">
         <CheckSquare className="size-10 text-zinc-300" />
@@ -127,12 +199,20 @@ export function ObligationList({
             Track deliverables, payments, and commitments here.
           </p>
         </div>
-        {canCreate && (
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="size-4" />
-            Add Obligation
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canCreate && (
+            <Button size="sm" variant="outline" onClick={extractWithAI} disabled={extracting}>
+              {extracting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {extracting ? "Extracting…" : "Extract with AI"}
+            </Button>
+          )}
+          {canCreate && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="size-4" />
+              Add Obligation
+            </Button>
+          )}
+        </div>
 
         <ObligationSheet
           open={sheetOpen}
@@ -167,13 +247,90 @@ export function ObligationList({
             </button>
           ))}
         </div>
-        {canCreate && (
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="size-4" />
-            Add Obligation
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canCreate && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={extractWithAI}
+              disabled={extracting}
+            >
+              {extracting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Sparkles className="size-4" />
+              )}
+              {extracting ? "Extracting…" : "Extract with AI"}
+            </Button>
+          )}
+          {canCreate && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="size-4" />
+              Add Obligation
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* AI Suggestions Panel */}
+      {suggestions.length > 0 && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-indigo-900">
+              AI found {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""} — review and accept
+            </p>
+            <button
+              type="button"
+              onClick={() => setSuggestions([])}
+              className="rounded p-1 text-indigo-400 hover:text-indigo-700"
+              aria-label="Dismiss all suggestions"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {suggestions.map((s, idx) => {
+              const dismissed = dismissedIds.has(idx)
+              if (dismissed) return null
+              const dueDate = new Date()
+              dueDate.setDate(dueDate.getDate() + s.suggestedDueDays)
+              return (
+                <div key={idx} className="rounded-md border border-indigo-100 bg-white p-3 flex items-start gap-3">
+                  <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", PRIORITY_DOT[s.priority])} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-900">{s.title}</p>
+                    {s.description && <p className="text-xs text-zinc-500 mt-0.5">{s.description}</p>}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-zinc-400">
+                      {s.clauseReference && <span>{s.clauseReference}</span>}
+                      <span>Due ~{format(dueDate, "MMM d, yyyy")}</span>
+                      <span className="capitalize">{s.priority.toLowerCase()} priority</span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={acceptingIdx === idx}
+                      onClick={() => acceptSuggestion(idx, s)}
+                    >
+                      {acceptingIdx === idx ? <Loader2 className="size-3 animate-spin" /> : "Accept"}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setDismissedIds((prev) => new Set(prev).add(idx))}
+                      className="rounded p-1.5 text-zinc-400 hover:text-zinc-700"
+                      aria-label="Dismiss suggestion"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* List */}
       {visible.length === 0 ? (

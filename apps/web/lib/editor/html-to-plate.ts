@@ -5,6 +5,7 @@ export interface PlateTextLeaf {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strikethrough?: boolean
 }
 
 export interface PlateElementNode {
@@ -19,6 +20,7 @@ interface InlineMarks {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strikethrough?: boolean
 }
 
 const MAX_NESTING_DEPTH = 6
@@ -46,6 +48,7 @@ function makeText(text: string, marks: InlineMarks): PlateTextLeaf {
   if (marks.bold) leaf.bold = true
   if (marks.italic) leaf.italic = true
   if (marks.underline) leaf.underline = true
+  if (marks.strikethrough) leaf.strikethrough = true
   return leaf
 }
 
@@ -83,6 +86,10 @@ function collectInline(
     }
     if (tag === "u") {
       collectInline(child, { ...marks, underline: true }, out)
+      continue
+    }
+    if (tag === "s" || tag === "del" || tag === "strike") {
+      collectInline(child, { ...marks, strikethrough: true }, out)
       continue
     }
     // Any other inline element: recurse with current marks
@@ -151,6 +158,8 @@ function processList(
             collectInline(child, { italic: true }, liInline)
           } else if (tag === "u") {
             collectInline(child, { underline: true }, liInline)
+          } else if (tag === "s" || tag === "del" || tag === "strike") {
+            collectInline(child, { strikethrough: true }, liInline)
           } else {
             collectInline(child, {}, liInline)
           }
@@ -305,6 +314,8 @@ function processBlock(
             collectInline(child, { italic: true }, pendingInline)
           } else if (childTag === "u") {
             collectInline(child, { underline: true }, pendingInline)
+          } else if (childTag === "s" || childTag === "del" || childTag === "strike") {
+            collectInline(child, { strikethrough: true }, pendingInline)
           } else if (childTag === "br") {
             pendingInline.push({ text: "\n" })
           } else {

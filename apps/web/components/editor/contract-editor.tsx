@@ -6,7 +6,7 @@ import { Slate, Editable, withReact, type ReactEditor, type RenderElementProps, 
 import { withHistory, type HistoryEditor } from "slate-history"
 import { toast } from "sonner"
 import {
-  Bold, Italic, Underline as UnderlineIcon,
+  Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   List, ListOrdered, Minus, Table as TableIcon, FileText, Heading1, Heading2, Heading3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,7 @@ type CustomText = {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strikethrough?: boolean
 }
 type CustomDescendant = CustomElement | CustomText
 
@@ -38,7 +39,7 @@ export const EMPTY_DOC: Descendant[] = [
   { type: "p", children: [{ text: "" }] } as unknown as Descendant,
 ]
 
-type FormatKey = "bold" | "italic" | "underline"
+type FormatKey = "bold" | "italic" | "underline" | "strikethrough"
 
 function isMarkActive(editor: Editor, format: FormatKey): boolean {
   const marks = Editor.marks(editor) as Partial<Record<FormatKey, boolean>> | null
@@ -225,6 +226,7 @@ function renderLeaf(props: RenderLeafProps): React.ReactElement {
   if (t.bold) el = <strong>{el}</strong>
   if (t.italic) el = <em>{el}</em>
   if (t.underline) el = <u>{el}</u>
+  if (t.strikethrough) el = <s>{el}</s>
   return <span {...attributes}>{el}</span>
 }
 
@@ -239,7 +241,6 @@ export interface ContractEditorProps {
   showVariablesPanel?: boolean
   variables?: { name: string; label?: string; required?: boolean }[]
   onChange?: (value: Descendant[], wordCount: number) => void
-  onInsertVariable?: (name: string) => void
   rightActions?: React.ReactNode        // extra toolbar actions
   // Auto-save mode: only enabled when contractId is provided
   enableAutoSave?: boolean
@@ -256,7 +257,7 @@ export function ContractEditor({
   onChange,
   rightActions,
   enableAutoSave = true,
-}: ContractEditorProps) {
+}: ContractEditorProps): React.ReactElement {
   const editor = useMemo<CustomEditor>(() => {
     const e = withTemplateVariableInline(withHistory(withReact(createEditor() as unknown as ReactEditor)))
     return e as unknown as CustomEditor
@@ -269,8 +270,10 @@ export function ContractEditor({
   const pendingRetryRef = useRef(false)
   const [isReadOnly, setIsReadOnly] = useState(readOnly)
   const [saveStatus, setSaveStatus] = useState<
-    "saved" | "unsaved" | "saving" | "conflict" | "error"
-  >("saved")
+    "idle" | "saved" | "unsaved" | "saving" | "conflict" | "error"
+    // "idle" = no edits yet and no document on server (version 0)
+    // "saved" = document exists and is in sync
+  >(initialVersion > 0 ? "saved" : "idle")
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const valueRef = useRef<Descendant[]>(value)
   valueRef.current = value
@@ -371,7 +374,7 @@ export function ContractEditor({
       if (enableAutoSave && contractId) {
         saveTimer.current = setTimeout(() => {
           triggerSave()
-        }, 30_000)
+        }, 3_000)
       }
     },
     [editor, onChange, isReadOnly, enableAutoSave, contractId, triggerSave],
@@ -390,17 +393,26 @@ export function ContractEditor({
         if (e.key === "b") { e.preventDefault(); toggleMark(editor, "bold"); return }
         if (e.key === "i") { e.preventDefault(); toggleMark(editor, "italic"); return }
         if (e.key === "u") { e.preventDefault(); toggleMark(editor, "underline"); return }
+        if (e.key === "s") { e.preventDefault(); triggerSave(); return }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey) {
+        if (e.key === "s" || e.key === "S") { e.preventDefault(); toggleMark(editor, "strikethrough"); return }
       }
     },
-    [editor],
+    [editor, triggerSave],
   )
 
-  const headingValue = (() => {
+  // Recomputes only when document content or selection changes, not on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const headingValue = useMemo(() => {
     if (isBlockActive(editor, "h1")) return "h1"
     if (isBlockActive(editor, "h2")) return "h2"
     if (isBlockActive(editor, "h3")) return "h3"
     return "p"
-  })()
+  // editor.selection is a plain object; including `value` ensures we re-check
+  // when the document structure changes too.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.selection, value])
 
   return (
     <div className="flex flex-col gap-3">
@@ -454,6 +466,13 @@ export function ContractEditor({
               title="Underline (Cmd+U)"
             >
               <UnderlineIcon className="size-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={isMarkActive(editor, "strikethrough")}
+              onMouseDown={(e) => { e.preventDefault(); toggleMark(editor, "strikethrough") }}
+              title="Strikethrough (Cmd+Shift+S)"
+            >
+              <Strikethrough className="size-4" />
             </ToolbarButton>
 
             <span className="w-px h-5 bg-zinc-200 mx-1" />
@@ -588,10 +607,11 @@ function ToolbarButton({
 }
 
 function SaveStatusLabel({ status }: { status: string }) {
+  if (status === "idle") return null
   if (status === "saved") return <span className="text-sm text-zinc-400">Saved</span>
   if (status === "unsaved") return <span className="text-sm text-amber-600">Unsaved changes</span>
   if (status === "saving") return <span className="text-sm text-zinc-400">Saving…</span>
-  if (status === "conflict") return <span className="text-sm text-red-600">Conflict</span>
+  if (status === "conflict") return <span className="text-sm text-red-600">Conflict — reload to sync</span>
   if (status === "error") return <span className="text-sm text-red-600">Save failed</span>
   return null
 }

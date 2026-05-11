@@ -11,7 +11,12 @@ import {
   UnderlineType,
   WidthType,
   AlignmentType,
+  LevelFormat,
 } from "docx"
+
+// Reference key for the custom numbered list (ordered); unordered lists use
+// docx's built-in `bullet` shorthand and need no explicit reference.
+const ORDERED_LIST_REF = "cf-ordered-list"
 
 interface AnyNode {
   type?: string
@@ -21,6 +26,7 @@ interface AnyNode {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strikethrough?: boolean
   indent?: number
 }
 
@@ -62,6 +68,7 @@ function walk(children: unknown[], runs: TextRun[], font: string): void {
         ...(n.bold ? { bold: true } : {}),
         ...(n.italic ? { italics: true } : {}),
         ...(n.underline ? { underline: { type: UnderlineType.SINGLE } } : {}),
+        ...(n.strikethrough ? { strike: true } : {}),
       }))
       continue
     }
@@ -80,10 +87,6 @@ function listItemParagraphs(
   listType: "ol" | "ul",
   level: number,
 ): Paragraph[] {
-  // The spec maps both ol and ul to bullets; numeric vs bullet differentiation
-  // requires custom numbering definitions in docx which add complexity for
-  // little gain — bullets render acceptably for both.
-  void listType
   const paragraphs: Paragraph[] = []
   if (Array.isArray(node.children)) {
     for (const child of node.children) {
@@ -91,12 +94,21 @@ function listItemParagraphs(
       const li = child as AnyNode
       if (li.type === "li") {
         const indentLevel = li.indent ? Math.max(0, Math.min(li.indent - 1, 5)) : level
-        paragraphs.push(
-          new Paragraph({
-            bullet: { level: indentLevel },
-            children: flattenInline(li.children),
-          }),
-        )
+        if (listType === "ol") {
+          paragraphs.push(
+            new Paragraph({
+              numbering: { reference: ORDERED_LIST_REF, level: indentLevel },
+              children: flattenInline(li.children),
+            }),
+          )
+        } else {
+          paragraphs.push(
+            new Paragraph({
+              bullet: { level: indentLevel },
+              children: flattenInline(li.children),
+            }),
+          )
+        }
       }
     }
   }
@@ -187,6 +199,7 @@ function nodeToDocxBlocks(node: unknown): Array<Paragraph | Table> {
   }
 
   if (type === "li") {
+    // Standalone li without parent context — treat as unordered bullet
     return [
       new Paragraph({
         bullet: { level: 0 },
@@ -230,6 +243,25 @@ export async function plateToDocxBuffer(nodes: unknown[]): Promise<Buffer> {
   }
 
   const doc = new Document({
+    numbering: {
+      config: [
+        {
+          reference: ORDERED_LIST_REF,
+          levels: Array.from({ length: 9 }, (_, i) => ({
+            level: i,
+            format: LevelFormat.DECIMAL,
+            text: `%${i + 1}.`,
+            alignment: AlignmentType.LEFT,
+            style: {
+              paragraph: {
+                indent: { left: 720 * (i + 1), hanging: 360 },
+              },
+              run: { font },
+            },
+          })),
+        },
+      ],
+    },
     styles: {
       default: {
         document: {

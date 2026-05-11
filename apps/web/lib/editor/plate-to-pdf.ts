@@ -9,6 +9,7 @@ interface AnyNode {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strikethrough?: boolean
 }
 
 const styles = StyleSheet.create({
@@ -88,7 +89,10 @@ function renderInline(children: unknown[] | undefined, keyPrefix: string): React
         const family = fontFamilyForMarks(!!n.bold, !!n.italic)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const style: any = { fontFamily: family }
-        if (n.underline) style.textDecoration = "underline"
+        // React PDF supports a single textDecoration value. When both underline
+        // and strikethrough are active, "line-through" takes visual priority.
+        if (n.strikethrough) style.textDecoration = "line-through"
+        else if (n.underline) style.textDecoration = "underline"
         out.push(
           React.createElement(Text, { key: `${prefix}_${i++}`, style }, n.text),
         )

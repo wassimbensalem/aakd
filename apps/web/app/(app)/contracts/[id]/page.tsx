@@ -185,14 +185,6 @@ export default function ContractDetailPage() {
   const [aiAnswer, setAiAnswer] = useState("")
   const [aiCitations, setAiCitations] = useState<AskCitation[]>([])
   const [askingAI, setAskingAI] = useState(false)
-  const [qaInput, setQaInput] = useState("")
-  const [qaThreads, setQaThreads] = useState<Array<{ id: string; question: string; answers: Array<{ name: string; text: string }> }>>([
-    {
-      id: "demo-1",
-      question: "What is the notice period for termination?",
-      answers: [{ name: "AI", text: "Based on the contract, the notice period for termination is 90 days written notice to the other party." }],
-    },
-  ])
 
   const fetchContract = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -751,7 +743,7 @@ export default function ContractDetailPage() {
         defaultValue={searchParams.get("tab") === "editor" ? "editor" : "overview"}
         className="flex flex-col flex-1 min-h-0"
       >
-        <TabsList className="h-auto rounded-none border-b-0 bg-transparent p-0 flex gap-0 px-7 border-b border-border flex-shrink-0">
+        <TabsList className="h-auto rounded-none border-b-0 bg-transparent p-0 flex gap-0 px-7 border-b border-border flex-shrink-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <TabsTrigger
             value="overview"
             className="rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[12.5px] font-normal text-muted-foreground -mb-px data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-foreground transition-colors cursor-pointer"
@@ -1637,45 +1629,10 @@ export default function ContractDetailPage() {
         <TabsContent value="qa" className="flex-1 overflow-auto m-0 border-0">
           <div className="p-7">
             <div className="rounded-[var(--radius)] border border-border bg-card p-5 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-foreground">Questions &amp; Answers</h3>
-                <span className="text-xs text-muted-foreground">{qaThreads.length} thread{qaThreads.length !== 1 ? "s" : ""}</span>
-              </div>
+              <h3 className="text-sm font-medium text-foreground">Ask AI</h3>
 
-              <div className="space-y-4">
-                {qaThreads.map((thread) => (
-                  <div key={thread.id} className="rounded-[var(--radius)] border border-border overflow-hidden">
-                    <div className="bg-muted/40 px-4 py-2.5">
-                      <p className="text-sm font-medium text-foreground">{thread.question}</p>
-                    </div>
-                    <div className="divide-y divide-border">
-                      {thread.answers.map((answer, idx) => (
-                        <div key={idx} className="flex gap-3 px-4 py-3">
-                          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-                            {answer.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-foreground mb-0.5">{answer.name}</p>
-                            <p className="text-sm text-muted-foreground">{answer.text}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
-                {qaThreads.length === 0 && (
-                  <div className="flex flex-col items-center py-8 gap-2">
-                    <MessageSquare className="size-8 text-muted-foreground/40" />
-                    <p className="text-sm text-muted-foreground">No questions yet</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Ask AI inline */}
-              {contract.hasExtractedText && (
-                <div className="rounded-md bg-muted/30 border border-border p-3">
-                  <p className="text-xs font-medium text-foreground mb-2">Ask AI about this contract</p>
+              {contract.hasExtractedText ? (
+                <div className="flex flex-col gap-3">
                   <div className="flex gap-2">
                     <Input
                       placeholder="e.g. What is the notice period?"
@@ -1690,7 +1647,7 @@ export default function ContractDetailPage() {
                     </Button>
                   </div>
                   {aiAnswer && (
-                    <div className="mt-3 rounded-md bg-card border border-border p-3">
+                    <div className="rounded-md bg-muted/30 border border-border p-3">
                       <p className="whitespace-pre-wrap text-sm text-foreground">{aiAnswer}</p>
                       {aiCitations.length > 0 && (
                         <div className="mt-3 border-t border-border pt-3">
@@ -1717,39 +1674,14 @@ export default function ContractDetailPage() {
                     </div>
                   )}
                 </div>
+              ) : (
+                <div className="flex flex-col items-center py-8 gap-2">
+                  <MessageSquare className="size-8 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">
+                    No extracted text — upload a PDF or DOCX to enable AI Q&amp;A
+                  </p>
+                </div>
               )}
-
-              <div className="flex gap-2 pt-2 border-t border-border">
-                <Input
-                  placeholder="Ask a question about this contract..."
-                  value={qaInput}
-                  onChange={(e) => setQaInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && qaInput.trim()) {
-                      setQaThreads((prev) => [
-                        ...prev,
-                        { id: `q-${Date.now()}`, question: qaInput.trim(), answers: [] },
-                      ])
-                      setQaInput("")
-                    }
-                  }}
-                  className="flex-1 text-sm"
-                />
-                <Button
-                  size="sm"
-                  disabled={!qaInput.trim()}
-                  onClick={() => {
-                    if (!qaInput.trim()) return
-                    setQaThreads((prev) => [
-                      ...prev,
-                      { id: `q-${Date.now()}`, question: qaInput.trim(), answers: [] },
-                    ])
-                    setQaInput("")
-                  }}
-                >
-                  Ask
-                </Button>
-              </div>
             </div>
           </div>
         </TabsContent>

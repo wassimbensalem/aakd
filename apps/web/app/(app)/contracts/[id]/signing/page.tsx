@@ -535,6 +535,28 @@ export default function SigningPage() {
         ) : (
           // ── State B: Post-send ─────────────────────────────────────────────
           <div className="space-y-6">
+            {/* Declined / expired / failed banner */}
+            {isResettable && (
+              <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">
+                    {signingStatus === "declined" && "Signing declined"}
+                    {signingStatus === "expired" && "Signing expired"}
+                    {signingStatus === "failed" && "Signing failed"}
+                  </p>
+                  <p className="mt-0.5 text-rose-700/80 text-xs">
+                    {signingStatus === "declined" &&
+                      "One or more signers declined to sign. Reset the workflow below to reconfigure and re-send."}
+                    {signingStatus === "expired" &&
+                      "The signing request expired before all signers responded. Reset the workflow to re-send."}
+                    {signingStatus === "failed" &&
+                      "Signing failed due to an error. Reset the workflow to try again."}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Progress card */}
             <Card>
               <CardContent className="pt-4 pb-4 space-y-3">

@@ -10,6 +10,11 @@ import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 // the contract owner can reconfigure signers and re-send.
 // Only allowed when signingStatus is "declined", "expired", or "failed".
 
+function hasRole(role: string, minimumRole: string): boolean {
+  const hierarchy: Record<string, number> = { viewer: 0, member: 1, legal: 2, admin: 3, owner: 4 }
+  return (hierarchy[role] ?? 0) >= (hierarchy[minimumRole] ?? 0)
+}
+
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
@@ -17,8 +22,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const scopeError = requireWriteScope(ctx)
   if (scopeError) return scopeError
 
-  if (ctx.role !== "admin" && ctx.role !== "legal") {
-    return Response.json({ error: "Only admin or legal roles may reset signing" }, { status: 403 })
+  if (!hasRole(ctx.role, "legal")) {
+    return Response.json(
+      { error: "Only legal, admin, or owner roles may reset signing" },
+      { status: 403 },
+    )
   }
 
   const rl = await rateLimit(`${ctx.organizationId}:sign`, 5, 60_000)
@@ -64,10 +72,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       }
     }
 
-    // Reset all signer statuses
+    // Reset all signer statuses back to "not_sent" — they haven't been sent yet
     await prisma.contractSigner.updateMany({
       where: { contractId: params.id },
-      data: { status: "pending", externalId: null, signedAt: null },
+      data: { status: "not_sent", externalId: null, signedAt: null },
     })
 
     // Clear submission info on the contract

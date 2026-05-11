@@ -863,9 +863,14 @@ async function syncDocuSealContract(contract: SyncableContract) {
       where: { id: contract.id },
       data: { signingStatus },
     })
-    // Fire declined/expired notification — mirrors what the webhook handler does.
-    // This path runs when DocuSeal can't reach the webhook (e.g. local dev behind NAT).
+    // Mirror the per-signer status so the UI badges reflect the outcome.
+    // For declined/expired we mark every still-pending signer as "declined"
+    // so the per-row badge shows the right state.
     if (signingStatus === "declined" || signingStatus === "expired") {
+      await getWorkerPrisma().contractSigner.updateMany({
+        where: { contractId: contract.id, status: "pending" },
+        data: { status: "declined" },
+      })
       await enqueueNotification("contract.signing_declined", contract.id, null, {
         signingStatus,
       })

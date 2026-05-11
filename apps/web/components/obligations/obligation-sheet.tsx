@@ -251,6 +251,16 @@ export function ObligationSheet({
                 ))}
               </SelectContent>
             </Select>
+            {obligation?.reminderSentAt && (
+              <p className="text-xs text-muted-foreground">
+                Reminder sent on{" "}
+                {new Date(obligation.reminderSentAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-2">

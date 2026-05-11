@@ -257,22 +257,26 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
                 Import from Word
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={exportBusy}
-              onClick={() => handleExport("docx")}
-            >
-              {exportBusy && exportFormat === "docx" ? "Exporting…" : "Export to Word"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={exportBusy}
-              onClick={() => handleExport("pdf")}
-            >
-              {exportBusy && exportFormat === "pdf" ? "Exporting…" : "Export to PDF"}
-            </Button>
+            {documentExists && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exportBusy}
+                  onClick={() => handleExport("docx")}
+                >
+                  {exportBusy && exportFormat === "docx" ? "Exporting…" : "Export to Word"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exportBusy}
+                  onClick={() => handleExport("pdf")}
+                >
+                  {exportBusy && exportFormat === "pdf" ? "Exporting…" : "Export to PDF"}
+                </Button>
+              </>
+            )}
             {showSendForExtraction && (
               <Button
                 size="sm"

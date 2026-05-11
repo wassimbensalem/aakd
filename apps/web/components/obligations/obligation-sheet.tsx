@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import {
   X,
@@ -34,31 +35,20 @@ const REMINDER_OPTIONS = [
 
 const UNASSIGNED = "__none__"
 
-const PRIORITY_OPTIONS: {
-  value: ObligationPriority
-  label: string
-  dot: string
-  pill: string
-}[] = [
-  {
-    value: "LOW",
-    label: "Low",
-    dot: "bg-emerald-500",
+const PRIORITY_STYLE: Record<ObligationPriority, { dot: string; pill: string }> = {
+  LOW: {
+    dot:  "bg-emerald-500",
     pill: "border-emerald-200 bg-emerald-50 text-emerald-700 data-[active=true]:bg-emerald-100 data-[active=true]:border-emerald-400 data-[active=true]:shadow-sm",
   },
-  {
-    value: "MEDIUM",
-    label: "Medium",
-    dot: "bg-amber-500",
+  MEDIUM: {
+    dot:  "bg-amber-500",
     pill: "border-amber-200 bg-amber-50 text-amber-700 data-[active=true]:bg-amber-100 data-[active=true]:border-amber-400 data-[active=true]:shadow-sm",
   },
-  {
-    value: "HIGH",
-    label: "High",
-    dot: "bg-rose-500",
+  HIGH: {
+    dot:  "bg-rose-500",
     pill: "border-rose-200 bg-rose-50 text-rose-700 data-[active=true]:bg-rose-100 data-[active=true]:border-rose-400 data-[active=true]:shadow-sm",
   },
-]
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -280,6 +270,13 @@ export function ObligationSheet({
   members,
   onSaved,
 }: Props) {
+  const t = useTranslations("obligations")
+  const PRIORITY_OPTIONS: { value: ObligationPriority; label: string; dot: string; pill: string }[] = [
+    { value: "LOW",    label: t("priority.LOW"),    ...PRIORITY_STYLE.LOW },
+    { value: "MEDIUM", label: t("priority.MEDIUM"), ...PRIORITY_STYLE.MEDIUM },
+    { value: "HIGH",   label: t("priority.HIGH"),   ...PRIORITY_STYLE.HIGH },
+  ]
+
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 

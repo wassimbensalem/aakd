@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback, DragEvent, ChangeEvent } from "react"
+import { useTranslations } from "next-intl"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ArrowLeft, Upload, Sparkles, FileText, Loader2 } from "lucide-react"
@@ -19,16 +20,6 @@ import {
 import { cn } from "@/lib/utils"
 
 // ---- Constants ----
-
-const CONTRACT_TYPES = [
-  { value: "NDA", label: "NDA" },
-  { value: "MSA", label: "Master Service Agreement" },
-  { value: "SOW", label: "Statement of Work" },
-  { value: "EMPLOYMENT", label: "Employment" },
-  { value: "VENDOR", label: "Vendor" },
-  { value: "CUSTOMER", label: "Customer" },
-  { value: "OTHER", label: "Other" },
-] as const
 
 const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "OTHER"] as const
 
@@ -288,6 +279,16 @@ function ReviewScreen({
   onSubmit: () => void
   onChangeFile: () => void
 }) {
+  const t = useTranslations("contract.types")
+  const CONTRACT_TYPES = [
+    { value: "NDA",        label: t("NDA") },
+    { value: "MSA",        label: t("MSA") },
+    { value: "SOW",        label: t("SOW") },
+    { value: "EMPLOYMENT", label: t("EMPLOYMENT") },
+    { value: "VENDOR",     label: t("VENDOR") },
+    { value: "CUSTOMER",   label: t("CUSTOMER") },
+    { value: "OTHER",      label: t("OTHER") },
+  ]
   const fileExt = file.name.split(".").pop()?.toUpperCase() ?? "FILE"
 
   return (

@@ -1,6 +1,8 @@
 "use client"
 
+import { useTranslations } from "next-intl"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+import type { ContractStatus } from "@/lib/types"
 
 // Canopy-aligned status colors (hsl literals matching the design system)
 const STATUS_COLORS: Record<string, string> = {
@@ -14,22 +16,12 @@ const STATUS_COLORS: Record<string, string> = {
   ARCHIVED:            "hsl(215, 10%, 82%)",   // light muted
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT:               "Draft",
-  INTERNAL_REVIEW:     "Internal Review",
-  PENDING_APPROVAL:    "Pending Approval",
-  AWAITING_SIGNATURE:  "Awaiting Signature",
-  ACTIVE:              "Active",
-  EXPIRED:             "Expired",
-  TERMINATED:          "Terminated",
-  ARCHIVED:            "Archived",
-}
-
 const FALLBACK_COLOR = "hsl(215, 10%, 72%)"
 
 type Datum = { status: string; count: number }
 
 export function PortfolioHealthWidget({ data }: { data: Datum[] }) {
+  const t = useTranslations("contract.statuses")
   const filtered = data.filter((d) => d.count > 0)
   const total = filtered.reduce((sum, d) => sum + d.count, 0)
 
@@ -64,8 +56,9 @@ export function PortfolioHealthWidget({ data }: { data: Datum[] }) {
             <Tooltip
               formatter={(value, _name, item) => {
                 const payload = (item as { payload?: { status?: string } } | undefined)?.payload
-                const status = payload?.status ?? ""
-                return [Number(value), STATUS_LABELS[status] ?? status]
+                const status = (payload?.status ?? "") as ContractStatus
+                const label = status in STATUS_COLORS ? t(status) : status
+                return [Number(value), label]
               }}
               contentStyle={{ fontSize: 12 }}
             />
@@ -85,7 +78,7 @@ export function PortfolioHealthWidget({ data }: { data: Datum[] }) {
                 className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: STATUS_COLORS[d.status] ?? FALLBACK_COLOR }}
               />
-              <span className="text-foreground">{STATUS_LABELS[d.status] ?? d.status}</span>
+              <span className="text-foreground">{d.status in STATUS_COLORS ? t(d.status as ContractStatus) : d.status}</span>
             </span>
             <span className="tabular-nums text-muted-foreground">{d.count}</span>
           </li>

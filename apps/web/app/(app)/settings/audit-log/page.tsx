@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useTranslations } from "next-intl"
 import Link from "next/link"
 import {
   Download, FileText, Upload, CheckCircle, RefreshCw,
@@ -16,33 +17,27 @@ import { cn } from "@/lib/utils"
 
 type Category = "green" | "amber" | "red" | "blue"
 
-interface ActionMeta {
-  label: string
-  category: Category
-  Icon: React.ElementType
+const ACTION_ICON_CAT: Record<string, { category: Category; Icon: React.ElementType }> = {
+  CREATED:             { category: "green", Icon: FileText },
+  UPLOADED:            { category: "green", Icon: Upload },
+  UPDATED:             { category: "amber", Icon: RefreshCw },
+  STATUS_CHANGED:      { category: "amber", Icon: RefreshCw },
+  COMMENTED:           { category: "blue",  Icon: FileText },
+  APPROVAL_REQUESTED:  { category: "blue",  Icon: UserPlus },
+  APPROVED:            { category: "green", Icon: CheckCircle },
+  REJECTED:            { category: "red",   Icon: XCircle },
+  SENT_FOR_SIGNATURE:  { category: "blue",  Icon: PenLine },
+  SIGNED:              { category: "green", Icon: PenLine },
+  ALERT_FIRED:         { category: "amber", Icon: Bell },
+  METADATA_EXTRACTED:  { category: "green", Icon: Key },
+  METADATA_UPDATED:    { category: "amber", Icon: RefreshCw },
+  DOWNLOADED:          { category: "blue",  Icon: Download },
+  DELETED:             { category: "red",   Icon: Trash2 },
+  ARCHIVED:            { category: "red",   Icon: Trash2 },
+  TAGGED:              { category: "green", Icon: Tag },
 }
 
-const ACTION_META: Record<string, ActionMeta> = {
-  CREATED:             { label: "Contract Created",       category: "green", Icon: FileText },
-  UPLOADED:            { label: "File Uploaded",          category: "green", Icon: Upload },
-  UPDATED:             { label: "Contract Updated",       category: "amber", Icon: RefreshCw },
-  STATUS_CHANGED:      { label: "Status Changed",         category: "amber", Icon: RefreshCw },
-  COMMENTED:           { label: "Comment Added",          category: "blue",  Icon: FileText },
-  APPROVAL_REQUESTED:  { label: "Approval Requested",     category: "blue",  Icon: UserPlus },
-  APPROVED:            { label: "Approved",               category: "green", Icon: CheckCircle },
-  REJECTED:            { label: "Rejected",               category: "red",   Icon: XCircle },
-  SENT_FOR_SIGNATURE:  { label: "Sent for Signature",     category: "blue",  Icon: PenLine },
-  SIGNED:              { label: "Signed",                 category: "green", Icon: PenLine },
-  ALERT_FIRED:         { label: "Alert Triggered",        category: "amber", Icon: Bell },
-  METADATA_EXTRACTED:  { label: "AI Extraction",          category: "green", Icon: Key },
-  METADATA_UPDATED:    { label: "Metadata Updated",       category: "amber", Icon: RefreshCw },
-  DOWNLOADED:          { label: "Downloaded",             category: "blue",  Icon: Download },
-  DELETED:             { label: "Deleted",                category: "red",   Icon: Trash2 },
-  ARCHIVED:            { label: "Archived",               category: "red",   Icon: Trash2 },
-  TAGGED:              { label: "Tag Applied",            category: "green", Icon: Tag },
-}
-
-const FALLBACK_META: ActionMeta = { label: "Activity", category: "blue", Icon: Eye }
+const FALLBACK_ICON_CAT: { category: Category; Icon: React.ElementType } = { category: "blue", Icon: Eye }
 
 const CATEGORY_STYLE: Record<Category, string> = {
   green: "bg-emerald-100 text-emerald-600",
@@ -64,21 +59,6 @@ interface ActivityItem {
 }
 
 // ─── Filter options ───────────────────────────────────────────────────────────
-
-const ACTION_OPTIONS = [
-  { value: "",                   label: "All Actions" },
-  { value: "CREATED",            label: "Contract Created" },
-  { value: "UPLOADED",           label: "File Uploaded" },
-  { value: "UPDATED",            label: "Contract Updated" },
-  { value: "STATUS_CHANGED",     label: "Status Changed" },
-  { value: "APPROVED",           label: "Approved" },
-  { value: "REJECTED",           label: "Rejected" },
-  { value: "SENT_FOR_SIGNATURE", label: "Sent for Signature" },
-  { value: "SIGNED",             label: "Signed" },
-  { value: "ARCHIVED",           label: "Archived" },
-  { value: "ALERT_FIRED",        label: "Alert Triggered" },
-  { value: "METADATA_EXTRACTED", label: "AI Extraction" },
-]
 
 const DATE_OPTIONS = [
   { value: "7",   label: "Last 7 days" },
@@ -106,6 +86,23 @@ function getInitials(name: string): string {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AuditLogPage() {
+  const t = useTranslations("activity")
+
+  const ACTION_OPTIONS = [
+    { value: "",                   label: "All Actions" },
+    { value: "CREATED",            label: t("CREATED") },
+    { value: "UPLOADED",           label: t("UPLOADED") },
+    { value: "UPDATED",            label: t("UPDATED") },
+    { value: "STATUS_CHANGED",     label: t("STATUS_CHANGED") },
+    { value: "APPROVED",           label: t("APPROVED") },
+    { value: "REJECTED",           label: t("REJECTED") },
+    { value: "SENT_FOR_SIGNATURE", label: t("SENT_FOR_SIGNATURE") },
+    { value: "SIGNED",             label: t("SIGNED") },
+    { value: "ARCHIVED",           label: t("ARCHIVED") },
+    { value: "ALERT_FIRED",        label: t("ALERT_FIRED") },
+    { value: "METADATA_EXTRACTED", label: t("METADATA_EXTRACTED") },
+  ]
+
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [total, setTotal]   = useState(0)
   const [loading, setLoading] = useState(true)
@@ -234,19 +231,20 @@ export default function AuditLogPage() {
                 </tr>
               ) : (
                 activities.map((entry) => {
-                  const meta = ACTION_META[entry.action] ?? FALLBACK_META
-                  const { Icon } = meta
+                  const iconCat = ACTION_ICON_CAT[entry.action] ?? FALLBACK_ICON_CAT
+                  const { Icon } = iconCat
+                  const label = entry.action in ACTION_ICON_CAT ? t(entry.action as Parameters<typeof t>[0]) : entry.action
                   const displayName = entry.user?.name ?? entry.actorLabel
                   return (
                     <tr key={entry.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
                       {/* Action */}
                       <td className="py-3 px-4 text-[13px]">
                         <div className="flex items-center gap-2.5">
-                          <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-full shrink-0", CATEGORY_STYLE[meta.category])}>
+                          <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-full shrink-0", CATEGORY_STYLE[iconCat.category])}>
                             <Icon className="h-3.5 w-3.5" />
                           </span>
                           <div>
-                            <p className="font-medium text-foreground leading-tight">{meta.label}</p>
+                            <p className="font-medium text-foreground leading-tight">{label}</p>
                             {entry.detail && (
                               <p className="text-[11px] text-muted-foreground leading-tight truncate max-w-[240px]">{entry.detail}</p>
                             )}

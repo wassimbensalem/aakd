@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { useTranslations } from "next-intl"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import { useSession } from "@/lib/auth/client"
 import Link from "next/link"
@@ -95,16 +96,16 @@ const STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
   ARCHIVED:            ["DRAFT"],
 }
 
-// Visual metadata for the status picker — dot color + human label + one-liner description
-const STATUS_META: Record<ContractStatus, { label: string; dot: string; description: string }> = {
-  DRAFT:               { label: "Draft",               dot: "bg-zinc-400",    description: "Work in progress" },
-  INTERNAL_REVIEW:     { label: "Internal Review",     dot: "bg-blue-500",    description: "Under team review" },
-  PENDING_APPROVAL:    { label: "Pending Approval",    dot: "bg-amber-500",   description: "Awaiting sign-off" },
-  AWAITING_SIGNATURE:  { label: "Awaiting Signature",  dot: "bg-violet-500",  description: "Ready to sign" },
-  ACTIVE:              { label: "Active",              dot: "bg-emerald-500", description: "Executed & live" },
-  EXPIRED:             { label: "Expired",             dot: "bg-red-400",     description: "Past end date" },
-  TERMINATED:          { label: "Terminated",          dot: "bg-red-600",     description: "Terminated early" },
-  ARCHIVED:            { label: "Archived",            dot: "bg-zinc-300",    description: "Moved to archive" },
+// Visual metadata for the status picker — dot color only (labels are translated inside component)
+const STATUS_DOT: Record<ContractStatus, string> = {
+  DRAFT:               "bg-zinc-400",
+  INTERNAL_REVIEW:     "bg-blue-500",
+  PENDING_APPROVAL:    "bg-amber-500",
+  AWAITING_SIGNATURE:  "bg-violet-500",
+  ACTIVE:              "bg-emerald-500",
+  EXPIRED:             "bg-red-400",
+  TERMINATED:          "bg-red-600",
+  ARCHIVED:            "bg-zinc-300",
 }
 
 const CONTRACT_TYPES = ["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"] as const
@@ -255,6 +256,7 @@ function ReviewerPicker({
 }
 
 export default function ContractDetailPage() {
+  const tStatuses = useTranslations("contract.statuses")
   const { id } = useParams<{ id: string }>()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -752,7 +754,7 @@ export default function ContractDetailPage() {
             {transitions.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger className="inline-flex items-center gap-2 h-8 px-3 pr-2.5 rounded-[var(--radius)] border border-border bg-background text-[13px] font-medium text-foreground hover:bg-muted/70 transition-colors focus:outline-none">
-                  <span className={cn("size-2 rounded-full shrink-0", STATUS_META[contract.status]?.dot ?? "bg-zinc-400")} />
+                  <span className={cn("size-2 rounded-full shrink-0", STATUS_DOT[contract.status] ?? "bg-zinc-400")} />
                   Change Status
                   <ChevronDown className="size-3 opacity-50" />
                 </DropdownMenuTrigger>
@@ -762,17 +764,16 @@ export default function ContractDetailPage() {
                   </div>
                   <DropdownMenuSeparator className="my-1" />
                   {transitions.map((s) => {
-                    const meta = STATUS_META[s]
+                    const dot = STATUS_DOT[s] ?? "bg-zinc-400"
                     return (
                       <DropdownMenuItem
                         key={s}
                         onClick={() => changeStatus(s)}
                         className="flex items-start gap-3 rounded-[calc(var(--radius)-2px)] px-2.5 py-2.5 cursor-pointer"
                       >
-                        <span className={cn("mt-[3px] size-2.5 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-background", meta.dot, meta.dot.replace("bg-", "ring-"))} />
+                        <span className={cn("mt-[3px] size-2.5 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-background", dot, dot.replace("bg-", "ring-"))} />
                         <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className="text-[13px] font-medium leading-none">{meta.label}</span>
-                          <span className="text-[11px] text-muted-foreground leading-tight">{meta.description}</span>
+                          <span className="text-[13px] font-medium leading-none">{tStatuses(s)}</span>
                         </div>
                       </DropdownMenuItem>
                     )

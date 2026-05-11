@@ -12,7 +12,7 @@ import { ContractEditor, EMPTY_DOC, acceptAllChanges, rejectAllChanges } from "@
 import { cn } from "@/lib/utils"
 import type { ContractStatus } from "@/lib/types"
 import { useSession } from "@/lib/auth/client"
-import { Check, Trash2, MessageSquare, GitBranch, CheckCircle2 } from "lucide-react"
+import { Check, Trash2, MessageSquare, GitBranch, CheckCircle2, Loader2 } from "lucide-react"
 import type { Editor } from "@tiptap/react"
 
 const READ_ONLY_STATUSES = new Set<ContractStatus>([
@@ -103,6 +103,7 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
   const currentUserName = session?.user?.name ?? undefined
 
   const [loading, setLoading] = useState(true)
+  const [processing, setProcessing] = useState(false) // true while polling for async worker output
   const [content, setContent] = useState<unknown | null>(null)
   const [version, setVersion] = useState<number>(0)
   const [importOpen, setImportOpen] = useState(false)
@@ -134,34 +135,63 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
   const canEdit = role !== "viewer" && !READ_ONLY_STATUSES.has(contractStatus)
   const canExtract = role === "admin" || role === "legal"
 
-  // ─── Fetch document ────────────────────────────────────────────────────────
+  // ─── Fetch document (with async-worker polling) ────────────────────────────
 
-  const loadDocument = useCallback(async () => {
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollAttemptsRef = useRef(0)
+  const DOC_MAX_POLL_ATTEMPTS = 10
+  const DOC_POLL_INTERVAL_MS = 3_000
+
+  const loadDocument = useCallback(async (isPoll = false) => {
     try {
       const res = await fetch(`/api/contracts/${contractId}/document`)
       if (!res.ok) {
         toast.error("Failed to load document")
         setLoading(false)
+        setProcessing(false)
         return
       }
       const data = await res.json()
       if (data.document) {
         setContent(data.document.content ?? EMPTY_DOC)
         setVersion(data.document.version)
+        setProcessing(false)
+        if (isPoll) toast.success("Document ready")
       } else {
-        setContent(EMPTY_DOC)
-        setVersion(0)
+        // Document doesn't exist yet — could be that the worker is still
+        // converting an uploaded file. Poll automatically for a short period.
+        if (!isPoll) {
+          // First load: start polling
+          pollAttemptsRef.current = 0
+          setProcessing(true)
+          setContent(null)
+          setVersion(0)
+          pollTimerRef.current = setTimeout(() => loadDocument(true), DOC_POLL_INTERVAL_MS)
+        } else if (pollAttemptsRef.current < DOC_MAX_POLL_ATTEMPTS) {
+          // Still polling — schedule next attempt
+          pollAttemptsRef.current += 1
+          pollTimerRef.current = setTimeout(() => loadDocument(true), DOC_POLL_INTERVAL_MS)
+        } else {
+          // Gave up polling — show empty editor
+          setContent(EMPTY_DOC)
+          setVersion(0)
+          setProcessing(false)
+        }
       }
     } catch (err) {
       console.error("[editor-tab] load failed:", err)
       toast.error("Failed to load document")
+      setProcessing(false)
     } finally {
-      setLoading(false)
+      if (!isPoll) setLoading(false)
     }
   }, [contractId])
 
   useEffect(() => {
     loadDocument()
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    }
   }, [loadDocument])
 
   // ─── Fetch comments ────────────────────────────────────────────────────────
@@ -564,8 +594,23 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
     )
   }
 
-  const documentExists = content !== null
+  const documentExists = content !== null && !processing
   const showSendForExtraction = canExtract && documentExists
+
+  // Show processing state while waiting for the worker to convert an uploaded file
+  if (processing) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-sm font-medium text-foreground">Converting your document…</p>
+          <p className="text-xs text-muted-foreground">
+            We&apos;re extracting the content from your uploaded file. This usually takes a few seconds.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

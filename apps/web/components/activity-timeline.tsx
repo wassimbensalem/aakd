@@ -1,3 +1,6 @@
+"use client"
+
+import { useTranslations } from "next-intl"
 import { Activity, ActivityAction } from "@/lib/types"
 import { RelativeTime } from "@/components/relative-time"
 import {
@@ -6,39 +9,40 @@ import {
   Download, Trash, Archive, Tag as TagIcon, Plus
 } from "lucide-react"
 
-const actionConfig: Record<ActivityAction, { label: string; Icon: React.ComponentType<{ className?: string }> }> = {
-  CREATED: { label: "Created contract", Icon: Plus },
-  UPLOADED: { label: "Uploaded file", Icon: Upload },
-  UPDATED: { label: "Updated contract", Icon: Pencil },
-  STATUS_CHANGED: { label: "Changed status", Icon: RefreshCw },
-  COMMENTED: { label: "Commented", Icon: MessageSquare },
-  APPROVAL_REQUESTED: { label: "Requested approval", Icon: Send },
-  APPROVED: { label: "Approved", Icon: CheckCircle },
-  REJECTED: { label: "Rejected", Icon: XCircle },
-  SENT_FOR_SIGNATURE: { label: "Sent for signature", Icon: Send },
-  SIGNED: { label: "Signed", Icon: PenLine },
-  ALERT_FIRED: { label: "Alert fired", Icon: Bell },
-  METADATA_EXTRACTED: { label: "Metadata extracted", Icon: Cpu },
-  METADATA_UPDATED: { label: "Metadata updated", Icon: Cpu },
-  DOWNLOADED: { label: "Downloaded file", Icon: Download },
-  DELETED: { label: "Deleted", Icon: Trash },
-  ARCHIVED: { label: "Archived", Icon: Archive },
-  TAGGED: { label: "Tagged", Icon: TagIcon },
-  APPROVAL_CANCELLED: { label: "Cancelled approval request", Icon: XCircle },
+const ACTION_ICON: Record<ActivityAction, React.ComponentType<{ className?: string }>> = {
+  CREATED:            Plus,
+  UPLOADED:           Upload,
+  UPDATED:            Pencil,
+  STATUS_CHANGED:     RefreshCw,
+  COMMENTED:          MessageSquare,
+  APPROVAL_REQUESTED: Send,
+  APPROVED:           CheckCircle,
+  REJECTED:           XCircle,
+  SENT_FOR_SIGNATURE: Send,
+  SIGNED:             PenLine,
+  ALERT_FIRED:        Bell,
+  METADATA_EXTRACTED: Cpu,
+  METADATA_UPDATED:   Cpu,
+  DOWNLOADED:         Download,
+  DELETED:            Trash,
+  ARCHIVED:           Archive,
+  TAGGED:             TagIcon,
+  APPROVAL_CANCELLED: XCircle,
 }
 
 export function ActivityTimeline({ activities }: { activities: Activity[] }) {
+  const t = useTranslations("activity")
+
   if (activities.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-8 text-center">No activity yet.</p>
+      <p className="text-sm text-muted-foreground py-8 text-center">{t("noActivity")}</p>
     )
   }
 
   return (
     <ol className="space-y-4">
       {activities.map((entry, i) => {
-        const config = actionConfig[entry.action] ?? { label: entry.action, Icon: FileText }
-        const { Icon } = config
+        const Icon = ACTION_ICON[entry.action] ?? FileText
         return (
           <li key={entry.id} className="flex gap-3">
             <div className="flex flex-col items-center">
@@ -52,7 +56,9 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
             <div className="pb-4 flex-1">
               <p className="text-sm">
                 <span className="font-medium">{entry.user?.name ?? entry.actorLabel}</span>{" "}
-                <span className="text-muted-foreground">{config.label}</span>
+                <span className="text-muted-foreground">
+                  {entry.action in ACTION_ICON ? t(entry.action as ActivityAction) : entry.action}
+                </span>
               </p>
               {entry.detail && (
                 <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>

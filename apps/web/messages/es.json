@@ -87,7 +87,18 @@
       "EXPIRED": "Vencido",
       "TERMINATED": "Rescindido",
       "AWAITING_SIGNATURE": "Pendiente de firma",
-      "ARCHIVED": "Archivado"
+      "ARCHIVED": "Archivado",
+      "INTERNAL_REVIEW": "Revisión interna",
+      "PENDING_APPROVAL": "Aprobación pendiente"
+    },
+    "types": {
+      "NDA": "NDA",
+      "MSA": "MSA",
+      "SOW": "SOW",
+      "EMPLOYMENT": "Empleo",
+      "VENDOR": "Proveedor",
+      "CUSTOMER": "Cliente",
+      "OTHER": "Otro"
     },
     "tabs": {
       "overview": "Resumen",
@@ -436,6 +447,27 @@
     "createdTitle": "Clave API creada",
     "copyOnce": "Esta clave solo se mostrará una vez. Cópiela ahora.",
     "done": "Listo"
+  },
+  "activity": {
+    "CREATED": "Created contract",
+    "UPLOADED": "Uploaded file",
+    "UPDATED": "Updated contract",
+    "STATUS_CHANGED": "Changed status",
+    "COMMENTED": "Commented",
+    "APPROVAL_REQUESTED": "Requested approval",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "SENT_FOR_SIGNATURE": "Sent for signature",
+    "SIGNED": "Signed",
+    "ALERT_FIRED": "Alert fired",
+    "METADATA_EXTRACTED": "Metadata extracted",
+    "METADATA_UPDATED": "Metadata updated",
+    "DOWNLOADED": "Downloaded file",
+    "DELETED": "Deleted",
+    "ARCHIVED": "Archived",
+    "TAGGED": "Tagged",
+    "APPROVAL_CANCELLED": "Cancelled approval request",
+    "noActivity": "No activity yet."
   },
   "errors": {
     "unauthorized": "No tiene permiso para realizar esta acción",

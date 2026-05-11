@@ -1,5 +1,6 @@
 "use client"
 
+import { useTranslations } from "next-intl"
 import {
   BarChart,
   Bar,
@@ -9,21 +10,14 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import type { ContractType } from "@/lib/types"
 
 // Canopy tokens as hsl() literals for Recharts SVG attrs
 const C_PRIMARY   = "hsl(148, 58%, 30%)"  // --primary (forest green)
 const C_BORDER    = "hsl(215, 10%, 90%)"  // --border
 const C_CURSOR_BG = "hsl(148 58% 30% / 0.07)"
 
-const TYPE_LABELS: Record<string, string> = {
-  NDA:        "NDA",
-  MSA:        "MSA",
-  SOW:        "SOW",
-  EMPLOYMENT: "Employment",
-  VENDOR:     "Vendor",
-  CUSTOMER:   "Customer",
-  OTHER:      "Other",
-}
+const KNOWN_TYPES = new Set(["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"])
 
 type Datum = { contractType: string; totalValue: number; count: number }
 
@@ -34,6 +28,8 @@ function formatValue(n: number): string {
 }
 
 export function ValueByTypeWidget({ data }: { data: Datum[] }) {
+  const t = useTranslations("contract.types")
+
   if (data.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-12 text-center">
@@ -44,7 +40,7 @@ export function ValueByTypeWidget({ data }: { data: Datum[] }) {
 
   const sorted = [...data].sort((a, b) => b.totalValue - a.totalValue)
   const chartData = sorted.map((d) => ({
-    type: TYPE_LABELS[d.contractType] ?? d.contractType,
+    type: KNOWN_TYPES.has(d.contractType) ? t(d.contractType as ContractType) : d.contractType,
     rawType: d.contractType,
     totalValue: d.totalValue,
     count: d.count,

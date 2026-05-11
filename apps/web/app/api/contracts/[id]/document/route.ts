@@ -16,8 +16,19 @@ const READ_ONLY_STATUSES = new Set([
   "ARCHIVED",
 ])
 
-const SaveSchema = z.object({
+// Accept either:
+// - legacy Slate array: [...nodes]
+// - TipTap doc object: { type: "doc", content: [...nodes] }
+const TipTapDocSchema = z.object({
+  type: z.literal("doc"),
   content: z.array(z.unknown()).max(50_000),
+})
+
+const SaveSchema = z.object({
+  content: z.union([
+    TipTapDocSchema,
+    z.array(z.unknown()).max(50_000),
+  ]),
   wordCount: z.number().int().min(0).max(1_000_000),
   clientVersion: z.number().int().min(0),
 })

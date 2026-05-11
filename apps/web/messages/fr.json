@@ -87,7 +87,18 @@
       "EXPIRED": "Expiré",
       "TERMINATED": "Résilié",
       "AWAITING_SIGNATURE": "En attente de signature",
-      "ARCHIVED": "Archivé"
+      "ARCHIVED": "Archivé",
+      "INTERNAL_REVIEW": "En révision interne",
+      "PENDING_APPROVAL": "En attente d'approbation"
+    },
+    "types": {
+      "NDA": "NDA",
+      "MSA": "MSA",
+      "SOW": "SOW",
+      "EMPLOYMENT": "Emploi",
+      "VENDOR": "Fournisseur",
+      "CUSTOMER": "Client",
+      "OTHER": "Autre"
     },
     "tabs": {
       "overview": "Aperçu",
@@ -436,6 +447,27 @@
     "createdTitle": "Clé API créée",
     "copyOnce": "Cette clé ne sera affichée qu'une seule fois. Copiez-la maintenant.",
     "done": "Terminé"
+  },
+  "activity": {
+    "CREATED": "Created contract",
+    "UPLOADED": "Uploaded file",
+    "UPDATED": "Updated contract",
+    "STATUS_CHANGED": "Changed status",
+    "COMMENTED": "Commented",
+    "APPROVAL_REQUESTED": "Requested approval",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "SENT_FOR_SIGNATURE": "Sent for signature",
+    "SIGNED": "Signed",
+    "ALERT_FIRED": "Alert fired",
+    "METADATA_EXTRACTED": "Metadata extracted",
+    "METADATA_UPDATED": "Metadata updated",
+    "DOWNLOADED": "Downloaded file",
+    "DELETED": "Deleted",
+    "ARCHIVED": "Archived",
+    "TAGGED": "Tagged",
+    "APPROVAL_CANCELLED": "Cancelled approval request",
+    "noActivity": "No activity yet."
   },
   "errors": {
     "unauthorized": "Vous n'avez pas l'autorisation d'effectuer cette action",

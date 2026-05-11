@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useTranslations } from "next-intl"
 import { format, differenceInCalendarDays } from "date-fns"
 import { Check, CheckSquare, Loader2, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react"
 import Link from "next/link"
@@ -30,14 +31,6 @@ interface Props {
   onChange: (next: Obligation[]) => void
 }
 
-const STATUS_FILTERS: ReadonlyArray<{ key: "ALL" | ObligationStatus; label: string }> = [
-  { key: "ALL", label: "All" },
-  { key: "PENDING", label: "Pending" },
-  { key: "IN_PROGRESS", label: "In Progress" },
-  { key: "OVERDUE", label: "Overdue" },
-  { key: "COMPLETED", label: "Completed" },
-]
-
 const STATUS_BADGE: Record<ObligationStatus, string> = {
   PENDING: "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200",
   IN_PROGRESS: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
@@ -66,6 +59,15 @@ export function ObligationList({
   role,
   onChange,
 }: Props) {
+  const t = useTranslations("obligations")
+  const STATUS_FILTERS: ReadonlyArray<{ key: "ALL" | ObligationStatus; label: string }> = [
+    { key: "ALL",         label: t("filterAll") },
+    { key: "PENDING",     label: t("status.PENDING") },
+    { key: "IN_PROGRESS", label: t("status.IN_PROGRESS") },
+    { key: "OVERDUE",     label: t("status.OVERDUE") },
+    { key: "COMPLETED",   label: t("status.COMPLETED") },
+  ]
+
   const [filter, setFilter] = useState<"ALL" | ObligationStatus>("ALL")
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Obligation | null>(null)

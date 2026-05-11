@@ -3,7 +3,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
-import { contractExtractQueue } from "@/lib/jobs/queues"
+import { contractExtractQueue, documentConvertQueue } from "@/lib/jobs/queues"
 import { enqueueNotification } from "@/lib/notifications/fanout"
 
 // GET /api/contracts/[id]/upload?fileId=... — generate a signed download URL
@@ -160,6 +160,23 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     } catch (err) {
       console.error("[upload] failed to enqueue extraction job:", err)
       return Response.json({ ...contractFile, downloadUrl: null, extractionQueued: false }, { status: 201 })
+    }
+
+    // Enqueue document.convert so the editor tab is populated after upload.
+    // This converts the PDF/DOCX to TipTap JSON and saves it as a ContractDocument.
+    const fileType = mimeType === "application/pdf" ? "pdf" : "docx"
+    try {
+      await documentConvertQueue.add("convert", {
+        contractId: params.id,
+        storageKey: key,
+        requestedById: ctx.userId,
+        jobId: contractFile.id,
+        fileType,
+      })
+    } catch (err) {
+      // Non-fatal — the extraction job is already queued; the editor will just
+      // start blank (user can still write from scratch or re-import later).
+      console.error("[upload] failed to enqueue document.convert job:", err)
     }
 
     const downloadUrl = await storage.getSignedDownloadUrl(key)

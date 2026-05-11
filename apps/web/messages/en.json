@@ -87,7 +87,18 @@
       "EXPIRED": "Expired",
       "TERMINATED": "Terminated",
       "AWAITING_SIGNATURE": "Awaiting signature",
-      "ARCHIVED": "Archived"
+      "ARCHIVED": "Archived",
+      "INTERNAL_REVIEW": "Internal Review",
+      "PENDING_APPROVAL": "Pending Approval"
+    },
+    "types": {
+      "NDA": "NDA",
+      "MSA": "MSA",
+      "SOW": "SOW",
+      "EMPLOYMENT": "Employment",
+      "VENDOR": "Vendor",
+      "CUSTOMER": "Customer",
+      "OTHER": "Other"
     },
     "tabs": {
       "overview": "Overview",
@@ -436,6 +447,27 @@
     "createdTitle": "API Key Created",
     "copyOnce": "This key will only be shown once. Copy it now.",
     "done": "Done"
+  },
+  "activity": {
+    "CREATED": "Created contract",
+    "UPLOADED": "Uploaded file",
+    "UPDATED": "Updated contract",
+    "STATUS_CHANGED": "Changed status",
+    "COMMENTED": "Commented",
+    "APPROVAL_REQUESTED": "Requested approval",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "SENT_FOR_SIGNATURE": "Sent for signature",
+    "SIGNED": "Signed",
+    "ALERT_FIRED": "Alert fired",
+    "METADATA_EXTRACTED": "Metadata extracted",
+    "METADATA_UPDATED": "Metadata updated",
+    "DOWNLOADED": "Downloaded file",
+    "DELETED": "Deleted",
+    "ARCHIVED": "Archived",
+    "TAGGED": "Tagged",
+    "APPROVAL_CANCELLED": "Cancelled approval request",
+    "noActivity": "No activity yet."
   },
   "errors": {
     "unauthorized": "You don't have permission to do this",

@@ -87,7 +87,18 @@
       "EXPIRED": "منتهي",
       "TERMINATED": "منهَى",
       "AWAITING_SIGNATURE": "في انتظار التوقيع",
-      "ARCHIVED": "مؤرشف"
+      "ARCHIVED": "مؤرشف",
+      "INTERNAL_REVIEW": "مراجعة داخلية",
+      "PENDING_APPROVAL": "في انتظار الموافقة"
+    },
+    "types": {
+      "NDA": "NDA",
+      "MSA": "MSA",
+      "SOW": "SOW",
+      "EMPLOYMENT": "توظيف",
+      "VENDOR": "مورد",
+      "CUSTOMER": "عميل",
+      "OTHER": "أخرى"
     },
     "tabs": {
       "overview": "نظرة عامة",
@@ -436,6 +447,27 @@
     "createdTitle": "تم إنشاء مفتاح API",
     "copyOnce": "سيظهر هذا المفتاح مرة واحدة فقط. انسخه الآن.",
     "done": "تم"
+  },
+  "activity": {
+    "CREATED": "Created contract",
+    "UPLOADED": "Uploaded file",
+    "UPDATED": "Updated contract",
+    "STATUS_CHANGED": "Changed status",
+    "COMMENTED": "Commented",
+    "APPROVAL_REQUESTED": "Requested approval",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "SENT_FOR_SIGNATURE": "Sent for signature",
+    "SIGNED": "Signed",
+    "ALERT_FIRED": "Alert fired",
+    "METADATA_EXTRACTED": "Metadata extracted",
+    "METADATA_UPDATED": "Metadata updated",
+    "DOWNLOADED": "Downloaded file",
+    "DELETED": "Deleted",
+    "ARCHIVED": "Archived",
+    "TAGGED": "Tagged",
+    "APPROVAL_CANCELLED": "Cancelled approval request",
+    "noActivity": "No activity yet."
   },
   "errors": {
     "unauthorized": "ليس لديك صلاحية القيام بهذا الإجراء",

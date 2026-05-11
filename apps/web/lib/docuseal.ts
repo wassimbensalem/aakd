@@ -48,8 +48,9 @@ function warnMissing(): null {
 
 /**
  * Upload a PDF buffer to DocuSeal as a template.
- * Uses multipart/form-data: POST /templates/pdf
- * Returns { id: templateId } or null if unconfigured.
+ * DocuSeal Cloud expects JSON + base64-encoded file at POST /templates/pdf.
+ * (multipart/form-data is rejected with a 422 JSON parse error on Cloud.)
+ * Returns { id: templateId } or null if unconfigured / on error.
  */
 export async function createTemplate(
   name: string,
@@ -57,14 +58,18 @@ export async function createTemplate(
 ): Promise<{ id: number } | null> {
   if (!KEY) return warnMissing()
 
-  const form = new FormData()
-  form.append("name", name)
-  form.append("file", new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" }), `${name}.pdf`)
+  const base64File = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`
 
   const res = await fetch(`${BASE}/templates/pdf`, {
     method: "POST",
-    headers: authHeaders(),
-    body: form,
+    headers: {
+      ...authHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      documents: [{ name: `${name}.pdf`, file: base64File }],
+    }),
   })
 
   if (!res.ok) {

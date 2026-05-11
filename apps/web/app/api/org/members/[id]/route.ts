@@ -33,7 +33,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const member = await prisma.member.findUnique({
       where: { id: params.id },
-      select: { id: true, organizationId: true, role: true },
+      select: { id: true, userId: true, organizationId: true, role: true },
     })
     if (!member || member.organizationId !== ctx.organizationId) {
       return new Response("Not Found", { status: 404 })
@@ -58,6 +58,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       data: { role: parsed.data.role },
       include: { user: { select: { id: true, name: true, email: true, image: true } } },
     })
+
+    // Notify the affected member that their role changed (fire-and-forget)
+    prisma.notification.create({
+      data: {
+        userId: member.userId,
+        organizationId: ctx.organizationId,
+        contractId: null,
+        eventName: "member.role_changed",
+        title: "Role updated",
+        body: `Your role has been updated to ${parsed.data.role}`,
+      },
+    }).catch(() => {})
 
     return Response.json(updated)
   })

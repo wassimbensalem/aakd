@@ -75,6 +75,33 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }),
   ])
 
+  // Notify org admins & owners that a new member joined (fire-and-forget)
+  Promise.all([
+    prisma.member.findMany({
+      where: {
+        organizationId: invitation.organizationId,
+        role: { in: ["admin", "owner"] },
+        NOT: { userId: ctx.userId },
+      },
+      select: { userId: true },
+    }),
+    prisma.user.findUnique({ where: { id: ctx.userId }, select: { name: true, email: true } }),
+  ]).then(([admins, newUser]) => {
+    const displayName = newUser?.name || newUser?.email || "Someone"
+    for (const a of admins) {
+      prisma.notification.create({
+        data: {
+          userId: a.userId,
+          organizationId: invitation.organizationId,
+          contractId: null,
+          eventName: "member.joined",
+          title: "New member joined",
+          body: `${displayName} joined your organization`,
+        },
+      }).catch(() => {})
+    }
+  }).catch(() => {})
+
   return Response.json({
     organizationId: member.organizationId,
     role: member.role,

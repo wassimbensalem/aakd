@@ -1264,6 +1264,123 @@ async function createInAppNotifications(
       break
     }
 
+    case "contract.uploaded": {
+      const members = await db.member.findMany({
+        where: { organizationId, role: { in: ["legal", "admin", "owner"] } },
+        select: { userId: true },
+      }).catch(() => [] as Array<{ userId: string }>)
+      for (const m of members) {
+        if (m.userId === actor?.id) continue
+        await writeNotification(
+          m.userId,
+          "Contract file uploaded",
+          `${actorName} uploaded a file to "${contractTitle}"`,
+        )
+      }
+      break
+    }
+
+    case "contract.archived": {
+      const members = await db.member.findMany({
+        where: { organizationId, role: { in: ["legal", "admin", "owner"] } },
+        select: { userId: true },
+      }).catch(() => [] as Array<{ userId: string }>)
+      for (const m of members) {
+        if (m.userId === actor?.id) continue
+        await writeNotification(
+          m.userId,
+          "Contract archived",
+          `${actorName} archived "${contractTitle}"`,
+        )
+      }
+      break
+    }
+
+    case "contract.signed": {
+      const members = await db.member.findMany({
+        where: { organizationId, role: { in: ["legal", "admin", "owner"] } },
+        select: { userId: true },
+      }).catch(() => [] as Array<{ userId: string }>)
+      for (const m of members) {
+        await writeNotification(
+          m.userId,
+          "Contract signed",
+          `"${contractTitle}" has been fully signed`,
+        )
+      }
+      break
+    }
+
+    case "contract.expiring_soon": {
+      const daysLeft = typeof metadata.daysUntilExpiry === "number" ? metadata.daysUntilExpiry : null
+      const members = await db.member.findMany({
+        where: { organizationId, role: { in: ["legal", "admin", "owner"] } },
+        select: { userId: true },
+      }).catch(() => [] as Array<{ userId: string }>)
+      for (const m of members) {
+        await writeNotification(
+          m.userId,
+          "Contract expiring soon",
+          daysLeft != null
+            ? `"${contractTitle}" expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`
+            : `"${contractTitle}" is expiring soon`,
+        )
+      }
+      break
+    }
+
+    case "contract.expired": {
+      const members = await db.member.findMany({
+        where: { organizationId, role: { in: ["legal", "admin", "owner"] } },
+        select: { userId: true },
+      }).catch(() => [] as Array<{ userId: string }>)
+      for (const m of members) {
+        await writeNotification(
+          m.userId,
+          "Contract expired",
+          `"${contractTitle}" has expired`,
+        )
+      }
+      break
+    }
+
+    case "obligation.due_soon":
+    case "obligation.overdue": {
+      const obligationTitle = typeof metadata.obligationTitle === "string" ? metadata.obligationTitle : "An obligation"
+      const daysUntilDue = typeof metadata.daysUntilDue === "number" ? metadata.daysUntilDue : null
+      const title = eventName === "obligation.overdue" ? "Obligation overdue" : "Obligation due soon"
+      const body = eventName === "obligation.overdue"
+        ? `"${obligationTitle}" on "${contractTitle}" is overdue`
+        : daysUntilDue != null && daysUntilDue > 0
+          ? `"${obligationTitle}" on "${contractTitle}" is due in ${daysUntilDue} day${daysUntilDue === 1 ? "" : "s"}`
+          : `"${obligationTitle}" on "${contractTitle}" is due soon`
+
+      const members = await db.member.findMany({
+        where: { organizationId, role: { in: ["legal", "admin", "owner"] } },
+        select: { userId: true },
+      }).catch(() => [] as Array<{ userId: string }>)
+      for (const m of members) {
+        await writeNotification(m.userId, title, body)
+      }
+
+      // Also notify the obligation assignee if set and not already notified
+      const obligationId = typeof metadata.obligationId === "string" ? metadata.obligationId : null
+      if (obligationId) {
+        const ob = await db.contractObligation.findUnique({
+          where: { id: obligationId },
+          select: { assigneeId: true },
+        }).catch(() => null)
+        const assigneeId = ob?.assigneeId ?? null
+        if (assigneeId) {
+          const alreadyNotified = members.some(m => m.userId === assigneeId)
+          if (!alreadyNotified) {
+            await writeNotification(assigneeId, title, body)
+          }
+        }
+      }
+      break
+    }
+
     default:
       // No in-app notification for other events (they get email/Slack/webhook)
       break

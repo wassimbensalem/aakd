@@ -74,6 +74,15 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return Response.json({ error: "Not Found" }, { status: 404 })
     }
 
+    // Block approvals on contracts that are not in a requestable state
+    const APPROVAL_REQUESTABLE = new Set(["DRAFT", "INTERNAL_REVIEW", "PENDING_APPROVAL"])
+    if (!APPROVAL_REQUESTABLE.has(contract.status)) {
+      return Response.json(
+        { error: "Approvals cannot be requested on a contract in this state" },
+        { status: 409 },
+      )
+    }
+
     // Validate body
     let body: z.infer<typeof PostSchema>
     try {
@@ -85,6 +94,21 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     // Block self-approval — separation of duties
     if (body.assignedToId === ctx.userId) {
       return Response.json({ error: "Cannot assign yourself as approver" }, { status: 400 })
+    }
+
+    // Block duplicate active approval for the same assignee
+    const existingActive = await prisma.approval.findFirst({
+      where: {
+        contractId: params.id,
+        assignedToId: body.assignedToId,
+        status: { in: ["pending", "waiting"] },
+      },
+    })
+    if (existingActive) {
+      return Response.json(
+        { error: "This person already has an active approval on this contract" },
+        { status: 409 },
+      )
     }
 
     // Resolve the assignee — must be a member of the same org
@@ -124,7 +148,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     // previous rejected cycle so activatedNext can't accidentally resurrect them.
     if (nextStep === 1) {
       await prisma.approval.deleteMany({
-        where: { contractId: params.id, status: "waiting" },
+        where: { contractId: params.id, status: { in: ["waiting", "rejected"] } },
       })
     }
 

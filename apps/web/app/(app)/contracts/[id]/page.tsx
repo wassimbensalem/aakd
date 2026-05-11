@@ -1307,7 +1307,7 @@ export default function ContractDetailPage() {
         <TabsContent value="approvals" className="flex-1 overflow-auto m-0 border-0">
           <div className="p-7">
             <div className="rounded-[var(--radius)] border border-border bg-card p-5">
-              {contract.status === "INTERNAL_REVIEW" && approvals.some(a => a.status === "rejected") && (() => {
+              {approvals.some(a => a.status === "rejected") && (() => {
                 const iWasTheReviewer = approvals.some(a => a.status === "rejected" && a.assignedToId === session?.user?.id)
                 if (iWasTheReviewer) return (
                   <div className="mb-4 flex items-start gap-3 rounded-[var(--radius)] border border-zinc-200 bg-muted/60 px-4 py-3">

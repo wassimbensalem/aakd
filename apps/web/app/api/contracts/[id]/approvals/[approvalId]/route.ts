@@ -48,30 +48,37 @@ export async function PATCH(
       return Response.json({ error: "Invalid request body", detail: err }, { status: 400 })
     }
 
-    // Fetch the approval and verify it belongs to this contract
-    const approval = await prisma.approval.findUnique({
-      where: { id: params.approvalId },
-      select: { id: true, contractId: true, assignedToId: true, status: true, required: true },
-    })
-    if (!approval || approval.contractId !== params.id) {
-      return Response.json({ error: "Not Found" }, { status: 404 })
-    }
-
-    // Only the assigned reviewer may decide
-    if (approval.assignedToId !== ctx.userId) {
-      return Response.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    // Reject re-decisions — approvals are write-once.
-    if (approval.status !== "pending") {
-      return Response.json({ error: "Approval already decided" }, { status: 409 })
-    }
-
     // Decide approval, evaluate the gating condition, and (conditionally)
     // advance the contract status atomically. Two reviewers approving the
     // last pending approval at the same instant could otherwise both observe
     // "no unresolved" and double-advance.
-    const { updated, advancedTo, activatedNext } = await prisma.$transaction(async (tx) => {
+    // NOTE: The approval fetch and all status checks are INSIDE the transaction
+    // so that concurrent requests cannot both pass the "pending" guard.
+    let preCheckError: Response | null = null
+    const { updated, advancedTo, activatedNext, approval } = await prisma.$transaction(async (tx) => {
+      // Fetch the approval inside the transaction to prevent the race condition
+      // where two concurrent requests both read "pending" before either updates it.
+      const approval = await tx.approval.findUnique({
+        where: { id: params.approvalId },
+        select: { id: true, contractId: true, assignedToId: true, status: true, required: true },
+      })
+      if (!approval || approval.contractId !== params.id) {
+        preCheckError = Response.json({ error: "Not Found" }, { status: 404 })
+        return { updated: null, advancedTo: null, activatedNext: null, approval: null }
+      }
+
+      // Only the assigned reviewer may decide
+      if (approval.assignedToId !== ctx.userId) {
+        preCheckError = Response.json({ error: "Forbidden" }, { status: 403 })
+        return { updated: null, advancedTo: null, activatedNext: null, approval: null }
+      }
+
+      // Reject re-decisions — approvals are write-once.
+      if (approval.status !== "pending") {
+        preCheckError = Response.json({ error: "Approval already decided" }, { status: 409 })
+        return { updated: null, advancedTo: null, activatedNext: null, approval: null }
+      }
+
       const updated = await tx.approval.update({
         where: { id: params.approvalId },
         data: {
@@ -107,11 +114,14 @@ export async function PATCH(
           where: {
             contractId: params.id,
             required: true,
-            status: { in: ["pending", "waiting", "rejected"] },
+            status: { in: ["pending", "waiting"] },
           },
           select: { id: true },
         })
-        if (unresolvedRequired.length === 0) {
+        const requiredApprovalCount = await tx.approval.count({
+          where: { contractId: params.id, required: true },
+        })
+        if (unresolvedRequired.length === 0 && requiredApprovalCount > 0) {
           await tx.contract.update({
             where: { id: params.id, status: "PENDING_APPROVAL" },
             data: { status: "AWAITING_SIGNATURE" },
@@ -131,8 +141,11 @@ export async function PATCH(
         }
       }
 
-      return { updated, advancedTo, activatedNext }
+      return { updated, advancedTo, activatedNext, approval }
     })
+
+    if (preCheckError) return preCheckError
+    if (!updated || !approval) return Response.json({ error: "Not Found" }, { status: 404 })
 
     // Side-effect audit writes — outside the transaction so a write failure
     // here cannot rewind the approval decision.

@@ -21,3 +21,7 @@ __pycache__/
 # Lock files (project uses pnpm only)
 package-lock.json
 yarn.lock
+
+# Scratch / test documents
+*.docx
+~$*

@@ -49,6 +49,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 const PostSchema = z.object({
   assignedToId: z.string().min(1),
   message: z.string().optional(),
+  step: z.number().int().positive().optional(),
 })
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -100,13 +101,35 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       select: USER_SELECT,
     })
 
+    // Check if any approvals are still active (pending/waiting).
+    // If none are active (e.g. all were rejected or approved), we start fresh
+    // from step 1 so a re-request after rejection isn't stuck in "waiting".
+    const activeApprovalCount = await prisma.approval.count({
+      where: { contractId: params.id, status: { in: ["pending", "waiting"] } },
+    })
+    const hasActiveApprovals = activeApprovalCount > 0
+
+    // Determine step — caller override takes precedence; otherwise auto-assign.
+    // Start fresh at step 1 when no active approvals exist (post-rejection reset).
+    const stepAgg = await prisma.approval.aggregate({
+      where: { contractId: params.id },
+      _max: { step: true },
+    })
+    const nextStep = body.step ?? (hasActiveApprovals ? (stepAgg._max.step ?? 0) + 1 : 1)
+
+    // If this is not the first step (i.e. there's already a pending/active
+    // approval in front of it) start in "waiting" so only the current active
+    // reviewer gets notified. The PATCH handler activates the next step.
+    const approvalStatus = nextStep === 1 ? "pending" : "waiting"
+
     // Create the approval record
     const approval = await prisma.approval.create({
       data: {
         contractId: params.id,
         requestedById: ctx.userId,
         assignedToId: body.assignedToId,
-        status: "pending",
+        status: approvalStatus,
+        step: nextStep,
       },
       include: {
         requestedBy: { select: USER_SELECT },
@@ -137,27 +160,29 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       )
     }
 
-    // Hand the email off to the email.send queue — fire-and-forget; the
-    // worker handles SMTP latency and retries.
-    emailQueue
-      .add("send", {
-        kind: "approval_request",
-        to: assigneeMember.user.email,
-        assigneeName: assigneeMember.user.name,
-        requesterName: requesterUser?.name ?? "A team member",
-        contractTitle: contract.title,
-        message: body.message,
-      })
-      .catch(() => {})
+    // Only notify the assignee immediately if this approval is active ("pending").
+    // "waiting" approvals are notified by the PATCH handler when they are activated.
+    if (approvalStatus === "pending") {
+      emailQueue
+        .add("send", {
+          kind: "approval_request",
+          to: assigneeMember.user.email,
+          assigneeName: assigneeMember.user.name,
+          requesterName: requesterUser?.name ?? "A team member",
+          contractTitle: contract.title,
+          message: body.message,
+        })
+        .catch(() => {})
 
-    await enqueueNotification("approval.requested", params.id, ctx.userId, {
-      approvalId: approval.id,
-      assigneeId: assigneeMember.user.id,
-      assigneeName: assigneeMember.user.name,
-      requesterId: ctx.userId,
-      requesterName: requesterUser?.name ?? "A team member",
-      ...(body.message ? { message: body.message } : {}),
-    })
+      await enqueueNotification("approval.requested", params.id, ctx.userId, {
+        approvalId: approval.id,
+        assigneeId: assigneeMember.user.id,
+        assigneeName: assigneeMember.user.name,
+        requesterId: ctx.userId,
+        requesterName: requesterUser?.name ?? "A team member",
+        ...(body.message ? { message: body.message } : {}),
+      })
+    }
 
     return Response.json({ approval }, { status: 201 })
   })

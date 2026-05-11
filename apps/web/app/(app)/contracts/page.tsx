@@ -3,7 +3,10 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Plus, Search, ChevronLeft, ChevronRight, MoreHorizontal, FileText, Archive, Eye, FolderOpen, Settings2 } from "lucide-react"
+import {
+  Plus, Search, ChevronLeft, ChevronRight,
+  MoreHorizontal, FileText, Archive, Eye, Download,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,28 +25,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { TypeBadge, StatusBadge } from "@/components/contract-badges"
+import { StatusBadge } from "@/components/contract-badges"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Contract, ContractStatus, Folder } from "@/lib/types"
+import { Contract, ContractStatus } from "@/lib/types"
 import { useSession } from "@/lib/auth/client"
 import { cn } from "@/lib/utils"
 
-const STATUS_FILTERS: (ContractStatus | "ALL")[] = [
-  "ALL", "ACTIVE", "DRAFT", "EXPIRED", "ARCHIVED",
-]
-
-const STATUS_LABELS: Record<ContractStatus | "ALL", string> = {
-  ALL:                "All",
-  ACTIVE:             "Active",
-  DRAFT:              "Draft",
-  INTERNAL_REVIEW:    "Internal Review",
-  PENDING_APPROVAL:   "Pending Approval",
-  AWAITING_SIGNATURE: "Awaiting Signature",
-  EXPIRED:            "Expired",
-  TERMINATED:         "Terminated",
-  ARCHIVED:           "Archived",
+// ── Filter configuration ───────────────────────────────────────────────────
+interface FilterConfig {
+  label: string
+  status: ContractStatus | "ALL"
 }
 
+const FILTERS: FilterConfig[] = [
+  { label: "All",       status: "ALL"                },
+  { label: "Active",    status: "ACTIVE"             },
+  { label: "Draft",     status: "DRAFT"              },
+  { label: "In Review", status: "INTERNAL_REVIEW"    },
+  { label: "Signed",    status: "AWAITING_SIGNATURE" },
+  { label: "Pending",   status: "PENDING_APPROVAL"   },
+  { label: "Expiring",  status: "EXPIRED"            },
+]
+
+// ── Utilities ──────────────────────────────────────────────────────────────
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
   useEffect(() => {
@@ -62,11 +66,15 @@ function formatCurrency(value: number, currency = "USD") {
   }).format(value)
 }
 
-interface FolderWithCount extends Folder {
-  _count?: { contracts: number }
-  children?: FolderWithCount[]
+/** Returns two-letter initials from a full name (e.g. "Alex Johnson" → "AJ") */
+function ownerInitials(name?: string | null): string {
+  if (!name) return "?"
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
+// ── Page ───────────────────────────────────────────────────────────────────
 export default function ContractsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -79,26 +87,16 @@ export default function ContractsPage() {
   const pageSize = 20
 
   const [search, setSearch] = useState(searchParams.get("search") ?? "")
-  const [statusFilter, setStatusFilter] = useState<ContractStatus | "ALL">(
+  const [activeFilter, setActiveFilter] = useState<ContractStatus | "ALL">(
     (searchParams.get("status") as ContractStatus) ?? "ALL",
   )
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
-  const [folders, setFolders] = useState<FolderWithCount[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [role, setRole] = useState<string>("member")
   const debouncedSearch = useDebounce(search, 300)
 
-  const canManage = role === "admin" || role === "legal"
+  const canManage = role === "admin" || role === "legal" || role === "owner"
 
-  useEffect(() => {
-    const controller = new AbortController()
-    fetch("/api/folders", { signal: controller.signal })
-      .then((r) => r.json())
-      .then((data) => setFolders(Array.isArray(data) ? data : []))
-      .catch(() => {})
-    return () => controller.abort()
-  }, [])
-
+  // Fetch current user's org role
   useEffect(() => {
     if (!session?.user) return
     const controller = new AbortController()
@@ -106,7 +104,9 @@ export default function ContractsPage() {
       .then((r) => r.json())
       .then((members) => {
         if (Array.isArray(members)) {
-          const me = members.find((m) => m.userId === session.user.id)
+          const me = members.find(
+            (m: { userId: string; role: string }) => m.userId === session.user.id,
+          )
           if (me?.role) setRole(me.role)
         }
       })
@@ -114,28 +114,30 @@ export default function ContractsPage() {
     return () => controller.abort()
   }, [session?.user])
 
-  const fetchContracts = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (debouncedSearch) params.set("search", debouncedSearch)
-      if (statusFilter && statusFilter !== "ALL") params.set("status", statusFilter)
-      if (selectedFolder) params.set("folderId", selectedFolder)
-      params.set("limit", String(pageSize))
-      params.set("page", String(page))
+  const fetchContracts = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams()
+        if (debouncedSearch) params.set("search", debouncedSearch)
+        if (activeFilter && activeFilter !== "ALL") params.set("status", activeFilter)
+        params.set("limit", String(pageSize))
+        params.set("page", String(page))
 
-      const res = await fetch(`/api/contracts?${params}`, { signal })
-      if (!res.ok) throw new Error("Failed")
-      const data = await res.json()
-      setContracts(data.contracts ?? data ?? [])
-      setTotal(data.total ?? (data.contracts ?? data ?? []).length)
-    } catch (e) {
-      if ((e as Error).name === "AbortError") return
-      toast.error("Failed to load contracts")
-    } finally {
-      setLoading(false)
-    }
-  }, [debouncedSearch, statusFilter, selectedFolder, page])
+        const res = await fetch(`/api/contracts?${params}`, { signal })
+        if (!res.ok) throw new Error("Failed")
+        const data = await res.json()
+        setContracts(data.contracts ?? data ?? [])
+        setTotal(data.total ?? (data.contracts ?? data ?? []).length)
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return
+        toast.error("Failed to load contracts")
+      } finally {
+        setLoading(false)
+      }
+    },
+    [debouncedSearch, activeFilter, page],
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -144,6 +146,7 @@ export default function ContractsPage() {
     return () => controller.abort()
   }, [fetchContracts])
 
+  // ── Actions ──────────────────────────────────────────────────────────────
   async function archiveContract(id: string) {
     try {
       const res = await fetch(`/api/contracts/${id}`, {
@@ -157,10 +160,17 @@ export default function ContractsPage() {
         return
       }
       toast.success("Contract archived")
+      // Bust the router cache so the dashboard reflects the removal immediately.
+      router.refresh()
       fetchContracts()
     } catch {
       toast.error("Failed to archive")
     }
+  }
+
+  async function archiveSelected() {
+    await Promise.allSettled(Array.from(selectedIds).map(archiveContract))
+    setSelectedIds(new Set())
   }
 
   function toggleSelect(id: string) {
@@ -183,117 +193,107 @@ export default function ContractsPage() {
   const totalPages = Math.ceil(total / pageSize)
   const allSelected = contracts.length > 0 && selectedIds.size === contracts.length
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full">
-      {/* Folders sidebar */}
-      <aside className="flex h-full w-48 shrink-0 flex-col border-r border-border bg-muted">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-          <span className="text-xs font-semibold uppercase tracking-[0.07em] text-muted-foreground">Folders</span>
-          <Settings2 className="size-3.5 text-muted-foreground" />
-        </div>
-        <nav className="flex-1 overflow-y-auto p-1.5">
-          <button
-            onClick={() => { setSelectedFolder(null); setPage(1) }}
-            className={cn(
-              "flex w-full items-center justify-between rounded-[calc(var(--radius)-1px)] px-2 py-1.5 text-[13px] transition-colors",
-              selectedFolder === null
-                ? "bg-primary/10 font-semibold text-primary"
-                : "text-foreground/80 hover:bg-muted-foreground/[0.08] hover:text-foreground",
-            )}
-          >
-            <span className="flex items-center gap-2">
-              <FolderOpen className="size-3.5 shrink-0" />
-              All Contracts
-            </span>
-            <span className="text-xs tabular-nums opacity-70">{total}</span>
-          </button>
-          {folders.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => { setSelectedFolder(f.id); setPage(1) }}
-              className={cn(
-                "flex w-full items-center justify-between rounded-[calc(var(--radius)-1px)] px-2 py-1.5 text-[13px] transition-colors",
-                selectedFolder === f.id
-                  ? "bg-primary/10 font-semibold text-primary"
-                  : "text-foreground/80 hover:bg-muted-foreground/[0.08] hover:text-foreground",
-              )}
-            >
-              <span className="flex items-center gap-2 min-w-0">
-                <FolderOpen className="size-3.5 shrink-0" />
-                <span className="truncate">{f.name}</span>
-              </span>
-              {f._count != null && (
-                <span className="text-xs tabular-nums opacity-70">{f._count.contracts}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-      </aside>
+    <div className="flex h-full flex-col overflow-auto">
 
-      {/* Main content */}
-      <div className="flex h-full flex-1 flex-col overflow-auto p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-foreground">Contracts</h1>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  setPage(1)
-                }}
-                className="h-8 w-56 pl-8 text-sm"
-              />
-            </div>
-            <Link href="/contracts/new" className={buttonVariants({ size: "sm" })}>
-              <Plus className="size-4" />
-              New Contract
-            </Link>
-          </div>
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between border-b border-border px-7 py-5">
+        <div>
+          <h1 className="text-[18px] font-bold text-foreground">Contracts</h1>
+          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+            {total} contract{total !== 1 ? "s" : ""} in your repository
+          </p>
         </div>
+        <Link href="/contracts/new" className={buttonVariants({ size: "sm" })}>
+          <Plus className="size-4" />
+          New Contract
+        </Link>
+      </div>
 
-        {/* Status Filter Chips */}
-        <div className="mt-4 flex gap-1.5">
-          {STATUS_FILTERS.map((filter) => (
-            <button
-              key={filter}
-              onClick={() => {
-                setStatusFilter(filter)
+      <div className="flex flex-col gap-3.5 p-7">
+
+        {/* ── Filters bar ───────────────────────────────────────────────── */}
+        <div className="flex items-center gap-2.5">
+          {/* Search input */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search contracts..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
                 setPage(1)
               }}
-              className={cn(
-                "rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
-                statusFilter === filter
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-foreground/80 hover:bg-muted-foreground/[0.12] hover:text-foreground",
+              className="h-8 w-60 pl-8 text-[12.5px]"
+            />
+          </div>
+
+          {/* Status pill filters */}
+          <div className="flex gap-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.label}
+                onClick={() => { setActiveFilter(f.status); setPage(1) }}
+                className={cn(
+                  "rounded-full px-2.5 py-[3px] text-[11.5px] font-medium transition-colors",
+                  activeFilter === f.status
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-foreground/80 hover:bg-muted-foreground/[0.12] hover:text-foreground",
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Bulk actions — visible when at least one row is selected */}
+          {selectedIds.size > 0 && (
+            <div className="ml-auto flex items-center gap-1.5">
+              <span className="text-[12px] text-muted-foreground">
+                {selectedIds.size} selected
+              </span>
+              <Button variant="outline" size="sm" className="h-7 gap-1.5 text-[12px]">
+                <Download className="size-3.5" />
+                Export
+              </Button>
+              {canManage && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 gap-1.5 text-[12px]"
+                  onClick={archiveSelected}
+                >
+                  <Archive className="size-3.5" />
+                  Archive
+                </Button>
               )}
-            >
-              {STATUS_LABELS[filter]}
-            </button>
-          ))}
+            </div>
+          )}
         </div>
 
-        {/* Table */}
+        {/* ── Table ─────────────────────────────────────────────────────── */}
         {loading ? (
-          <div className="mt-4 rounded-[var(--radius)] border border-border bg-card">
+          /* Skeleton */
+          <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-10" />
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Name</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Counterparty</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Type</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Status</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Value</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">End Date</TableHead>
-                  <TableHead className="w-10" />
+                  <TableHead className="w-9 bg-muted" />
+                  {["Contract", "Counterparty", "Status", "Value", "End Date", "Owner", ""].map(
+                    (h) => (
+                      <TableHead
+                        key={h}
+                        className="h-9 bg-muted text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground"
+                      >
+                        {h}
+                      </TableHead>
+                    ),
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Array.from({ length: 5 }).map((_, i) => (
+                {Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
                     {Array.from({ length: 8 }).map((_, j) => (
                       <TableCell key={j} className="py-2.5">
@@ -306,74 +306,104 @@ export default function ContractsPage() {
             </Table>
           </div>
         ) : contracts.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState
-              icon={FileText}
-              title="No contracts yet"
-              description={
-                search || statusFilter !== "ALL"
-                  ? "No contracts match your filters"
-                  : "Create your first contract to get started."
-              }
-              action={!search && statusFilter === "ALL" ? "New Contract" : undefined}
-              onAction={!search && statusFilter === "ALL" ? () => router.push("/contracts/new") : undefined}
-            />
-          </div>
+          /* Empty state */
+          <EmptyState
+            icon={FileText}
+            title="No contracts yet"
+            description={
+              search || activeFilter !== "ALL"
+                ? "No contracts match your filters."
+                : "Create your first contract to get started."
+            }
+            action={!search && activeFilter === "ALL" ? "New Contract" : undefined}
+            onAction={
+              !search && activeFilter === "ALL"
+                ? () => router.push("/contracts/new")
+                : undefined
+            }
+          />
         ) : (
-          <div className="mt-4 rounded-[var(--radius)] border border-border bg-card">
+          /* Data table */
+          <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-10 pl-4">
+                  {/* Checkbox column */}
+                  <TableHead className="w-9 border-b border-border bg-muted pl-4">
                     <input
                       type="checkbox"
                       checked={allSelected}
                       onChange={toggleSelectAll}
-                      className="size-4 rounded border-border accent-primary cursor-pointer"
+                      className="size-3.5 cursor-pointer rounded border-border accent-primary"
                     />
                   </TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Name</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Counterparty</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Type</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Status</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Value</TableHead>
-                  <TableHead className="h-9 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">End Date</TableHead>
-                  <TableHead className="w-10" />
+                  {["Contract", "Counterparty", "Status", "Value", "End Date", "Owner", ""].map(
+                    (h) => (
+                      <TableHead
+                        key={h}
+                        className="h-9 border-b border-border bg-muted text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground"
+                      >
+                        {h}
+                      </TableHead>
+                    ),
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contracts.map((c) => (
-                  <TableRow key={c.id} className={cn("hover:bg-muted/40 transition-colors", selectedIds.has(c.id) && "bg-muted/40")}>
-                    <TableCell className="w-10 pl-4 py-2.5">
+                {contracts.map((c, idx) => (
+                  <TableRow
+                    key={c.id}
+                    onClick={() => router.push(`/contracts/${c.id}`)}
+                    className={cn(
+                      "cursor-pointer transition-colors",
+                      idx < contracts.length - 1 && "border-b border-border",
+                      selectedIds.has(c.id) ? "bg-muted/40" : "hover:bg-muted/50",
+                    )}
+                  >
+                    {/* ── Checkbox ──────────────────────────────────────── */}
+                    <TableCell
+                      className="w-9 py-2 pl-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedIds.has(c.id)}
                         onChange={() => toggleSelect(c.id)}
-                        className="size-4 rounded border-border accent-primary cursor-pointer"
-                        onClick={(e) => e.stopPropagation()}
+                        className="size-3.5 cursor-pointer rounded border-border accent-primary"
                       />
                     </TableCell>
-                    <TableCell className="py-2.5">
-                      <Link
-                        href={`/contracts/${c.id}`}
-                        className="text-sm font-medium hover:text-primary transition-colors"
-                      >
-                        {c.title}
-                      </Link>
+
+                    {/* ── Contract name + optional CRM badge ────────────── */}
+                    <TableCell className="py-2 text-[12.5px] font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <span>{c.title}</span>
+                        {c.crmLinks && c.crmLinks.length > 0 && (
+                          <span className="rounded-[3px] bg-muted px-[5px] py-[1px] text-[9px] font-semibold uppercase text-muted-foreground">
+                            {c.crmLinks[0].provider.toLowerCase()}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell className="py-2.5 text-sm text-muted-foreground">
+
+                    {/* ── Counterparty ───────────────────────────────────── */}
+                    <TableCell className="py-2 text-[12.5px] text-muted-foreground">
                       {c.counterpartyName ?? "—"}
                     </TableCell>
-                    <TableCell className="py-2.5">
-                      <TypeBadge type={c.contractType} />
-                    </TableCell>
-                    <TableCell className="py-2.5">
+
+                    {/* ── Status badge ───────────────────────────────────── */}
+                    <TableCell className="py-2">
                       <StatusBadge status={c.status} />
                     </TableCell>
-                    <TableCell className="py-2.5 text-sm tabular-nums text-muted-foreground">
-                      {c.value != null ? formatCurrency(c.value, c.currency ?? "USD") : "—"}
+
+                    {/* ── Value ──────────────────────────────────────────── */}
+                    <TableCell className="py-2 text-[12.5px] tabular-nums text-muted-foreground">
+                      {c.value != null
+                        ? formatCurrency(c.value, c.currency ?? "USD")
+                        : "—"}
                     </TableCell>
-                    <TableCell className="py-2.5 text-sm text-muted-foreground">
+
+                    {/* ── End date ───────────────────────────────────────── */}
+                    <TableCell className="py-2 text-[12px] text-muted-foreground">
                       {c.endDate
                         ? new Date(c.endDate).toLocaleDateString("en-US", {
                             month: "short",
@@ -382,18 +412,39 @@ export default function ContractsPage() {
                           })
                         : "—"}
                     </TableCell>
-                    <TableCell className="py-2.5">
+
+                    {/* ── Owner avatar ───────────────────────────────────── */}
+                    <TableCell className="py-2">
+                      <div
+                        title={c.owner?.name ?? c.ownerId}
+                        className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                        style={{ fontSize: 9, fontWeight: 700 }}
+                      >
+                        {ownerInitials(c.owner?.name)}
+                      </div>
+                    </TableCell>
+
+                    {/* ── Row menu ───────────────────────────────────────── */}
+                    <TableCell
+                      className="py-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <DropdownMenu>
                         <DropdownMenuTrigger className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
-                          <MoreHorizontal className="size-4" />
+                          <MoreHorizontal className="size-[15px]" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => router.push(`/contracts/${c.id}`)}>
+                          <DropdownMenuItem
+                            onClick={() => router.push(`/contracts/${c.id}`)}
+                          >
                             <Eye className="size-4" />
                             View
                           </DropdownMenuItem>
                           {canManage && (
-                            <DropdownMenuItem onClick={() => archiveContract(c.id)} variant="destructive">
+                            <DropdownMenuItem
+                              onClick={() => archiveContract(c.id)}
+                              variant="destructive"
+                            >
                               <Archive className="size-4" />
                               Archive
                             </DropdownMenuItem>
@@ -408,10 +459,10 @@ export default function ContractsPage() {
           </div>
         )}
 
-        {/* Pagination */}
+        {/* ── Pagination ────────────────────────────────────────────────── */}
         {totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <p className="text-[12.5px] text-muted-foreground">
               {total} contract{total !== 1 ? "s" : ""}
             </p>
             <div className="flex items-center gap-1">
@@ -424,7 +475,7 @@ export default function ContractsPage() {
               >
                 <ChevronLeft className="size-4" />
               </Button>
-              <span className="px-2 text-sm text-foreground/70">
+              <span className="px-2 text-[12.5px] text-foreground/70">
                 {page} / {totalPages}
               </span>
               <Button

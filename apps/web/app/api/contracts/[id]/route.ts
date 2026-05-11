@@ -6,16 +6,19 @@ import { generateAlertsForContract } from "@/lib/alerts/generate"
 import { enqueueNotification } from "@/lib/notifications/fanout"
 import { z } from "zod"
 
-// Allowed status transitions — prevents lifecycle corruption
+// Allowed status transitions — all forward and backward moves permitted so
+// users can correct mistakes freely. Only ARCHIVED is semi-terminal (can
+// return to DRAFT to unarchive, but not to mid-flow states).
+const ALL_STATUSES = ["DRAFT","INTERNAL_REVIEW","PENDING_APPROVAL","AWAITING_SIGNATURE","ACTIVE","EXPIRED","TERMINATED","ARCHIVED"] as const
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  DRAFT:               ["INTERNAL_REVIEW", "ARCHIVED"],
-  INTERNAL_REVIEW:     ["PENDING_APPROVAL", "DRAFT", "ARCHIVED"],
-  PENDING_APPROVAL:    ["AWAITING_SIGNATURE", "INTERNAL_REVIEW", "ARCHIVED"],
-  AWAITING_SIGNATURE:  ["ACTIVE", "ARCHIVED"],
-  ACTIVE:              ["EXPIRED", "TERMINATED", "ARCHIVED"],
-  EXPIRED:             ["ARCHIVED"],
-  TERMINATED:          ["ARCHIVED"],
-  ARCHIVED:            [], // terminal — no transitions out
+  DRAFT:               ALL_STATUSES.filter((s) => s !== "DRAFT"),
+  INTERNAL_REVIEW:     ALL_STATUSES.filter((s) => s !== "INTERNAL_REVIEW"),
+  PENDING_APPROVAL:    ALL_STATUSES.filter((s) => s !== "PENDING_APPROVAL"),
+  AWAITING_SIGNATURE:  ALL_STATUSES.filter((s) => s !== "AWAITING_SIGNATURE"),
+  ACTIVE:              ALL_STATUSES.filter((s) => s !== "ACTIVE"),
+  EXPIRED:             ALL_STATUSES.filter((s) => s !== "EXPIRED"),
+  TERMINATED:          ALL_STATUSES.filter((s) => s !== "TERMINATED"),
+  ARCHIVED:            ["DRAFT"], // unarchive → back to draft only
 }
 
 const isoDate = z.union([z.string().date(), z.string().datetime({ offset: true })])

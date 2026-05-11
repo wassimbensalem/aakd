@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { UserPlus, MoreHorizontal } from "lucide-react"
+import { UserPlus, UserMinus, RefreshCw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,27 +22,62 @@ import {
 import { OrgMember } from "@/lib/types"
 import { useSession } from "@/lib/auth/client"
 
-const ROLES = ["admin", "legal", "member", "viewer"]
+const ROLES = ["admin", "legal", "member", "viewer"] as const
+
+const ROLE_RANK: Record<string, number> = {
+  owner: 5, admin: 4, legal: 3, member: 2, viewer: 1,
+}
+
+interface PendingInvitation {
+  id: string
+  email: string
+  role: string | null
+  expiresAt: string
+}
 
 function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
 }
 
+function RoleBadge({ role }: { role: string }) {
+  const colors: Record<string, string> = {
+    owner:  "bg-purple-100 text-purple-700",
+    admin:  "bg-blue-100 text-blue-700",
+    legal:  "bg-amber-100 text-amber-700",
+    member: "bg-green-100 text-green-700",
+    viewer: "bg-gray-100 text-gray-600",
+  }
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${colors[role] ?? colors.viewer}`}>
+      {role}
+    </span>
+  )
+}
+
 export default function MembersPage() {
   const { data: session } = useSession()
   const [members, setMembers] = useState<OrgMember[]>([])
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([])
   const [loading, setLoading] = useState(true)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState("member")
   const [inviting, setInviting] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
 
   const fetchMembers = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/org/members", { signal })
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      setMembers(data.members ?? data ?? [])
+      const [membersRes, invitesRes] = await Promise.all([
+        fetch("/api/org/members", { signal }),
+        fetch("/api/org/members/invite", { signal }),
+      ])
+      if (membersRes.ok) {
+        const data = await membersRes.json()
+        setMembers(data.members ?? data ?? [])
+      }
+      if (invitesRes.ok) {
+        setInvitations(await invitesRes.json())
+      }
     } catch (e) {
       if ((e as Error).name === "AbortError") return
       toast.error("Failed to load members")
@@ -58,8 +93,9 @@ export default function MembersPage() {
   }, [fetchMembers])
 
   const currentMember = members.find((m) => m.userId === session?.user?.id)
-  const currentUserRole = currentMember?.role
-  const canManageMembers = currentUserRole === "admin"
+  const currentUserRole = currentMember?.role ?? "viewer"
+  const myRank = ROLE_RANK[currentUserRole] ?? 0
+  const canManageMembers = myRank >= ROLE_RANK.admin
 
   async function invite(e: React.FormEvent) {
     e.preventDefault()
@@ -70,10 +106,20 @@ export default function MembersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       })
-      if (!res.ok) throw new Error("Failed to invite")
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg: Record<string, string> = {
+          already_member: "This person is already a member.",
+          already_invited: "An active invitation already exists for this email.",
+          cannot_invite_higher_role: "You can't invite someone to a higher role than your own.",
+        }
+        toast.error(msg[body?.error] ?? body?.error ?? "Failed to send invitation")
+        return
+      }
       toast.success(`Invitation sent to ${inviteEmail}`)
       setInviteEmail("")
       setShowInviteModal(false)
+      fetchMembers()
     } catch {
       toast.error("Failed to send invitation")
     } finally {
@@ -88,7 +134,13 @@ export default function MembersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error === "cannot_demote_last_admin"
+          ? "Can't change — this is the last admin"
+          : body?.error ?? "Failed to update role")
+        return
+      }
       toast.success("Role updated")
       fetchMembers()
     } catch {
@@ -96,9 +148,61 @@ export default function MembersPage() {
     }
   }
 
+  async function removeMember(memberId: string, memberName: string) {
+    if (!confirm(`Remove ${memberName} from the organization?`)) return
+    try {
+      const res = await fetch(`/api/org/members/${memberId}`, { method: "DELETE" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error ?? "Failed to remove member")
+        return
+      }
+      toast.success(`${memberName} removed`)
+      fetchMembers()
+    } catch {
+      toast.error("Failed to remove member")
+    }
+  }
+
+  async function resendInvitation(invitationId: string, email: string) {
+    setResendingId(invitationId)
+    try {
+      const res = await fetch(`/api/org/invitations/${invitationId}`, { method: "POST" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error ?? "Failed to resend")
+        return
+      }
+      toast.success(`Invitation resent to ${email}`)
+      fetchMembers()
+    } catch {
+      toast.error("Failed to resend invitation")
+    } finally {
+      setResendingId(null)
+    }
+  }
+
+  async function cancelInvitation(invitationId: string, email: string) {
+    if (!confirm(`Cancel the invitation for ${email}?`)) return
+    try {
+      const res = await fetch(`/api/org/invitations/${invitationId}`, { method: "DELETE" })
+      if (!res.ok) return
+      toast.success("Invitation cancelled")
+      fetchMembers()
+    } catch {
+      toast.error("Failed to cancel invitation")
+    }
+  }
+
+  // Can I act on this member? Rank must strictly exceed theirs.
+  function canActOn(target: OrgMember): boolean {
+    if (target.userId === session?.user?.id) return false
+    return myRank > (ROLE_RANK[target.role] ?? 0)
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-3xl">
-      {/* Page header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Team Members</h1>
@@ -112,7 +216,7 @@ export default function MembersPage() {
         )}
       </div>
 
-      {/* Members table */}
+      {/* Active members */}
       <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
         <Table>
           <TableHeader>
@@ -133,66 +237,143 @@ export default function MembersPage() {
                   ))}
                 </TableRow>
               ))
-            ) : members.map((m) => (
-              <TableRow key={m.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2.5">
-                    <Avatar size="sm">
-                      {m.user.image && <AvatarImage src={m.user.image} />}
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                        {getInitials(m.user.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium text-foreground">{m.user.name}</p>
-                      <p className="text-xs text-muted-foreground">{m.user.email}</p>
+            ) : members.map((m) => {
+              const actable = canActOn(m)
+              return (
+                <TableRow key={m.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar size="sm">
+                        {m.user.image && <AvatarImage src={m.user.image} />}
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                          {getInitials(m.user.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium text-foreground">{m.user.name}</p>
+                        <p className="text-xs text-muted-foreground">{m.user.email}</p>
+                      </div>
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {canManageMembers ? (
-                    <Select
-                      value={m.role}
-                      onValueChange={(v) => v != null && changeRole(m.id, v)}
-                      disabled={m.userId === session?.user?.id}
-                    >
-                      <SelectTrigger className="h-7 w-28 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ROLES.map((r) => (
-                          <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className="text-xs text-foreground capitalize">{m.role}</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-green-100 text-green-700">
-                    Active
-                  </span>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {format(new Date(m.createdAt), "MMM d, yyyy")}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                  <TableCell>
+                    {canManageMembers && actable ? (
+                      <Select
+                        value={m.role}
+                        onValueChange={(v) => v != null && changeRole(m.id, v)}
+                      >
+                        <SelectTrigger className="h-7 w-28 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ROLES.map((r) => (
+                            <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <RoleBadge role={m.role} />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-green-100 text-green-700">
+                      Active
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {format(new Date(m.createdAt), "MMM d, yyyy")}
+                  </TableCell>
+                  <TableCell>
+                    {canManageMembers && actable ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                        title="Remove member"
+                        onClick={() => removeMember(m.id, m.user.name)}
+                      >
+                        <UserMinus className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <div className="h-7 w-7" />
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </div>
 
-      {/* Invite Member modal */}
+      {/* Pending invitations */}
+      {canManageMembers && invitations.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-foreground mb-2">
+            Pending Invitations
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              ({invitations.length})
+            </span>
+          </h2>
+          <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="w-24" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invitations.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0">
+                          <span className="text-[10px] font-semibold text-muted-foreground">
+                            {inv.email[0].toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-foreground">{inv.email}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <RoleBadge role={inv.role ?? "member"} />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {format(new Date(inv.expiresAt), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-primary"
+                          title="Resend invitation"
+                          disabled={resendingId === inv.id}
+                          onClick={() => resendInvitation(inv.id, inv.email)}
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${resendingId === inv.id ? "animate-spin" : ""}`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                          title="Cancel invitation"
+                          onClick={() => cancelInvitation(inv.id, inv.email)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
+      {/* Invite modal */}
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
         <DialogContent>
           <DialogHeader>
@@ -226,13 +407,12 @@ export default function MembersPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                The invitation link will be valid for 30 days.
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowInviteModal(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setShowInviteModal(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={inviting}>

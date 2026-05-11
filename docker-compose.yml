@@ -55,6 +55,13 @@ services:
       "
     restart: "no"
 
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"   # web UI — open http://localhost:8025 to read caught emails
+      - "1025:1025"   # SMTP — app/worker send here
+    restart: unless-stopped
+
   app:
     build:
       context: .
@@ -83,10 +90,13 @@ services:
       # Email alerts (optional) — also read from .env
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@clauseflow.io}
       ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      # M5 Notification encryption (required for Slack/Teams/webhook routing)
+      NOTIFICATION_ENCRYPTION_KEY: "${NOTIFICATION_ENCRYPTION_KEY:?NOTIFICATION_ENCRYPTION_KEY must be set in .env}"
     depends_on:
       db:
         condition: service_healthy
@@ -94,6 +104,8 @@ services:
         condition: service_started
       createbuckets:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_started
     restart: unless-stopped
 
   worker:
@@ -119,14 +131,19 @@ services:
       # Email alerts (optional)
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@clauseflow.io}
       ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      # M5 Notification encryption (required for Slack/Teams/webhook routing)
+      NOTIFICATION_ENCRYPTION_KEY: "${NOTIFICATION_ENCRYPTION_KEY:?NOTIFICATION_ENCRYPTION_KEY must be set in .env}"
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_started
+      mailpit:
         condition: service_started
     restart: unless-stopped
 

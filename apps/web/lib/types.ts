@@ -71,6 +71,7 @@ export interface Contract {
   docusealSubmissionId?: string | null
   signingUrl?: string | null
   signingStatus?: SigningStatus | null
+  crmLinks?: { provider: string }[]
   createdAt: string
   updatedAt: string
 }
@@ -158,7 +159,8 @@ export interface Approval {
   requestedBy: { id: string; name: string; email: string; image?: string | null }
   assignedToId: string
   assignedTo: { id: string; name: string; email: string; image?: string | null }
-  status: "pending" | "approved" | "rejected"
+  status: "pending" | "approved" | "rejected" | "waiting"
+  step: number
   comment?: string | null
   decidedAt?: string | null
   createdAt: string

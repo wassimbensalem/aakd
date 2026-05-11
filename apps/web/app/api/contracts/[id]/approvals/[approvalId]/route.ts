@@ -3,6 +3,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { emailQueue } from "@/lib/jobs/queues"
 import { z } from "zod"
 
 const USER_SELECT = {
@@ -70,7 +71,7 @@ export async function PATCH(
     // advance the contract status atomically. Two reviewers approving the
     // last pending approval at the same instant could otherwise both observe
     // "no unresolved" and double-advance.
-    const { updated, advancedTo } = await prisma.$transaction(async (tx) => {
+    const { updated, advancedTo, activatedNext } = await prisma.$transaction(async (tx) => {
       const updated = await tx.approval.update({
         where: { id: params.approvalId },
         data: {
@@ -85,12 +86,27 @@ export async function PATCH(
       })
 
       let advancedTo: "AWAITING_SIGNATURE" | "INTERNAL_REVIEW" | null = null
+      let activatedNext: { id: string; assignedToId: string } | null = null
 
       if (body.decision === "approved" && contract.status === "PENDING_APPROVAL") {
+        // Activate the next step in the chain if it exists
+        const nextWaiting = await tx.approval.findFirst({
+          where: { contractId: params.id, status: "waiting" },
+          orderBy: { step: "asc" },
+        })
+        if (nextWaiting) {
+          await tx.approval.update({
+            where: { id: nextWaiting.id },
+            data: { status: "pending" },
+          })
+          activatedNext = { id: nextWaiting.id, assignedToId: nextWaiting.assignedToId }
+        }
+
+        // Only advance contract when ALL approvals are resolved (no pending/waiting/rejected)
         const unresolvedApprovals = await tx.approval.findMany({
           where: {
             contractId: params.id,
-            status: { in: ["pending", "rejected"] },
+            status: { in: ["pending", "rejected", "waiting"] },
           },
           select: { id: true },
         })
@@ -111,7 +127,7 @@ export async function PATCH(
         advancedTo = "INTERNAL_REVIEW"
       }
 
-      return { updated, advancedTo }
+      return { updated, advancedTo, activatedNext }
     })
 
     // Side-effect audit writes — outside the transaction so a write failure
@@ -152,10 +168,56 @@ export async function PATCH(
       await enqueueNotification("approval.approved", params.id, ctx.userId, decisionMetadata)
     } else {
       await enqueueNotification("approval.rejected", params.id, ctx.userId, decisionMetadata)
+
+      // Email the requester with the rejection reason
+      const contractForEmail = await prisma.contract.findUnique({
+        where: { id: params.id },
+        select: { title: true },
+      })
+      emailQueue
+        .add("send", {
+          kind: "approval_rejected",
+          to: updated.requestedBy.email,
+          requesterName: updated.requestedBy.name,
+          reviewerName: updated.assignedTo.name,
+          contractTitle: contractForEmail?.title ?? "Contract",
+          comment: body.comment,
+        })
+        .catch(() => {})
     }
 
     if (advancedTo === "AWAITING_SIGNATURE") {
       await enqueueNotification("contract.sent_for_signing", params.id, ctx.userId, {})
+    }
+
+    // Notify the next-in-chain approver that it is now their turn
+    if (activatedNext) {
+      const nextAssignee = await prisma.user.findUnique({
+        where: { id: activatedNext.assignedToId },
+        select: { id: true, name: true, email: true },
+      })
+      if (nextAssignee) {
+        const contractForEmail = await prisma.contract.findUnique({
+          where: { id: params.id },
+          select: { title: true },
+        })
+        emailQueue
+          .add("send", {
+            kind: "approval_request",
+            to: nextAssignee.email,
+            assigneeName: nextAssignee.name,
+            requesterName: updated.requestedBy?.name ?? "A team member",
+            contractTitle: contractForEmail?.title ?? "Contract",
+          })
+          .catch(() => {})
+        await enqueueNotification("approval.requested", params.id, ctx.userId, {
+          approvalId: activatedNext.id,
+          assigneeId: nextAssignee.id,
+          assigneeName: nextAssignee.name,
+          requesterId: ctx.userId,
+          requesterName: updated.requestedBy?.name ?? "A team member",
+        })
+      }
     }
 
     return Response.json({ approval: updated })

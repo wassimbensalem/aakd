@@ -639,14 +639,20 @@ export default function NewContractPage() {
 
     setSubmitting(true)
     try {
+      // Helper: only send a date if it's already in YYYY-MM-DD format (what the
+      // API expects). AI-extracted dates may arrive in other formats — skip those
+      // rather than causing a 422 validation failure.
+      const isoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined
+
       const body: Record<string, unknown> = {
         title: formData.title.trim(),
         contractType: formData.contractType || undefined,
         counterpartyName: formData.counterpartyName || undefined,
         value: formData.value ? Number(formData.value) : undefined,
-        currency: formData.currency,
-        startDate: formData.startDate || undefined,
-        endDate: formData.endDate || undefined,
+        // Normalise currency: "OTHER" is a UI-only placeholder; send "USD" instead
+        currency: formData.currency === "OTHER" ? "USD" : (formData.currency || "USD"),
+        startDate: formData.startDate ? isoDate(formData.startDate) : undefined,
+        endDate: formData.endDate ? isoDate(formData.endDate) : undefined,
         governingLaw: formData.governingLaw || undefined,
         autoRenewal: formData.autoRenewal,
         notes: formData.description || undefined,
@@ -674,9 +680,46 @@ export default function NewContractPage() {
           body: fd,
           credentials: "include",
         })
+
+        // Seed AIExtraction rows immediately from the Pass-1 (extract-preview)
+        // data so the AI Extractions tab is populated the moment the user lands
+        // on the contract detail page — no spinner needed.
+        // The worker's ai_extract job will later enrich these rows with
+        // sourceText / sourcePage via its own upsert (skipDuplicates + updateMany).
+        const seedFields: Array<{ field: string; rawValue: string }> = [
+          { field: "contractType",     rawValue: formData.contractType },
+          { field: "counterpartyName", rawValue: formData.counterpartyName },
+          { field: "startDate",        rawValue: formData.startDate },
+          { field: "endDate",          rawValue: formData.endDate },
+          { field: "value",            rawValue: formData.value },
+          { field: "currency",         rawValue: formData.currency === "OTHER" ? "USD" : formData.currency },
+          { field: "governingLaw",     rawValue: formData.governingLaw },
+          { field: "autoRenewal",      rawValue: String(formData.autoRenewal) },
+        ]
+        const seedPayload = seedFields
+          .filter(({ rawValue }) => rawValue !== "" && rawValue != null)
+          .map(({ field, rawValue }) => ({
+            field,
+            rawValue,
+            confidence: confidence[field] ?? 0,
+          }))
+
+        if (seedPayload.length > 0) {
+          await fetch(`/api/contracts/${contract.id}/extractions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ extractions: seedPayload }),
+            credentials: "include",
+          }).catch(() => {
+            // Non-critical — the worker will populate the tab anyway
+          })
+        }
       }
 
       toast.success("Contract created")
+      // Invalidate the router cache so the dashboard reflects the new contract
+      // immediately when the user navigates back.
+      router.refresh()
       router.push(`/contracts/${contract.id}`)
     } catch (err) {
       toast.error(

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import { useSession } from "@/lib/auth/client"
 import Link from "next/link"
@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { format } from "date-fns"
 import {
   ChevronRight,
+  ChevronDown,
   Download,
   Archive,
   Upload,
@@ -16,6 +17,7 @@ import {
   X,
   Plus,
   Bell,
+  AlertCircle,
   CheckCircle,
   XCircle,
   Clock,
@@ -28,6 +30,7 @@ import {
   ArrowUpRight,
   Pen,
   Pencil,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,6 +51,13 @@ import {
 } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/contract-badges"
 import { FileUploadZone } from "@/components/file-upload-zone"
@@ -75,15 +85,31 @@ interface AskCitation {
   similarity: number | null
 }
 
+const ALL_STATUSES: ContractStatus[] = [
+  "DRAFT","INTERNAL_REVIEW","PENDING_APPROVAL","AWAITING_SIGNATURE",
+  "ACTIVE","EXPIRED","TERMINATED","ARCHIVED",
+]
 const STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
-  DRAFT:               ["INTERNAL_REVIEW", "ARCHIVED"],
-  INTERNAL_REVIEW:     ["PENDING_APPROVAL", "DRAFT", "ARCHIVED"],
-  PENDING_APPROVAL:    ["AWAITING_SIGNATURE", "INTERNAL_REVIEW", "ARCHIVED"],
-  AWAITING_SIGNATURE:  ["ACTIVE", "ARCHIVED"],
-  ACTIVE:              ["EXPIRED", "TERMINATED", "ARCHIVED"],
-  EXPIRED:             ["ARCHIVED"],
-  TERMINATED:          ["ARCHIVED"],
-  ARCHIVED:            [],
+  DRAFT:               ALL_STATUSES.filter((s) => s !== "DRAFT"),
+  INTERNAL_REVIEW:     ALL_STATUSES.filter((s) => s !== "INTERNAL_REVIEW"),
+  PENDING_APPROVAL:    ALL_STATUSES.filter((s) => s !== "PENDING_APPROVAL"),
+  AWAITING_SIGNATURE:  ALL_STATUSES.filter((s) => s !== "AWAITING_SIGNATURE"),
+  ACTIVE:              ALL_STATUSES.filter((s) => s !== "ACTIVE"),
+  EXPIRED:             ALL_STATUSES.filter((s) => s !== "EXPIRED"),
+  TERMINATED:          ALL_STATUSES.filter((s) => s !== "TERMINATED"),
+  ARCHIVED:            ["DRAFT"],
+}
+
+// Visual metadata for the status picker — dot color + human label + one-liner description
+const STATUS_META: Record<ContractStatus, { label: string; dot: string; description: string }> = {
+  DRAFT:               { label: "Draft",               dot: "bg-zinc-400",    description: "Work in progress" },
+  INTERNAL_REVIEW:     { label: "Internal Review",     dot: "bg-blue-500",    description: "Under team review" },
+  PENDING_APPROVAL:    { label: "Pending Approval",    dot: "bg-amber-500",   description: "Awaiting sign-off" },
+  AWAITING_SIGNATURE:  { label: "Awaiting Signature",  dot: "bg-violet-500",  description: "Ready to sign" },
+  ACTIVE:              { label: "Active",              dot: "bg-emerald-500", description: "Executed & live" },
+  EXPIRED:             { label: "Expired",             dot: "bg-red-400",     description: "Past end date" },
+  TERMINATED:          { label: "Terminated",          dot: "bg-red-600",     description: "Terminated early" },
+  ARCHIVED:            { label: "Archived",            dot: "bg-zinc-300",    description: "Moved to archive" },
 }
 
 const CONTRACT_TYPES = ["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"] as const
@@ -132,6 +158,8 @@ export default function ContractDetailPage() {
   const [activities, setActivities] = useState<Activity[]>([])
   const [alerts, setAlerts] = useState<ContractAlert[]>([])
   const [extractions, setExtractions] = useState<AIExtraction[]>([])
+  const [extractionPolling, setExtractionPolling] = useState(false)
+  const extractionPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [obligations, setObligations] = useState<Obligation[]>([])
   const [members, setMembers] = useState<OrgMember[]>([])
@@ -221,6 +249,56 @@ export default function ContractDetailPage() {
       .catch(() => {})
     return () => controller.abort()
   }, [fetchContract])
+
+  // ── AI extraction polling ─────────────────────────────────────────────────
+  // When the contract has files but no extractions yet, the BullMQ worker is
+  // still running the extract → embed → ai_extract pipeline. Poll every 4 s
+  // until data appears (or give up after 90 s).
+  useEffect(() => {
+    if (loading) return
+    if (extractions.length > 0) {
+      // Data arrived — kill any active poll and clear the indicator
+      if (extractionPollRef.current) {
+        clearInterval(extractionPollRef.current)
+        extractionPollRef.current = null
+      }
+      setExtractionPolling(false)
+      return
+    }
+    if (files.length === 0) return // no file uploaded yet — nothing to poll for
+
+    // Start polling
+    setExtractionPolling(true)
+    let attempts = 0
+    const MAX = 22 // 22 × 4 s ≈ 88 s ceiling
+
+    extractionPollRef.current = setInterval(async () => {
+      attempts++
+      try {
+        const res = await fetch(`/api/contracts/${id}/extractions`)
+        if (res.ok) {
+          const data = await res.json()
+          if ((data.extractions ?? []).length > 0) {
+            setExtractions(data.extractions)
+            // Polling will auto-stop on next effect run because extractions.length > 0
+          }
+        }
+      } catch { /* network hiccup — keep polling */ }
+
+      if (attempts >= MAX) {
+        clearInterval(extractionPollRef.current!)
+        extractionPollRef.current = null
+        setExtractionPolling(false)
+      }
+    }, 4000)
+
+    return () => {
+      if (extractionPollRef.current) {
+        clearInterval(extractionPollRef.current)
+        extractionPollRef.current = null
+      }
+    }
+  }, [loading, extractions.length, files.length, id])
 
   async function changeStatus(newStatus: ContractStatus) {
     try {
@@ -362,6 +440,22 @@ export default function ContractDetailPage() {
       )
     } catch {
       toast.error("Failed to update extraction")
+    }
+  }
+
+  async function handleRerunExtraction() {
+    try {
+      const res = await fetch(`/api/contracts/${id}/extractions/rerun`, { method: "POST" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.message ?? "Failed to re-run extraction")
+        return
+      }
+      toast.success("AI extraction queued — results will appear in ~30s")
+      // Reset polling so the tab auto-refreshes when new results land
+      setExtractions([])
+    } catch {
+      toast.error("Failed to re-run extraction")
     }
   }
 
@@ -555,8 +649,11 @@ export default function ContractDetailPage() {
 
   // Determine if current user can request approvals (admin or legal in this org)
   const currentMember = members.find((m) => m.userId === session?.user?.id)
-  const canRequestApproval = currentMember?.role === "admin" || currentMember?.role === "legal"
-  const canManage = currentMember?.role === "admin" || currentMember?.role === "legal"
+  const APPROVAL_REQUESTABLE_STATUSES: ContractStatus[] = ["DRAFT", "INTERNAL_REVIEW", "PENDING_APPROVAL"]
+  const canRequestApproval =
+    (currentMember?.role === "admin" || currentMember?.role === "legal" || currentMember?.role === "owner") &&
+    APPROVAL_REQUESTABLE_STATUSES.includes(contract.status)
+  const canManage = currentMember?.role === "admin" || currentMember?.role === "legal" || currentMember?.role === "owner"
 
   return (
     <div className="flex flex-col h-full">
@@ -582,18 +679,35 @@ export default function ContractDetailPage() {
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {transitions.length > 0 && (
-              <Select onValueChange={(v) => changeStatus(v as ContractStatus)}>
-                <SelectTrigger className="h-8 w-44 text-sm">
-                  <SelectValue placeholder="Change status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {transitions.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s.replace(/_/g, " ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="inline-flex items-center gap-2 h-8 px-3 pr-2.5 rounded-[var(--radius)] border border-border bg-background text-[13px] font-medium text-foreground hover:bg-muted/70 transition-colors focus:outline-none">
+                  <span className={cn("size-2 rounded-full shrink-0", STATUS_META[contract.status]?.dot ?? "bg-zinc-400")} />
+                  Change Status
+                  <ChevronDown className="size-3 opacity-50" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 p-1.5">
+                  <div className="px-2 py-1 text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Move to
+                  </div>
+                  <DropdownMenuSeparator className="my-1" />
+                  {transitions.map((s) => {
+                    const meta = STATUS_META[s]
+                    return (
+                      <DropdownMenuItem
+                        key={s}
+                        onClick={() => changeStatus(s)}
+                        className="flex items-start gap-3 rounded-[calc(var(--radius)-2px)] px-2.5 py-2.5 cursor-pointer"
+                      >
+                        <span className={cn("mt-[3px] size-2.5 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-background", meta.dot, meta.dot.replace("bg-", "ring-"))} />
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="text-[13px] font-medium leading-none">{meta.label}</span>
+                          <span className="text-[11px] text-muted-foreground leading-tight">{meta.description}</span>
+                        </div>
+                      </DropdownMenuItem>
+                    )
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {canRequestApproval && (
               <Button
@@ -934,24 +1048,6 @@ export default function ContractDetailPage() {
                 )}
               </div>
 
-              {/* Danger Zone */}
-              {canManage && contract.status !== "ARCHIVED" && (
-                <div className="p-[18px_20px] rounded-[var(--radius)] border border-red-100 bg-card">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-red-500 mb-1">Danger Zone</p>
-                  <p className="text-[12px] text-muted-foreground mb-3">
-                    Archiving moves this contract out of your active list.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-red-200 text-red-600 hover:bg-red-50"
-                    onClick={deleteContract}
-                  >
-                    <Archive className="size-4" />
-                    Archive Contract
-                  </Button>
-                </div>
-              )}
             </div>
 
             {/* RIGHT column — Activity panel */}
@@ -960,7 +1056,7 @@ export default function ContractDetailPage() {
               {activities.length === 0 ? (
                 <p className="text-[12px] text-muted-foreground">No activity yet</p>
               ) : (
-                <div className="space-y-0">
+                <div className="space-y-0 max-h-[420px] overflow-y-auto pr-1">
                   {activities.map((activity, idx) => {
                     const isLast = idx === activities.length - 1
                     return (
@@ -1097,9 +1193,21 @@ export default function ContractDetailPage() {
           <div className="p-7">
             {extractions.length === 0 ? (
               <div className="rounded-[var(--radius)] border border-border bg-card p-5">
-                <p className="text-center text-sm text-muted-foreground py-8">
-                  No AI extractions yet. Upload a document to trigger extraction.
-                </p>
+                {extractionPolling ? (
+                  <div className="flex flex-col items-center py-10 gap-3">
+                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground text-center">
+                      AI extraction in progress…
+                    </p>
+                    <p className="text-xs text-muted-foreground/60 text-center">
+                      This usually takes 15–30 seconds
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-center text-sm text-muted-foreground py-8">
+                    No AI extractions yet. Upload a document to trigger extraction.
+                  </p>
+                )}
               </div>
             ) : (
               <>
@@ -1115,7 +1223,7 @@ export default function ContractDetailPage() {
                         Accept All
                       </Button>
                     )}
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" variant="outline" onClick={handleRerunExtraction}>
                       <RefreshCw className="size-3.5" />
                       Re-run Extraction
                     </Button>
@@ -1197,6 +1305,20 @@ export default function ContractDetailPage() {
         <TabsContent value="approvals" className="flex-1 overflow-auto m-0 border-0">
           <div className="p-7">
             <div className="rounded-[var(--radius)] border border-border bg-card p-5">
+              {contract.status === "INTERNAL_REVIEW" && approvals.some(a => a.status === "rejected") && (
+                <div className="mb-4 flex items-start gap-3 rounded-[var(--radius)] border border-amber-200 bg-amber-50 px-4 py-3">
+                  <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-amber-900">Approval was rejected</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Address the reviewer&apos;s feedback, then re-submit for approval.</p>
+                  </div>
+                  {canRequestApproval && (
+                    <Button size="sm" onClick={() => setApprovalOpen(true)} className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white border-0">
+                      Re-submit
+                    </Button>
+                  )}
+                </div>
+              )}
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-sm font-medium text-foreground">Approval Workflow</h3>
                 {canRequestApproval && (
@@ -1208,14 +1330,21 @@ export default function ContractDetailPage() {
               </div>
 
               {approvals.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-8">
-                  No approvals requested yet
-                </p>
+                <div className="py-8 text-center">
+                  <p className="text-sm text-muted-foreground">No approvals requested yet</p>
+                  {!canRequestApproval && currentMember && (
+                    <p className="mt-1 text-xs text-muted-foreground/70">
+                      Your role ({currentMember.role}) is not eligible to request approvals.
+                      Only Legal, Admin, and Owner roles can submit approval requests.
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="relative">
                   {approvals.map((approval, idx) => {
                     const isPending = approval.status === "pending"
                     const isDone = approval.status === "approved"
+                    const isWaiting = approval.status === "waiting"
                     const isMyApproval = approval.assignedToId === session?.user?.id && isPending
                     const isDeciding = deciding?.id === approval.id
                     const isLast = idx === approvals.length - 1
@@ -1251,9 +1380,12 @@ export default function ContractDetailPage() {
                         <div className={cn("flex-1 pb-5", isLast && "pb-0")}>
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="text-sm font-medium text-foreground">{approval.assignedTo.name}</p>
+                              <p className="text-sm font-medium text-foreground">
+                                {approval.assignedTo.name}
+                                <span className="ml-1.5 text-xs font-normal text-muted-foreground">Step {approval.step}</span>
+                              </p>
                               <p className="text-xs text-muted-foreground">
-                                {isDone ? "Approved" : isPending ? "Waiting for review" : "Rejected"} · Requested by{" "}
+                                {isDone ? "Approved" : isPending ? "Waiting for review" : isWaiting ? "Queued" : "Rejected"} · Requested by{" "}
                                 {approval.requestedBy.name} · <RelativeTime date={approval.createdAt} />
                               </p>
                             </div>
@@ -1273,6 +1405,12 @@ export default function ContractDetailPage() {
                               <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 shrink-0">
                                 <XCircle className="size-3" />
                                 Rejected
+                              </span>
+                            )}
+                            {approval.status === "waiting" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground shrink-0">
+                                <Clock className="size-3" />
+                                Queued (Step {approval.step})
                               </span>
                             )}
                           </div>
@@ -1356,13 +1494,15 @@ export default function ContractDetailPage() {
                 </div>
               )}
 
-              <div className="mt-5 pt-4 border-t border-border">
-                <Link href={`/contracts/${id}/approval`}>
-                  <Button size="sm" className="w-full sm:w-auto">
-                    View Full Workflow
-                  </Button>
-                </Link>
-              </div>
+              {approvals.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-border">
+                  <Link href={`/contracts/${id}/approval`}>
+                    <Button size="sm" className="w-full sm:w-auto">
+                      View Full Workflow
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>
@@ -1758,7 +1898,14 @@ export default function ContractDetailPage() {
               <Label>Reviewer</Label>
               <Select value={approvalAssigneeId} onValueChange={(v) => setApprovalAssigneeId(v ?? "")}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select reviewer..." />
+                  <SelectValue placeholder="Select reviewer...">
+                    {approvalAssigneeId
+                      ? (() => {
+                          const m = members.find((m) => m.userId === approvalAssigneeId)
+                          return m ? `${m.user.name} (${m.user.email})` : "Select reviewer..."
+                        })()
+                      : "Select reviewer..."}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {members

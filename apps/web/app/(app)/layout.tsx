@@ -11,14 +11,7 @@ import {
   BarChart2,
   Bot,
   MessageSquare,
-  Plug,
-  Bell,
-  Mail,
-  Upload,
-  Building2,
-  Key,
-  Users,
-  CreditCard,
+  Settings,
   LogOut,
   Search,
   ChevronDown,
@@ -26,6 +19,7 @@ import {
 import { useSession, useActiveOrganization, signOut } from "@/lib/auth/client"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CmdK } from "@/components/cmd-k"
+import { NotificationBell } from "@/components/notification-bell"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -39,6 +33,8 @@ interface NavItem {
   icon: React.ElementType
   disabled?: boolean
   exact?: boolean
+  /** Override the path prefix used for active-link detection */
+  matchPrefix?: string
 }
 
 interface NavSection {
@@ -52,36 +48,27 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "Core",
     items: [
-      { label: "Dashboard",   href: "/dashboard",    icon: LayoutDashboard, exact: true },
-      { label: "Contracts",   href: "/contracts",    icon: FileText },
-      { label: "Templates",   href: "/templates",    icon: Layers },
-      { label: "Obligations", href: "/obligations",  icon: Target },
-      { label: "Analytics",   href: "/analytics",    icon: BarChart2 },
+      { label: "Dashboard",   href: "/dashboard",   icon: LayoutDashboard, exact: true },
+      { label: "Contracts",   href: "/contracts",   icon: FileText },
+      { label: "Templates",   href: "/templates",   icon: Layers },
+      { label: "Obligations", href: "/obligations", icon: Target },
+      { label: "Analytics",   href: "/analytics",   icon: BarChart2 },
     ],
   },
   {
     title: "AI",
     items: [
-      { label: "AI Agents",     href: "/ai/agents",  icon: Bot,          disabled: true },
-      { label: "Create with AI",href: "/ai/create",  icon: MessageSquare,disabled: true },
-    ],
-  },
-  {
-    title: "Ecosystem",
-    items: [
-      { label: "Integrations", href: "/settings/integrations", icon: Plug },
+      { label: "AI Agents",      href: "/ai/agents", icon: Bot,          disabled: true },
+      { label: "Create with AI", href: "/ai/create", icon: MessageSquare, disabled: true },
     ],
   },
   {
     title: "Settings",
     items: [
-      { label: "Notifications", href: "/settings/notifications",          icon: Bell },
-      { label: "Email Prefs",   href: "/settings/profile/notifications",  icon: Mail },
-      { label: "Data Import",   href: "/settings/import",                 icon: Upload },
-      { label: "Organization",  href: "/settings/org",                    icon: Building2 },
-      { label: "API Keys",      href: "/settings/api-keys",               icon: Key },
-      { label: "Members",       href: "/settings/members",                icon: Users },
-      { label: "Billing",       href: "/settings/billing",                icon: CreditCard, disabled: true },
+      // Single entry — all sub-pages live inside the settings secondary sidebar.
+      // `matchPrefix` lets the active highlight cover all /settings/* routes
+      // even though the link destination is /settings/org.
+      { label: "Settings", href: "/settings/org", icon: Settings, matchPrefix: "/settings" },
     ],
   },
 ]
@@ -111,9 +98,10 @@ function SoonBadge() {
 
 function NavItemRow({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon
+  const activePrefix = item.matchPrefix ?? item.href
   const isActive = item.exact
     ? pathname === item.href
-    : pathname.startsWith(item.href)
+    : pathname.startsWith(activePrefix)
 
   if (item.disabled) {
     return (
@@ -236,6 +224,8 @@ function Sidebar({
               {orgName}
             </p>
           </div>
+          {/* Notifications */}
+          <NotificationBell />
           {/* Sign out */}
           <Button
             variant="ghost"

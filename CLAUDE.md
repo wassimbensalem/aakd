@@ -255,7 +255,7 @@ AI and email are optional — the app runs without them (AI features degrade gra
 | C2 — Billing | Stripe subscriptions, plan enforcement, usage tracking |
 | C3 — Managed AI | We host Anthropic/OpenAI keys, usage metering, per-org quotas |
 | C4 — AI Agents | Renewal Agent, Review Agent, Intake Agent (cloud-only) |
-| C5 — Enterprise | SSO/SAML (Okta, Azure AD), Google Drive/SharePoint import, commercial license |
+| C5 — Enterprise | SSO/SAML (Okta, Azure AD), Google Drive/SharePoint import, commercial license, **per-contract/folder-level visibility ACLs** (user-scoped access on top of org-scope) |
 
 ---
 

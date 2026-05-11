@@ -86,7 +86,7 @@ export default function TemplatesPage() {
     return () => controller.abort()
   }, [session?.user])
 
-  const canManage = role === "admin" || role === "legal"
+  const canManage = role === "admin" || role === "legal" || role === "owner"
 
   async function archive(templateId: string) {
     if (!confirm("Archive this template? Existing contracts created from it are not affected.")) return

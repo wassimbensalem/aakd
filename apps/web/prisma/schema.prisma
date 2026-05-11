@@ -42,6 +42,7 @@ model User {
   crmLinksCreated             CrmLink[]                @relation("CrmLinkCreator")
   importJobsCreated           ImportJob[]              @relation("ImportJobCreator")
   googleDriveConnected        GoogleDriveIntegration[] @relation("GoogleDriveConnectedBy")
+  notifications               Notification[]
 }
 
 model Session {
@@ -105,6 +106,7 @@ model Organization {
   crmIntegrations         CrmIntegration[]
   importJobs              ImportJob[]
   googleDriveIntegration  GoogleDriveIntegration?
+  notifications           Notification[]
 }
 
 model Member {
@@ -184,6 +186,7 @@ model Contract {
   document              ContractDocument?
   obligations           ContractObligation[]
   crmLinks              CrmLink[]
+  notifications         Notification[]
   extractedText         String?
   docusealSubmissionId  String?
   signingUrl            String?
@@ -380,7 +383,8 @@ model Approval {
   requestedBy    User      @relation("ApprovalRequester", fields: [requestedById], references: [id])
   assignedToId   String
   assignedTo     User      @relation("ApprovalAssignee", fields: [assignedToId], references: [id])
-  status         String    @default("pending") // pending | approved | rejected
+  status         String    @default("pending") // pending | approved | rejected | waiting
+  step           Int       @default(1)
   comment        String?
   decidedAt      DateTime?
   createdAt      DateTime  @default(now())
@@ -690,4 +694,26 @@ enum ImportStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+// ─── In-app Notifications ─────────────────────────────────────────────────────
+
+model Notification {
+  id             String    @id @default(cuid())
+  userId         String
+  organizationId String
+  contractId     String?
+  eventName      String
+  title          String
+  body           String
+  read           Boolean   @default(false)
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contract     Contract?    @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  @@index([userId, read, createdAt])
+  @@index([organizationId])
 }

@@ -62,6 +62,14 @@ export type EmailJobData =
       message?: string
     }
   | {
+      kind: "approval_rejected"
+      to: string
+      requesterName: string
+      reviewerName: string
+      contractTitle: string
+      comment?: string
+    }
+  | {
       kind: "event_notification"
       eventName: string
       to: string

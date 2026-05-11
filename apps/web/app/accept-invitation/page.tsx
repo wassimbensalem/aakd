@@ -10,7 +10,6 @@ import { organization, useSession } from "@/lib/auth/client"
 
 type State = "loading" | "accepting" | "success" | "no_id" | "error"
 
-// Inner component that uses useSearchParams — must be inside <Suspense>
 function AcceptInvitationContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -22,7 +21,6 @@ function AcceptInvitationContent() {
   const invitationId = searchParams.get("id")
 
   useEffect(() => {
-    // Wait for session to resolve before doing anything
     if (sessionLoading) return
 
     if (!invitationId) {
@@ -37,27 +35,44 @@ function AcceptInvitationContent() {
       return
     }
 
-    // Logged in — auto-accept
+    // Logged in — call our own accept endpoint (not Better Auth's, which
+    // has quirks with manually-created invitations and returns spurious errors).
     setState("accepting")
-    organization
-      .acceptInvitation({ invitationId })
-      .then((result) => {
-        if (result.error) {
-          setErrorMsg(result.error.message ?? "Failed to accept invitation")
+
+    fetch(`/api/org/invitations/${invitationId}/accept`, { method: "POST" })
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}))
+
+        if (!res.ok) {
+          const friendlyMessages: Record<string, string> = {
+            already_accepted: "This invitation has already been accepted.",
+            expired: "This invitation link has expired. Ask your admin to send a new one.",
+            email_mismatch: body.message ?? "This invitation was sent to a different email address.",
+          }
+          setErrorMsg(friendlyMessages[body?.error] ?? body?.error ?? "Failed to accept invitation")
           setState("error")
           return
         }
-        // result.data contains the new membership; grab org name if available
-        const name =
-          (result.data as { invitation?: { organizationName?: string } })
-            ?.invitation?.organizationName ?? ""
-        setOrgName(name)
+
+        // Set the accepted org as active in the session so the app layout
+        // doesn't redirect to /create-org.
+        const orgId: string | undefined = body.organizationId
+        if (orgId) {
+          await organization.setActive({ organizationId: orgId }).catch(() => {})
+
+          // Fetch org name to show in the success message
+          const orgRes = await fetch(`/api/org`).catch(() => null)
+          if (orgRes?.ok) {
+            const orgData = await orgRes.json().catch(() => ({}))
+            setOrgName(orgData?.name ?? "")
+          }
+        }
+
         setState("success")
-        // Give the user a moment to see the success message, then go to dashboard
         setTimeout(() => router.replace("/dashboard"), 1800)
       })
-      .catch((err: unknown) => {
-        setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred")
+      .catch(() => {
+        setErrorMsg("An unexpected error occurred")
         setState("error")
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,7 +81,6 @@ function AcceptInvitationContent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600">
             <Shield className="h-5 w-5 text-white" />
@@ -74,7 +88,6 @@ function AcceptInvitationContent() {
           <span className="text-xl font-semibold tracking-tight text-zinc-900">ClauseFlow</span>
         </div>
 
-        {/* Card */}
         <div className="rounded-lg border border-zinc-200 bg-white p-8 shadow-sm text-center">
           {(state === "loading" || state === "accepting") && (
             <>
@@ -91,9 +104,7 @@ function AcceptInvitationContent() {
               <CheckCircle className="mx-auto mb-4 h-8 w-8 text-green-500" />
               <h1 className="text-base font-semibold text-zinc-900">You&apos;re in!</h1>
               <p className="mt-1 text-sm text-zinc-500">
-                {orgName
-                  ? `Welcome to ${orgName}. Redirecting…`
-                  : "Invitation accepted. Redirecting to dashboard…"}
+                {orgName ? `Welcome to ${orgName}. Redirecting…` : "Invitation accepted. Redirecting to dashboard…"}
               </p>
             </>
           )}
@@ -101,7 +112,7 @@ function AcceptInvitationContent() {
           {state === "error" && (
             <>
               <XCircle className="mx-auto mb-4 h-8 w-8 text-red-500" />
-              <h1 className="text-base font-semibold text-zinc-900">Invitation failed</h1>
+              <h1 className="text-base font-semibold text-zinc-900">Couldn&apos;t accept invitation</h1>
               <p className="mt-1 text-sm text-zinc-500">{errorMsg}</p>
               <div className="mt-6 flex flex-col gap-2">
                 <Link href="/dashboard" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full justify-center")}>
@@ -132,8 +143,6 @@ function AcceptInvitationContent() {
   )
 }
 
-// useSearchParams() must be inside <Suspense> in Next.js App Router.
-// The outer page provides the boundary; the inner component does the work.
 export default function AcceptInvitationPage() {
   return (
     <Suspense fallback={

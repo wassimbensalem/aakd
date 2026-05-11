@@ -238,17 +238,20 @@ export default function ApprovalPage() {
     (a) => a.status === "pending" && a.assignedToId === currentUserId
   )
 
-  async function handleAction(intent: "approve" | "reject" | "request-changes") {
+  async function handleAction(intent: "approve" | "reject") {
     if (!pendingApproval) return
     setActionState("loading")
 
-    const endpoint = `/api/approvals/${pendingApproval.id}/${intent}`
+    const endpoint = `/api/contracts/${id}/approvals/${pendingApproval.id}`
 
     try {
       const res = await fetch(endpoint, {
-        method: "POST",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment: comment.trim() || undefined }),
+        body: JSON.stringify({
+          decision: intent === "approve" ? "approved" : "rejected",
+          comment: comment.trim() || undefined,
+        }),
       })
 
       if (!res.ok) {
@@ -256,12 +259,7 @@ export default function ApprovalPage() {
         throw new Error(body?.error ?? "Action failed")
       }
 
-      const label =
-        intent === "approve"
-          ? "Approved"
-          : intent === "reject"
-          ? "Rejected"
-          : "Changes requested"
+      const label = intent === "approve" ? "Approved" : "Rejected"
 
       setActionState("success")
       setActionMessage(`${label} successfully.`)
@@ -454,14 +452,6 @@ export default function ApprovalPage() {
                         onClick={() => handleAction("reject")}
                       >
                         Reject
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        disabled={actionState === "loading" || actionState === "success"}
-                        onClick={() => handleAction("request-changes")}
-                      >
-                        Request Changes
                       </Button>
                     </div>
                   </CardContent>

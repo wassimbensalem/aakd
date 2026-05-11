@@ -51,6 +51,76 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   })
 }
 
+// ─── POST /api/contracts/[id]/extractions ─────────────────────────────────────
+// Seeds initial AIExtraction rows from the Pass-1 (extract-preview) data so the
+// AI Extractions tab is populated immediately on the contract detail page.
+// The worker's ai_extract job will later enrich these rows with sourceText and
+// sourcePage via its own createMany(skipDuplicates)+updateMany(status≠accepted)
+// upsert — so worker data always wins over seed data.
+
+const EXTRACTABLE_FIELDS = new Set([
+  "contractType", "startDate", "endDate", "renewalDate",
+  "value", "currency", "counterpartyName", "governingLaw",
+  "noticePeriodDays", "autoRenewal",
+])
+
+const SeedSchema = z.object({
+  extractions: z
+    .array(
+      z.object({
+        field:      z.string().min(1),
+        rawValue:   z.string().min(1),
+        confidence: z.number().min(0).max(1).default(0),
+      }),
+    )
+    .min(1)
+    .max(20),
+})
+
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  const ctx = await resolveAuth(req)
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const scopeError = requireWriteScope(ctx)
+  if (scopeError) return scopeError
+
+  return requestContext.run(ctx, async () => {
+    const contract = await prisma.contract.findUnique({
+      where: { id: params.id },
+      select: { id: true, organizationId: true },
+    })
+    if (!contract || contract.organizationId !== ctx.organizationId) {
+      return Response.json({ error: "Not Found" }, { status: 404 })
+    }
+
+    let body: z.infer<typeof SeedSchema>
+    try {
+      body = SeedSchema.parse(await req.json())
+    } catch {
+      return Response.json({ error: "Invalid request body" }, { status: 400 })
+    }
+
+    const valid = body.extractions.filter((e) => EXTRACTABLE_FIELDS.has(e.field))
+    if (valid.length === 0) return Response.json({ seeded: 0 })
+
+    // skipDuplicates: if the worker already ran, don't clobber its richer data.
+    const result = await prisma.aIExtraction.createMany({
+      data: valid.map((e) => ({
+        contractId:  params.id,
+        field:       e.field,
+        rawValue:    e.rawValue,
+        confidence:  e.confidence,
+        sourceText:  null,
+        sourcePage:  null,
+        extractedBy: "ai",
+        status:      "pending",
+      })),
+      skipDuplicates: true,
+    })
+
+    return Response.json({ seeded: result.count })
+  })
+}
+
 // ─── PATCH /api/contracts/[id]/extractions ────────────────────────────────────
 // Actions:
 //   { action: "accept",     extractionId: string }           — mark accepted + write to contract

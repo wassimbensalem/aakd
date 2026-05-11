@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
 import { signUp } from "@/lib/auth/client"
@@ -9,12 +9,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // If the user arrived via an invitation link, callbackURL points back to
+  // /accept-invitation?id=... — skip /create-org entirely and go accept.
+  const callbackURL = searchParams.get("callbackURL") ?? null
+
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+
+  const destination = callbackURL ?? "/create-org"
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,12 +31,12 @@ export default function RegisterPage() {
         name,
         email,
         password,
-        callbackURL: "/create-org",
+        callbackURL: destination,
       })
       if (result.error) {
         toast.error(result.error.message ?? "Registration failed")
       } else {
-        router.push("/create-org")
+        router.push(destination)
       }
     } catch {
       toast.error("An unexpected error occurred")
@@ -42,7 +49,9 @@ export default function RegisterPage() {
     <>
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-zinc-900">Create account</h1>
-        <p className="text-sm text-zinc-500">Get started with ClauseFlow</p>
+        <p className="text-sm text-zinc-500">
+          {callbackURL ? "Create an account to accept your invitation" : "Get started with ClauseFlow"}
+        </p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
@@ -88,10 +97,21 @@ export default function RegisterPage() {
       </form>
       <p className="mt-4 text-center text-sm text-zinc-500">
         Already have an account?{" "}
-        <Link href="/login" className="text-indigo-600 hover:underline">
+        <Link
+          href={callbackURL ? `/login?callbackURL=${encodeURIComponent(callbackURL)}` : "/login"}
+          className="text-indigo-600 hover:underline"
+        >
           Sign in
         </Link>
       </p>
     </>
+  )
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
   )
 }

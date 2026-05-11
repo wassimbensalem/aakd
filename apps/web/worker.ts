@@ -27,7 +27,7 @@ import { generateEmbedding, currentEmbeddingModel } from "@/lib/embedding"
 import { getSubmission, isAllowedDocuSealUrl } from "@/lib/docuseal"
 import { chunkText } from "@/lib/ai/chunking"
 import { sendAlertEmailById } from "@/lib/email"
-import { sendApprovalRequestEmail } from "@/lib/email/approval"
+import { sendApprovalRequestEmail, sendApprovalRejectionEmail } from "@/lib/email/approval"
 import { sendEventNotificationEmail } from "@/lib/email/event-notification"
 import { sendSlackEvent, sendTeamsEvent } from "@/lib/notifications/webhooks"
 import { decrypt } from "@/lib/notifications/crypto"
@@ -942,6 +942,16 @@ const emailWorker = new Worker<EmailJobData>(
         })
         return
       }
+      if (data.kind === "approval_rejected") {
+        await sendApprovalRejectionEmail({
+          to: data.to,
+          requesterName: data.requesterName,
+          reviewerName: data.reviewerName,
+          contractTitle: data.contractTitle,
+          comment: data.comment,
+        })
+        return
+      }
       if (data.kind === "event_notification") {
         // orgName is looked up here so the event_notification job stays small
         // (the fanout job already loaded the full contract context).
@@ -1145,6 +1155,18 @@ const fanoutWorker = new Worker<NotificationFanoutJobData>(
         })
       }
     }
+
+    // 6. In-app notifications — create Notification rows for targeted users.
+    // Each write is wrapped in .catch() so a DB failure never breaks the fanout.
+    await createInAppNotifications(
+      db,
+      eventName as NotificationEventName,
+      contract.id,
+      contract.title,
+      contract.organizationId,
+      actor,
+      metadata,
+    )
   },
   // attempts: 1 — fanout enqueues per-channel deliver jobs that have their own
   // retry logic. Retrying the fanout itself would re-deliver to channels that
@@ -1158,6 +1180,95 @@ fanoutWorker.on("completed", (job) =>
 fanoutWorker.on("failed", (job, err) =>
   console.error(`[fanout] Job ${job?.id} failed:`, err),
 )
+
+// ─── In-app notification helper ───────────────────────────────────────────────
+// Creates Notification rows for per-event target users. Each write is fire-and-
+// forget (.catch logged) so a DB failure never blocks the outer fanout job.
+
+async function createInAppNotifications(
+  db: ReturnType<typeof getWorkerPrisma>,
+  eventName: NotificationEventName,
+  contractId: string,
+  contractTitle: string,
+  organizationId: string,
+  actor: { id: string; name: string; email: string } | null,
+  metadata: Record<string, string | number | boolean | null>,
+): Promise<void> {
+  const actorName = actor?.name ?? "Someone"
+
+  async function writeNotification(
+    userId: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    await db.notification.create({
+      data: {
+        userId,
+        organizationId,
+        contractId,
+        eventName,
+        title,
+        body,
+      },
+    }).catch((err) => console.error(`[fanout] in-app notification write failed:`, err))
+  }
+
+  switch (eventName) {
+    case "approval.requested": {
+      const assigneeId = typeof metadata.assigneeId === "string" ? metadata.assigneeId : null
+      const requesterName = typeof metadata.requesterName === "string" ? metadata.requesterName : actorName
+      if (assigneeId) {
+        await writeNotification(
+          assigneeId,
+          "Approval requested",
+          `${requesterName} asked you to approve "${contractTitle}"`,
+        )
+      }
+      break
+    }
+
+    case "approval.approved":
+    case "approval.rejected": {
+      const approvalId = typeof metadata.approvalId === "string" ? metadata.approvalId : null
+      const decidedByName = typeof metadata.decidedByName === "string" ? metadata.decidedByName : actorName
+      const verb = eventName === "approval.approved" ? "approved" : "rejected"
+      if (approvalId) {
+        const approval = await db.approval.findUnique({
+          where: { id: approvalId },
+          select: { requestedById: true },
+        }).catch(() => null)
+        if (approval?.requestedById) {
+          await writeNotification(
+            approval.requestedById,
+            eventName === "approval.approved" ? "Approval approved" : "Approval rejected",
+            `${decidedByName} ${verb} "${contractTitle}"`,
+          )
+        }
+      }
+      break
+    }
+
+    case "contract.sent_for_signing": {
+      // Notify all org members with role legal, admin, or owner
+      const members = await db.member.findMany({
+        where: { organizationId, role: { in: ["legal", "admin", "owner"] } },
+        select: { userId: true },
+      }).catch(() => [] as Array<{ userId: string }>)
+      for (const m of members) {
+        await writeNotification(
+          m.userId,
+          "Ready for signing",
+          `"${contractTitle}" is ready for signing`,
+        )
+      }
+      break
+    }
+
+    default:
+      // No in-app notification for other events (they get email/Slack/webhook)
+      break
+  }
+}
 
 // Resolve per-event default recipients. Returns the set of userIds whose
 // preferences should be checked. The caller filters by UserNotificationPreference

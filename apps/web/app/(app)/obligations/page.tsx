@@ -8,8 +8,17 @@ import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import type { Obligation, ObligationStatus, ObligationPriority } from "@/components/obligations/types"
+
+const REMINDER_OPTIONS = [1, 3, 7, 14, 30] as const
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -149,11 +158,48 @@ function StatusBadge({
 function ObligationDetailSheet({
   obligation,
   onClose,
+  onUpdate,
 }: {
   obligation: FlatObligation | null
   onClose: () => void
+  onUpdate: (updated: FlatObligation) => void
 }) {
   const ob = obligation
+  const [reminderDays, setReminderDays] = useState<number>(ob?.reminderDays ?? 7)
+  const [savingReminder, setSavingReminder] = useState(false)
+
+  // Sync reminder state when obligation changes
+  useEffect(() => {
+    if (ob) setReminderDays(ob.reminderDays)
+  }, [ob?.id, ob?.reminderDays])
+
+  async function handleReminderChange(val: string | null) {
+    if (!ob || val === null) return
+    const days = Number(val)
+    const prev = reminderDays
+    setReminderDays(days) // optimistic
+    setSavingReminder(true)
+    try {
+      const res = await fetch(
+        `/api/contracts/${ob.contractId}/obligations/${ob.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reminderDays: days }),
+        },
+      )
+      if (!res.ok) throw new Error("Failed")
+      const updated = await res.json()
+      onUpdate({ ...ob, reminderDays: updated.reminderDays })
+      toast.success("Reminder updated")
+    } catch {
+      setReminderDays(prev) // roll back
+      toast.error("Failed to update reminder")
+    } finally {
+      setSavingReminder(false)
+    }
+  }
+
   if (!ob) return null
 
   const overdue = isOverdue(ob.dueDate, ob.status)
@@ -261,12 +307,36 @@ function ObligationDetailSheet({
             </span>
           </div>
 
-          {/* Reminder */}
+          {/* Reminder — editable */}
           <div className="flex items-start gap-3">
             <Bell className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-            <span className="text-sm text-foreground">
-              {ob.reminderDays > 0 ? `${ob.reminderDays} days before due` : "None"}
-            </span>
+            <div className="flex flex-col gap-1 min-w-0">
+              <Select
+                value={String(reminderDays)}
+                onValueChange={handleReminderChange}
+                disabled={savingReminder}
+              >
+                <SelectTrigger className="h-8 w-40 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REMINDER_OPTIONS.map((d) => (
+                    <SelectItem key={d} value={String(d)} className="text-sm">
+                      {d} day{d === 1 ? "" : "s"} before due
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {ob.reminderSentAt && (
+                <p className="text-xs text-muted-foreground">
+                  Reminder sent{" "}
+                  {new Date(ob.reminderSentAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Description */}
@@ -620,7 +690,16 @@ export default function ObligationsPage() {
         )}
       </div>
 
-      <ObligationDetailSheet obligation={selected} onClose={() => setSelected(null)} />
+      <ObligationDetailSheet
+        obligation={selected}
+        onClose={() => setSelected(null)}
+        onUpdate={(updated) => {
+          setObligations((prev) =>
+            prev.map((o) => (o.id === updated.id ? { ...o, reminderDays: updated.reminderDays } : o)),
+          )
+          setSelected((prev) => (prev?.id === updated.id ? { ...prev, reminderDays: updated.reminderDays } : prev))
+        }}
+      />
     </div>
   )
 }

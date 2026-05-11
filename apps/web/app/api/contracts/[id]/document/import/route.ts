@@ -92,6 +92,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         contractId: params.id,
         storageKey: tmpKey,
         requestedById: ctx.userId,
+        fileType,
         jobId: job.id,
       })
     }

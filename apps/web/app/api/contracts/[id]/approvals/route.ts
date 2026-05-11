@@ -102,21 +102,31 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       select: USER_SELECT,
     })
 
-    // Check if any approvals are still active (pending/waiting).
-    // If none are active (e.g. all were rejected or approved), we start fresh
-    // from step 1 so a re-request after rejection isn't stuck in "waiting".
-    const activeApprovalCount = await prisma.approval.count({
-      where: { contractId: params.id, status: { in: ["pending", "waiting"] } },
+    // Only count "pending" approvals (actively awaiting a decision) to determine
+    // whether we're in an active cycle. "waiting" approvals that were never
+    // activated (because a prior step rejected) are stale and must not block
+    // a re-request — they would push the new approval to step N+1 as "waiting"
+    // and suppress the notification entirely.
+    const pendingCount = await prisma.approval.count({
+      where: { contractId: params.id, status: "pending" },
     })
-    const hasActiveApprovals = activeApprovalCount > 0
+    const hasActivePending = pendingCount > 0
 
     // Determine step — caller override takes precedence; otherwise auto-assign.
-    // Start fresh at step 1 when no active approvals exist (post-rejection reset).
+    // Start fresh at step 1 when no pending approvals exist (post-rejection reset).
     const stepAgg = await prisma.approval.aggregate({
       where: { contractId: params.id },
       _max: { step: true },
     })
-    const nextStep = body.step ?? (hasActiveApprovals ? (stepAgg._max.step ?? 0) + 1 : 1)
+    const nextStep = body.step ?? (hasActivePending ? (stepAgg._max.step ?? 0) + 1 : 1)
+
+    // Starting fresh: delete any stale "waiting" approvals left over from a
+    // previous rejected cycle so activatedNext can't accidentally resurrect them.
+    if (nextStep === 1) {
+      await prisma.approval.deleteMany({
+        where: { contractId: params.id, status: "waiting" },
+      })
+    }
 
     // If this is not the first step (i.e. there's already a pending/active
     // approval in front of it) start in "waiting" so only the current active

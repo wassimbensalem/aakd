@@ -1307,20 +1307,29 @@ export default function ContractDetailPage() {
         <TabsContent value="approvals" className="flex-1 overflow-auto m-0 border-0">
           <div className="p-7">
             <div className="rounded-[var(--radius)] border border-border bg-card p-5">
-              {contract.status === "INTERNAL_REVIEW" && approvals.some(a => a.status === "rejected") && (
-                <div className="mb-4 flex items-start gap-3 rounded-[var(--radius)] border border-amber-200 bg-amber-50 px-4 py-3">
-                  <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-amber-900">Approval was rejected</p>
-                    <p className="text-xs text-amber-700 mt-0.5">Address the reviewer&apos;s feedback, then re-submit for approval.</p>
+              {contract.status === "INTERNAL_REVIEW" && approvals.some(a => a.status === "rejected") && (() => {
+                const iWasTheReviewer = approvals.some(a => a.status === "rejected" && a.assignedToId === session?.user?.id)
+                if (iWasTheReviewer) return (
+                  <div className="mb-4 flex items-start gap-3 rounded-[var(--radius)] border border-zinc-200 bg-muted/60 px-4 py-3">
+                    <AlertCircle className="size-4 text-zinc-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-zinc-600">You rejected this approval. The requester has been notified.</p>
                   </div>
-                  {canRequestApproval && (
-                    <Button size="sm" onClick={() => setApprovalOpen(true)} className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white border-0">
-                      Re-submit
-                    </Button>
-                  )}
-                </div>
-              )}
+                )
+                return (
+                  <div className="mb-4 flex items-start gap-3 rounded-[var(--radius)] border border-amber-200 bg-amber-50 px-4 py-3">
+                    <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-amber-900">Approval was rejected</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Address the reviewer&apos;s feedback, then re-submit for approval.</p>
+                    </div>
+                    {canRequestApproval && (
+                      <Button size="sm" onClick={() => setApprovalOpen(true)} className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white border-0">
+                        Re-submit
+                      </Button>
+                    )}
+                  </div>
+                )
+              })()}
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-sm font-medium text-foreground">Approval Workflow</h3>
                 {canRequestApproval && (

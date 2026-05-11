@@ -54,7 +54,7 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications()
-    intervalRef.current = setInterval(fetchNotifications, 30_000)
+    intervalRef.current = setInterval(fetchNotifications, 10_000)
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
@@ -70,10 +70,14 @@ export function NotificationBell() {
   }
 
   // Mark all as read as soon as the popover opens — the user has seen them.
+  // Refetch when closing so any notifications that arrived while open show correctly.
   function handleOpenChange(next: boolean) {
     setOpen(next)
     if (next && unreadCount > 0) {
       handleMarkAllRead()
+    }
+    if (!next) {
+      fetchNotifications()
     }
   }
 

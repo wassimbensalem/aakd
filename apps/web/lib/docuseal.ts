@@ -35,7 +35,7 @@ export function isAllowedDocuSealUrl(url: string): boolean {
 
 function authHeaders(): Record<string, string> {
   return {
-    Authorization: `Token ${KEY}`,
+    "X-Auth-Token": KEY ?? "",
   }
 }
 

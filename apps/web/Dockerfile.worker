@@ -9,6 +9,9 @@ RUN pnpm install --frozen-lockfile
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# LibreOffice is used by the document.convert worker to convert PDF→DOCX before
+# parsing with mammoth, which preserves tables, headings, and structure.
+RUN apk add --no-cache libreoffice
 
 # Root node_modules (pnpm virtual store + hoisted packages)
 COPY --from=deps /app/node_modules ./node_modules

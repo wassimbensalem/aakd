@@ -27,6 +27,9 @@ RUN pnpm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# LibreOffice is used by the document.convert worker to convert PDF→DOCX before
+# parsing with mammoth, which preserves tables, headings, and structure.
+RUN apk add --no-cache libreoffice
 # prisma CLI needed for migrate deploy at container start
 RUN npm install -g prisma
 RUN addgroup --system --gid 1001 nodejs

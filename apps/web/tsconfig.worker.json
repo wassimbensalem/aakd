@@ -10,5 +10,5 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["worker.ts", "lib/**/*.ts", "prisma/**/*.ts"]
+  "include": ["worker.ts", "lib/**/*.ts", "prisma/**/*.ts", "types/**/*.ts"]
 }

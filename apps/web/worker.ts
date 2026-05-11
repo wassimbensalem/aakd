@@ -13,9 +13,11 @@ import path from "path"
 dotenv.config({ path: path.resolve(__dirname, ".env.local") })
 
 import crypto from "node:crypto"
+import { promisify } from "node:util"
 import { Worker, Job } from "bullmq"
 import pdfParse from "pdf-parse"
 import mammoth from "mammoth"
+import libre from "libreoffice-convert"
 import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
@@ -104,6 +106,23 @@ function getAnthropic(): Anthropic {
 let _openai: OpenAI | null = null
 function getOpenAI(): OpenAI {
   return (_openai ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY }))
+}
+
+// ─── LibreOffice PDF→DOCX conversion helper ───────────────────────────────────
+// Converts a PDF buffer to DOCX using the local LibreOffice install.
+// Returns null if LibreOffice is unavailable or the conversion fails, so callers
+// can fall back to plain-text extraction without aborting the job.
+
+const libreConvert = promisify(libre.convert)
+
+async function pdfToDocxBuffer(pdfBuffer: Buffer): Promise<Buffer | null> {
+  try {
+    const result = await libreConvert(pdfBuffer, ".docx", undefined)
+    return result as Buffer
+  } catch (err) {
+    console.warn("[import] LibreOffice PDF→DOCX failed, falling back to text:", err)
+    return null
+  }
 }
 
 // ─── Extraction prompt ────────────────────────────────────────────────────────
@@ -1709,18 +1728,35 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
     let nodes: ReturnType<typeof htmlToPlateNodes>
 
     if (fileType === "pdf") {
-      // PDFs yield plain text only — no formatting can be recovered.
-      let rawText: string
-      try {
-        const result = await pdfParse(buffer)
-        rawText = result.text ?? ""
-        console.log(`[document.convert] PDF text extracted: ${rawText.length} chars`)
-      } catch (err) {
-        console.error(`[document.convert] pdf-parse failed for ${contractId}:`, err)
-        await storage.delete(storageKey).catch(() => {})
-        throw err
+      // Try LibreOffice PDF→DOCX first — preserves tables, headings, and structure.
+      // Falls back to plain-text extraction when LibreOffice is unavailable or fails.
+      const docxBuffer = await pdfToDocxBuffer(buffer)
+      if (docxBuffer) {
+        let html: string
+        try {
+          const result = await mammoth.convertToHtml({ buffer: docxBuffer })
+          html = result.value ?? ""
+          console.log(`[document.convert] PDF→DOCX via LibreOffice, mammoth HTML: ${html.length} chars`)
+        } catch (err) {
+          console.error(`[document.convert] mammoth failed on LibreOffice DOCX for ${contractId}:`, err)
+          await storage.delete(storageKey).catch(() => {})
+          throw err
+        }
+        nodes = htmlToPlateNodes(html)
+      } else {
+        // LibreOffice unavailable or failed — fall back to plain text.
+        let rawText: string
+        try {
+          const result = await pdfParse(buffer)
+          rawText = result.text ?? ""
+          console.log(`[document.convert] PDF text extracted (fallback): ${rawText.length} chars`)
+        } catch (err) {
+          console.error(`[document.convert] pdf-parse failed for ${contractId}:`, err)
+          await storage.delete(storageKey).catch(() => {})
+          throw err
+        }
+        nodes = plaintextToPlateNodes(rawText)
       }
-      nodes = plaintextToPlateNodes(rawText)
     } else {
       // DOCX: mammoth → HTML → Plate AST (formatting preserved)
       let html: string
@@ -1771,7 +1807,7 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
       console.warn(`[document.convert] Failed to delete tmp object ${storageKey}:`, err),
     )
 
-    const sourceLabel = fileType === "pdf" ? "PDF (text only)" : "Word document"
+    const sourceLabel = fileType === "pdf" ? "PDF" : "Word document"
     await db.activity.create({
       data: {
         contractId,

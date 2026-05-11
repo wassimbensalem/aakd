@@ -44,6 +44,7 @@ export default function OrgSettingsPage() {
   const [timezone, setTimezone] = useState("UTC")
   const [industry, setIndustry] = useState("")
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -55,11 +56,12 @@ export default function OrgSettingsPage() {
   useEffect(() => {
     fetch("/api/org")
       .then((r) => r.json())
-      .then((data: { name?: string; meta?: Record<string, unknown> }) => {
+      .then((data: { name?: string; meta?: Record<string, unknown>; logo?: string | null }) => {
         if (data.name) setName(data.name)
         if (data.meta?.domain) setDomain(data.meta.domain as string)
         if (data.meta?.timezone) setTimezone(data.meta.timezone as string)
         if (data.meta?.industry) setIndustry(data.meta.industry as string)
+        if (data.logo) setLogoUrl(data.logo)
       })
       .catch(() => {})
   }, [])
@@ -71,14 +73,28 @@ export default function OrgSettingsPage() {
       .catch(() => setAiStatus({ provider: null, model: null }))
   }, [])
 
-  function handleLogoFile(file: File) {
+  async function handleLogoFile(file: File) {
     if (file.size > 2 * 1024 * 1024) {
       toast.error("Logo must be under 2 MB")
       return
     }
-    const reader = new FileReader()
-    reader.onload = (e) => setLogoUrl(e.target?.result as string)
-    reader.readAsDataURL(file)
+    setLogoUploading(true)
+    try {
+      const form = new FormData()
+      form.append("file", file)
+      const res = await fetch("/api/org/logo", { method: "POST", body: form })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error((err as { error?: string }).error ?? "Failed to upload logo")
+        return
+      }
+      const data = (await res.json()) as { url: string }
+      setLogoUrl(data.url)
+    } catch {
+      toast.error("Failed to upload logo")
+    } finally {
+      setLogoUploading(false)
+    }
   }
 
   function handleLogoDrop(e: React.DragEvent) {
@@ -94,7 +110,7 @@ export default function OrgSettingsPage() {
       const res = await fetch("/api/org", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, domain, timezone, industry }),
+        body: JSON.stringify({ name, domain, timezone, industry, logo: logoUrl }),
       })
       if (!res.ok) throw new Error("Failed to update")
       toast.success("Organization updated")
@@ -213,18 +229,20 @@ export default function OrgSettingsPage() {
           </div>
         ) : (
           <div
-            className="border-2 border-dashed border-border rounded-[var(--radius)] p-8 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted/40 transition-colors"
-            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed border-border rounded-[var(--radius)] p-8 flex flex-col items-center justify-center gap-2 transition-colors ${logoUploading ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-muted/40"}`}
+            onClick={() => !logoUploading && fileInputRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
-            onDrop={handleLogoDrop}
+            onDrop={(e) => { if (!logoUploading) handleLogoDrop(e) }}
           >
             <ImageIcon className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-foreground font-medium">Click to upload or drag and drop</p>
-            <p className="text-xs text-muted-foreground">PNG, JPG up to 2MB</p>
+            <p className="text-sm text-foreground font-medium">
+              {logoUploading ? "Uploading…" : "Click to upload or drag and drop"}
+            </p>
+            <p className="text-xs text-muted-foreground">PNG, JPG, WebP up to 2MB</p>
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg"
+              accept="image/png,image/jpeg,image/webp"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0]

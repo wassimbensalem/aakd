@@ -61,10 +61,10 @@ export default function BillingPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                  Pro Plan
+                  —
                 </span>
-                <span className="text-xs text-muted-foreground">10 seats</span>
-                <span className="text-sm font-bold tabular-nums">$790/mo</span>
+                <span className="text-xs text-muted-foreground">— seats</span>
+                <span className="text-sm font-bold tabular-nums">—</span>
               </div>
             </div>
           </div>
@@ -76,31 +76,31 @@ export default function BillingPage() {
             </p>
             <UsageBar
               label="Contracts"
-              used={147}
-              max={Infinity}
-              displayUsed="147"
+              used={0}
+              max={1}
+              displayUsed="—"
               displayMax="∞"
             />
             <UsageBar
               label="Templates"
-              used={24}
-              max={Infinity}
-              displayUsed="24"
+              used={0}
+              max={1}
+              displayUsed="—"
               displayMax="∞"
             />
             <UsageBar
               label="Team Members"
-              used={10}
-              max={15}
-              displayUsed="10"
-              displayMax="15"
+              used={0}
+              max={1}
+              displayUsed="—"
+              displayMax="∞"
             />
             <UsageBar
               label="Storage"
-              used={2.1}
-              max={5}
-              displayUsed="2.1 GB"
-              displayMax="5 GB"
+              used={0}
+              max={1}
+              displayUsed="—"
+              displayMax="∞"
             />
           </div>
 
@@ -113,8 +113,8 @@ export default function BillingPage() {
               <div className="flex h-7 w-10 items-center justify-center rounded border border-border bg-muted">
                 <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
-              <span className="text-sm text-foreground/80 font-mono">
-                •••• •••• •••• 4242
+              <span className="text-sm text-foreground/80">
+                No payment method
               </span>
             </div>
           </div>
@@ -160,7 +160,7 @@ export default function BillingPage() {
               Billing — Cloud Feature
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              ClauseFlow is open-source and self-hosted. Billing management is available
+              Aakd is open-source and self-hosted. Billing management is available
               in the hosted cloud version at clauseflow.io.
             </p>
           </div>

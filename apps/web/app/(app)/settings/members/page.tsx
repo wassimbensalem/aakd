@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import {
   Table,
   TableBody,
@@ -87,6 +87,8 @@ export default function MembersPage() {
   const [inviteRole, setInviteRole] = useState("member")
   const [inviting, setInviting] = useState(false)
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
+  const [confirmCancelInvite, setConfirmCancelInvite] = useState<{ id: string; email: string } | null>(null)
 
   const fetchMembers = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -172,7 +174,11 @@ export default function MembersPage() {
   }
 
   async function removeMember(memberId: string, memberName: string) {
-    if (!confirm(`Remove ${memberName} from the organization?`)) return
+    setConfirmRemove({ id: memberId, name: memberName })
+  }
+
+  async function doRemoveMember(memberId: string, memberName: string) {
+    setConfirmRemove(null)
     try {
       const res = await fetch(`/api/org/members/${memberId}`, { method: "DELETE" })
       if (!res.ok) {
@@ -206,7 +212,11 @@ export default function MembersPage() {
   }
 
   async function cancelInvitation(invitationId: string, email: string) {
-    if (!confirm(`Cancel the invitation for ${email}?`)) return
+    setConfirmCancelInvite({ id: invitationId, email })
+  }
+
+  async function doCancelInvitation(invitationId: string) {
+    setConfirmCancelInvite(null)
     try {
       const res = await fetch(`/api/org/invitations/${invitationId}`, { method: "DELETE" })
       if (!res.ok) return
@@ -395,6 +405,48 @@ export default function MembersPage() {
           </div>
         </div>
       )}
+
+      {/* Remove member confirmation */}
+      <Dialog open={!!confirmRemove} onOpenChange={(open) => { if (!open) setConfirmRemove(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove member</DialogTitle>
+            <DialogDescription>
+              Remove <span className="font-medium text-foreground">{confirmRemove?.name}</span> from the organization? They will lose all access immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmRemove(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmRemove && doRemoveMember(confirmRemove.id, confirmRemove.name)}
+            >
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel invitation confirmation */}
+      <Dialog open={!!confirmCancelInvite} onOpenChange={(open) => { if (!open) setConfirmCancelInvite(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel invitation</DialogTitle>
+            <DialogDescription>
+              Cancel the invitation for <span className="font-medium text-foreground">{confirmCancelInvite?.email}</span>? The invite link will stop working.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmCancelInvite(null)}>Keep</Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmCancelInvite && doCancelInvitation(confirmCancelInvite.id)}
+            >
+              Cancel invitation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Invite modal */}
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>

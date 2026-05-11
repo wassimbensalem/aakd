@@ -167,9 +167,10 @@ export default function AuditLogPage() {
             All activity across your organization — {total} event{total !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5" disabled>
+        <Button variant="outline" size="sm" className="gap-1.5" disabled title="Coming soon">
           <Download className="h-3.5 w-3.5" />
           Export CSV
+          <span className="text-[9px] font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">Soon</span>
         </Button>
       </div>
 

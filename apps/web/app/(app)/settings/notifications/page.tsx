@@ -15,8 +15,10 @@ import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -68,6 +70,8 @@ export default function NotificationsSettingsPage() {
 
   const [newSecret, setNewSecret] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [confirmDeleteChannel, setConfirmDeleteChannel] = useState<string | null>(null)
+  const [confirmDeleteWebhook, setConfirmDeleteWebhook] = useState<string | null>(null)
 
   const isAdmin = role === "admin" || role === "owner"
 
@@ -172,7 +176,11 @@ export default function NotificationsSettingsPage() {
   }
 
   async function deleteChannel(id: string) {
-    if (!confirm("Delete this channel? This cannot be undone.")) return
+    setConfirmDeleteChannel(id)
+  }
+
+  async function doDeleteChannel(id: string) {
+    setConfirmDeleteChannel(null)
     try {
       const res = await fetch(`/api/org/notification-channels/${id}`, {
         method: "DELETE",
@@ -219,9 +227,11 @@ export default function NotificationsSettingsPage() {
   }
 
   async function deleteWebhook(id: string) {
-    if (!confirm("Delete this webhook? Delivery history will also be removed.")) {
-      return
-    }
+    setConfirmDeleteWebhook(id)
+  }
+
+  async function doDeleteWebhook(id: string) {
+    setConfirmDeleteWebhook(null)
     try {
       const res = await fetch(`/api/org/webhooks/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error()
@@ -513,6 +523,48 @@ export default function NotificationsSettingsPage() {
           </form>
         )}
       </section>
+
+      {/* Delete channel confirmation */}
+      <Dialog open={!!confirmDeleteChannel} onOpenChange={(open) => { if (!open) setConfirmDeleteChannel(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete channel</DialogTitle>
+            <DialogDescription>
+              Delete this notification channel? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteChannel(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmDeleteChannel && doDeleteChannel(confirmDeleteChannel)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete webhook confirmation */}
+      <Dialog open={!!confirmDeleteWebhook} onOpenChange={(open) => { if (!open) setConfirmDeleteWebhook(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete webhook</DialogTitle>
+            <DialogDescription>
+              Delete this webhook? Delivery history will also be removed. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteWebhook(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmDeleteWebhook && doDeleteWebhook(confirmDeleteWebhook)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!newSecret} onOpenChange={() => setNewSecret(null)}>
         <DialogContent>

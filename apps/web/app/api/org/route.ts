@@ -9,6 +9,7 @@ const UpdateOrgSchema = z.object({
   domain: z.string().max(200).optional(),
   timezone: z.string().max(100).optional(),
   industry: z.string().max(100).optional(),
+  logo: z.string().url().optional().nullable(),
 })
 
 export async function GET(req: Request) {
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
     })
     if (!org) return new Response("Not Found", { status: 404 })
     const meta = org.metadata ? (JSON.parse(org.metadata) as Record<string, unknown>) : {}
-    return Response.json({ ...org, meta })
+    return Response.json({ ...org, meta, logo: org.logo ?? null })
   })
 }
 
@@ -64,10 +65,11 @@ export async function PATCH(req: Request) {
       where: { id: ctx.organizationId },
       data: {
         ...(parsed.data.name ? { name: parsed.data.name } : {}),
+        ...("logo" in parsed.data ? { logo: parsed.data.logo } : {}),
         metadata: JSON.stringify(meta),
       },
     })
 
-    return Response.json({ ...org, meta })
+    return Response.json({ ...org, meta, logo: org.logo ?? null })
   })
 }

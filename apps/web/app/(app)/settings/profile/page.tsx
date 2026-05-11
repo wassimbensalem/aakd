@@ -474,23 +474,18 @@ export default function ProfilePage() {
 
         {/* Active sessions */}
         <SectionCard title="Active Sessions">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted border border-border text-muted-foreground">
-                <Monitor className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[13px] font-medium text-foreground">
-                  MacBook Pro · Chrome · San Francisco, CA
-                </p>
-                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-semibold mt-0.5">
-                  Current session
-                </span>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted border border-border text-muted-foreground">
+              <Monitor className="h-4 w-4" />
             </div>
-            <Button variant="outline" size="sm" disabled className="opacity-50">
-              Revoke
-            </Button>
+            <div>
+              <p className="text-[13px] font-medium text-foreground">
+                Current session
+              </p>
+              <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-semibold mt-0.5">
+                Active
+              </span>
+            </div>
           </div>
         </SectionCard>
       </div>

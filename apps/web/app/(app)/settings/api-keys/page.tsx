@@ -19,7 +19,6 @@ export default function ApiKeysPage() {
   const [keyName, setKeyName] = useState("")
   const [keyDescription, setKeyDescription] = useState("")
   const [newKey, setNewKey] = useState<string | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copiedNew, setCopiedNew] = useState(false)
 
   async function fetchKeys() {
@@ -71,12 +70,6 @@ export default function ApiKeysPage() {
     } catch {
       toast.error("Failed to revoke key")
     }
-  }
-
-  async function copyToClipboard(text: string, id: string) {
-    await navigator.clipboard.writeText(text)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
   }
 
   async function copyNewKey(key: string) {
@@ -137,21 +130,12 @@ export default function ApiKeysPage() {
                     <code className="font-mono text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-[var(--radius)]">
                       {maskKey(k.prefix)}
                     </code>
-                    {!k.revokedAt && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0"
-                        onClick={() => copyToClipboard(k.prefix, k.id)}
-                        title="Copy key prefix"
-                      >
-                        {copiedId === k.id
-                          ? <Check className="h-3.5 w-3.5 text-emerald-600" />
-                          : <Copy className="h-3.5 w-3.5" />
-                        }
-                      </Button>
-                    )}
                   </div>
+                  {!k.revokedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      The full key was shown once at creation.
+                    </p>
+                  )}
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span>Created {format(new Date(k.createdAt), "MMM d, yyyy")}</span>
                     {k.lastUsedAt && (

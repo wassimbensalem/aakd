@@ -26,9 +26,10 @@ export async function GET(req: Request, { params }: { params: { provider: string
   try {
     authUrl = getCrmProvider(provider).authorizationUrl(state, redirectUri)
   } catch (err) {
+    // Credentials not configured → 503 (service unavailable), not 500 (server error)
     return Response.json(
       { error: (err as Error).message ?? "provider_misconfigured" },
-      { status: 500 },
+      { status: 503 },
     )
   }
 

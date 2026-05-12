@@ -12,8 +12,9 @@ import { ContractEditor, EMPTY_DOC, acceptAllChanges, rejectAllChanges } from "@
 import { cn } from "@/lib/utils"
 import type { ContractStatus } from "@/lib/types"
 import { useSession } from "@/lib/auth/client"
-import { Check, Trash2, MessageSquare, GitBranch, CheckCircle2, Loader2 } from "lucide-react"
+import { Trash2, MessageSquare, GitBranch, CheckCircle2, Loader2 } from "lucide-react"
 import type { Editor } from "@tiptap/react"
+import { TrackChangeSidebar } from "@/components/editor/track-change-sidebar"
 
 const READ_ONLY_STATUSES = new Set<ContractStatus>([
   "AWAITING_SIGNATURE",
@@ -875,56 +876,21 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
 
             {/* ── Changes tab ───────────────────────────────── */}
             {rightTab === "changes" && (
-              <div className="space-y-2">
-                {/* Accept / Reject All — always visible; disabled when nothing to act on */}
-                <div className="flex gap-2 pb-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 text-emerald-700 border-emerald-200 hover:bg-emerald-50 text-[11px] disabled:opacity-40"
-                    disabled={changeCount === 0}
-                    onClick={handleAcceptAllChanges}
-                  >
-                    <Check className="size-3.5 mr-1" />
-                    Accept All
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 text-red-700 border-red-200 hover:bg-red-50 text-[11px] disabled:opacity-40"
-                    disabled={changeCount === 0}
-                    onClick={handleRejectAllChanges}
-                  >
-                    Reject All
-                  </Button>
-                </div>
-                {changes.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-12">
-                    <div className="text-muted-foreground/40">
-                      <GitBranch className="size-7" />
-                    </div>
-                    <p className="text-[12px] text-muted-foreground">No tracked changes</p>
-                    <p className="text-[11px] text-muted-foreground/60">Enable Track Changes in the toolbar to start tracking edits.</p>
+              editorRef.current ? (
+                <TrackChangeSidebar
+                  editor={editorRef.current}
+                  onAcceptAll={handleAcceptAllChanges}
+                  onRejectAll={handleRejectAllChanges}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-12">
+                  <div className="text-muted-foreground/40">
+                    <GitBranch className="size-7" />
                   </div>
-                ) : (
-                  changes.map((change, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "rounded-md border px-2.5 py-2 text-[12px]",
-                        change.type === "insertion"
-                          ? "border-emerald-200 bg-emerald-50/50 text-emerald-800"
-                          : "border-red-200 bg-red-50/50 text-red-800"
-                      )}
-                    >
-                      <span className="font-semibold mr-1.5">
-                        {change.type === "insertion" ? "+" : "-"}
-                      </span>
-                      <span className="break-words">{change.text}</span>
-                    </div>
-                  ))
-                )}
-              </div>
+                  <p className="text-[12px] text-muted-foreground">No tracked changes</p>
+                  <p className="text-[11px] text-muted-foreground/60">Enable Track Changes in the toolbar to start tracking edits.</p>
+                </div>
+              )
             )}
           </div>
         </aside>

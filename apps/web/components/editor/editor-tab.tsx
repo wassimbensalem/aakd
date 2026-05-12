@@ -12,9 +12,11 @@ import { ContractEditor, EMPTY_DOC, acceptAllChanges, rejectAllChanges } from "@
 import { cn } from "@/lib/utils"
 import type { ContractStatus } from "@/lib/types"
 import { useSession } from "@/lib/auth/client"
-import { Trash2, MessageSquare, GitBranch, CheckCircle2, Loader2 } from "lucide-react"
+import { Trash2, MessageSquare, GitBranch, CheckCircle2, Loader2, Camera } from "lucide-react"
 import type { Editor } from "@tiptap/react"
 import { TrackChangeSidebar } from "@/components/editor/track-change-sidebar"
+import { SnapshotSaveDialog } from "@/components/editor/snapshot-save-dialog"
+import { SnapshotHistoryPanel } from "@/components/editor/snapshot-history-panel"
 
 const READ_ONLY_STATUSES = new Set<ContractStatus>([
   "AWAITING_SIGNATURE",
@@ -114,7 +116,11 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
   const [exportBusy, setExportBusy] = useState(false)
   const [extractOpen, setExtractOpen] = useState(false)
   const [extracting, setExtracting] = useState(false)
-  const [rightTab, setRightTab] = useState<"details" | "comments" | "changes">("details")
+  const [rightTab, setRightTab] = useState<"details" | "comments" | "changes" | "snapshots">("details")
+
+  // Snapshot state
+  const [snapshotDialogOpen, setSnapshotDialogOpen] = useState(false)
+  const [snapshotRefresh, setSnapshotRefresh] = useState(0)
 
   // Comments state
   const [comments, setComments] = useState<CommentData[]>([])
@@ -733,6 +739,18 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
             >
               Changes{changeCount > 0 ? ` (${changeCount})` : ""}
             </button>
+            <button
+              type="button"
+              onClick={() => setRightTab("snapshots")}
+              className={cn(
+                "flex-1 py-2.5 text-[11px] font-medium transition-colors",
+                rightTab === "snapshots"
+                  ? "border-b-2 border-primary text-primary"
+                  : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Snapshots
+            </button>
           </div>
 
           {/* Tab content */}
@@ -779,6 +797,20 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
                       disabled={extracting}
                     >
                       Re-run AI Extraction
+                    </Button>
+                  </>
+                )}
+                {documentExists && canEdit && (
+                  <>
+                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold pt-3">Snapshots</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-1.5"
+                      onClick={() => setSnapshotDialogOpen(true)}
+                    >
+                      <Camera className="h-3.5 w-3.5" />
+                      Save snapshot
                     </Button>
                   </>
                 )}
@@ -892,6 +924,14 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
                 </div>
               )
             )}
+
+            {/* ── Snapshots tab ─────────────────────────────── */}
+            {rightTab === "snapshots" && (
+              <SnapshotHistoryPanel
+                contractId={contractId}
+                refreshTrigger={snapshotRefresh}
+              />
+            )}
           </div>
         </aside>
       </div>
@@ -982,6 +1022,17 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Snapshot save dialog ─────────────────────────────────────────────── */}
+      {snapshotDialogOpen && editorRef.current && (
+        <SnapshotSaveDialog
+          open={snapshotDialogOpen}
+          contractId={contractId}
+          content={editorRef.current.getJSON() as Record<string, unknown>}
+          onClose={() => setSnapshotDialogOpen(false)}
+          onSaved={() => setSnapshotRefresh((n) => n + 1)}
+        />
+      )}
     </div>
   )
 }

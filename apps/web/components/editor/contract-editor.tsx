@@ -262,6 +262,88 @@ export function rejectAllChanges(editor: Editor) {
   editor.view.dispatch(tr)
 }
 
+// ── Individual track-change helpers ──────────────────────────────────────────
+
+export type ChangeItem = {
+  id: string          // unique: `${type}-${from}-${to}`
+  type: "insertion" | "deletion"
+  from: number        // ProseMirror position (absolute)
+  to: number          // ProseMirror position (absolute)
+  text: string        // the marked text
+  userId: string | null
+  createdAt: string | null
+}
+
+/**
+ * Walk the ProseMirror document and collect all insertion/deletion marks
+ * with their absolute positions. Returns changes in document order.
+ */
+export function collectChanges(editor: Editor): ChangeItem[] {
+  const changes: ChangeItem[] = []
+  editor.state.doc.descendants((node, pos) => {
+    for (const mark of node.marks) {
+      if (mark.type.name === "insertion" || mark.type.name === "deletion") {
+        const from = pos
+        const to = pos + node.nodeSize
+        changes.push({
+          id: `${mark.type.name}-${from}-${to}`,
+          type: mark.type.name as "insertion" | "deletion",
+          from,
+          to,
+          text: node.text ?? "",
+          userId: (mark.attrs.userId as string) ?? null,
+          createdAt: (mark.attrs.createdAt as string) ?? null,
+        })
+      }
+    }
+  })
+  return changes
+}
+
+/**
+ * Accept a single tracked change:
+ * - insertion → remove the mark (keep the text)
+ * - deletion → remove the node range entirely
+ */
+export function acceptChange(editor: Editor, change: ChangeItem): void {
+  const { state, dispatch } = editor.view
+  const { tr } = state
+  if (change.type === "insertion") {
+    // Remove only the insertion mark, keep the text
+    tr.removeMark(change.from, change.to, state.schema.marks.insertion)
+  } else {
+    // deletion → delete the text
+    tr.delete(change.from, change.to)
+  }
+  dispatch(tr)
+}
+
+/**
+ * Reject a single tracked change:
+ * - insertion → delete the node range (reject the addition)
+ * - deletion → remove the mark (restore the text)
+ */
+export function rejectChange(editor: Editor, change: ChangeItem): void {
+  const { state, dispatch } = editor.view
+  const { tr } = state
+  if (change.type === "insertion") {
+    // Reject the insertion: delete the text
+    tr.delete(change.from, change.to)
+  } else {
+    // Reject the deletion: restore by removing the deletion mark
+    tr.removeMark(change.from, change.to, state.schema.marks.deletion)
+  }
+  dispatch(tr)
+}
+
+/**
+ * Scroll a specific change into view in the editor.
+ */
+export function scrollToChange(editor: Editor, change: ChangeItem): void {
+  editor.commands.setTextSelection({ from: change.from, to: change.to })
+  editor.commands.scrollIntoView()
+}
+
 // ─── Empty doc constant ────────────────────────────────────────────────────────
 
 export const EMPTY_DOC: TipTapDoc = {

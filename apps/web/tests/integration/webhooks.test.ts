@@ -60,15 +60,15 @@ describe("DocuSeal webhook HMAC verification", () => {
     delete process.env.DOCUSEAL_WEBHOOK_SECRET
   })
 
-  it("returns 200 when no secret is configured (backwards-compatible passthrough)", async () => {
+  it("returns 403 when no secret is configured (fail-secure — reject forged events)", async () => {
     delete process.env.DOCUSEAL_WEBHOOK_SECRET
 
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
-    // No signature header — should still pass
+    // No signature header and no secret — must be rejected to prevent forged webhook acceptance
     const req = makeWebhookRequest(ignoredPayload, null)
     const res = await POST(req)
 
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(403)
   })
 
   it("returns 200 for a valid HMAC-SHA256 signature", async () => {
@@ -93,31 +93,31 @@ describe("DocuSeal webhook HMAC verification", () => {
     expect(res.status).toBe(200)
   })
 
-  it("returns 401 when secret is configured but signature header is missing", async () => {
+  it("returns 403 when secret is configured but signature header is missing", async () => {
     process.env.DOCUSEAL_WEBHOOK_SECRET = SECRET
 
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
     const req = makeWebhookRequest(ignoredPayload, null)
     const res = await POST(req)
 
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(403)
     const body = await res.json()
-    expect(body.error).toBe("Invalid signature")
+    expect(body.error).toBe("Invalid or missing signature")
   })
 
-  it("returns 401 when signature is wrong", async () => {
+  it("returns 403 when signature is wrong", async () => {
     process.env.DOCUSEAL_WEBHOOK_SECRET = SECRET
 
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
     const req = makeWebhookRequest(ignoredPayload, "deadbeefdeadbeef")
     const res = await POST(req)
 
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(403)
     const body = await res.json()
-    expect(body.error).toBe("Invalid signature")
+    expect(body.error).toBe("Invalid or missing signature")
   })
 
-  it("returns 401 when signature matches a different secret", async () => {
+  it("returns 403 when signature matches a different secret", async () => {
     process.env.DOCUSEAL_WEBHOOK_SECRET = SECRET
 
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
@@ -125,10 +125,10 @@ describe("DocuSeal webhook HMAC verification", () => {
     const req = makeWebhookRequest(ignoredPayload, wrongSig)
     const res = await POST(req)
 
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(403)
   })
 
-  it("returns 401 when body is tampered after signing", async () => {
+  it("returns 403 when body is tampered after signing", async () => {
     process.env.DOCUSEAL_WEBHOOK_SECRET = SECRET
 
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
@@ -149,27 +149,42 @@ describe("DocuSeal webhook HMAC verification", () => {
     })
     const res = await POST(req)
 
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(403)
   })
 })
 
 // ─── Webhook processing with valid signature ─────────────────────────────────
 
+const PROCESSING_SECRET = "test-processing-secret-xyz"
+
+function makeSignedRequest(body: object | string): Request {
+  const rawBody = typeof body === "string" ? body : JSON.stringify(body)
+  const sig = createHmac("sha256", PROCESSING_SECRET).update(rawBody).digest("hex")
+  return new Request("http://localhost/api/webhooks/docuseal", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-docuseal-signature": sig,
+    },
+    body: rawBody,
+  })
+}
+
 describe("DocuSeal webhook processing (valid requests)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    process.env.DOCUSEAL_WEBHOOK_SECRET = PROCESSING_SECRET
+  })
+
+  afterEach(() => {
     delete process.env.DOCUSEAL_WEBHOOK_SECRET
   })
 
   it("returns 400 for invalid JSON body", async () => {
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
 
-    const req = new Request("http://localhost/api/webhooks/docuseal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "not-valid-json{",
-    })
+    const req = makeSignedRequest("not-valid-json{")
     const res = await POST(req)
 
     expect(res.status).toBe(400)
@@ -180,7 +195,7 @@ describe("DocuSeal webhook processing (valid requests)", () => {
   it("returns 200 (ok: true) for non-form.completed events without hitting DB", async () => {
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
 
-    const req = makeWebhookRequest({
+    const req = makeSignedRequest({
       event_type: "form.started",
       data: { id: 10, status: "in_progress", documents: [] },
     })
@@ -197,7 +212,7 @@ describe("DocuSeal webhook processing (valid requests)", () => {
 
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
 
-    const req = makeWebhookRequest({
+    const req = makeSignedRequest({
       event_type: "form.completed",
       data: { id: 42, status: "completed", documents: [{ url: "https://docs.example.com/1.pdf" }] },
     })

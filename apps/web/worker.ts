@@ -710,6 +710,20 @@ const obligationsWorker = new Worker<ObligationsCheckJobData>(
         },
       })
       for (const ob of nowOverdue) {
+        // Write an audit trail entry for system-initiated OVERDUE transition
+        await db.activity.create({
+          data: {
+            contractId: ob.contractId,
+            userId: null,
+            actorLabel: "System",
+            action: "OBLIGATION_UPDATED",
+            detail: `Obligation auto-marked OVERDUE: ${ob.title}`,
+            metadata: { obligationId: ob.id },
+          },
+        }).catch((err) =>
+          console.error("[obligations] writeActivity OVERDUE error:", err),
+        )
+
         await enqueueNotification("obligation.overdue", ob.contractId, null, {
           obligationId: ob.id,
           obligationTitle: ob.title,

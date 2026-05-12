@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       return Number.isNaN(n) ? 20 : Math.min(Math.max(1, n), 100)
     })()
 
-    const where: Record<string, unknown> = { isArchived: false }
+    const where: Record<string, unknown> = { isArchived: false, organizationId: ctx.organizationId }
     if (contractType) where.contractType = contractType
 
     const [templates, total] = await Promise.all([
@@ -134,9 +134,9 @@ export async function POST(req: Request) {
       )
     }
 
-    // Active template count
+    // Active template count (org-scoped)
     const active = await prisma.contractTemplate.count({
-      where: { isArchived: false },
+      where: { isArchived: false, organizationId: ctx.organizationId },
     })
     if (active >= MAX_TEMPLATES_PER_ORG) {
       return Response.json({ error: "template_limit_reached" }, { status: 422 })

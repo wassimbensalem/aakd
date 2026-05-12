@@ -921,11 +921,11 @@ async function toolGetAnalyticsSummary(
   )
 
   const [next30, next60, next90, expiringContracts] = await Promise.all([
-    prisma.contract.count({ where: { status: "ACTIVE", endDate: { gte: now, lte: d30 } } }),
-    prisma.contract.count({ where: { status: "ACTIVE", endDate: { gte: now, lte: d60 } } }),
-    prisma.contract.count({ where: { status: "ACTIVE", endDate: { gte: now, lte: d90 } } }),
+    prisma.contract.count({ where: { organizationId: orgId, status: "ACTIVE", endDate: { gte: now, lte: d30 } } }),
+    prisma.contract.count({ where: { organizationId: orgId, status: "ACTIVE", endDate: { gte: now, lte: d60 } } }),
+    prisma.contract.count({ where: { organizationId: orgId, status: "ACTIVE", endDate: { gte: now, lte: d90 } } }),
     prisma.contract.findMany({
-      where: { status: "ACTIVE", endDate: { gte: now, lte: d90 } },
+      where: { organizationId: orgId, status: "ACTIVE", endDate: { gte: now, lte: d90 } },
       orderBy: { endDate: "asc" },
       take: 10,
       select: { id: true, title: true, endDate: true, counterpartyName: true, contractType: true },
@@ -1218,6 +1218,9 @@ export async function POST(req: Request) {
         case "get_contract":
           return toolGetContract(toolArgs, ctx.organizationId, id)
         case "create_contract":
+          if (ctx.scopes && !ctx.scopes.includes("write")) {
+            return toolError(id, "Error: API key is read-only — write scope required")
+          }
           return toolCreateContract(toolArgs, ctx.organizationId, ctx.userId, id)
         case "list_contracts":
           return toolListContracts(toolArgs, ctx.organizationId, id)

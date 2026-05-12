@@ -1,6 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { createHmac } from "crypto"
 import { prisma } from "@/lib/db/client"
 import { requestContext } from "@/lib/context"
+
+// ─── Webhook test helpers ──────────────────────────────────────────────────────
+
+const TEST_WEBHOOK_SECRET = "test-signing-webhook-secret-123"
+
+function makeSignedWebhookRequest(body: object): Request {
+  const rawBody = JSON.stringify(body)
+  const sig = createHmac("sha256", TEST_WEBHOOK_SECRET).update(rawBody).digest("hex")
+  return new Request("http://localhost/api/webhooks/docuseal", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-docuseal-signature": sig,
+    },
+    body: rawBody,
+  })
+}
 
 // ─── Mock auth ────────────────────────────────────────────────────────────────
 
@@ -239,20 +257,24 @@ describe("POST /api/contracts/[id]/sign", () => {
 describe("POST /api/webhooks/docuseal", () => {
   beforeEach(async () => {
     vi.clearAllMocks()
+    // Set the webhook secret so verifySignature() doesn't reject all calls.
+    // Do NOT call vi.resetModules() here — it breaks the prisma mock setup
+    // that all tests in this suite share.
+    process.env.DOCUSEAL_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET
     const { resolveAuth } = await import("@/lib/auth/middleware")
     vi.mocked(resolveAuth).mockResolvedValue(mockCtx)
+  })
+
+  afterEach(() => {
+    delete process.env.DOCUSEAL_WEBHOOK_SECRET
   })
 
   it("ignores non-form.completed events and returns 200", async () => {
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
 
-    const req = new Request("http://localhost/api/webhooks/docuseal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event_type: "form.viewed",
-        data: { id: 99, status: "in_progress", documents: [] },
-      }),
+    const req = makeSignedWebhookRequest({
+      event_type: "form.viewed",
+      data: { id: 99, status: "in_progress", documents: [] },
     })
     const res = await POST(req)
 
@@ -266,13 +288,9 @@ describe("POST /api/webhooks/docuseal", () => {
 
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
 
-    const req = new Request("http://localhost/api/webhooks/docuseal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event_type: "form.completed",
-        data: { id: 999, status: "completed", documents: [{ url: "https://docs.example.com/signed.pdf" }] },
-      }),
+    const req = makeSignedWebhookRequest({
+      event_type: "form.completed",
+      data: { id: 999, status: "completed", documents: [{ url: "https://docs.example.com/signed.pdf" }] },
     })
     const res = await POST(req)
 
@@ -306,17 +324,13 @@ describe("POST /api/webhooks/docuseal", () => {
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
     const { writeActivity } = await import("@/lib/db/activity")
 
-    const req = new Request("http://localhost/api/webhooks/docuseal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event_type: "form.completed",
-        data: {
-          id: 99,
-          status: "completed",
-          documents: [{ url: "https://docuseal.com/signed.pdf" }],
-        },
-      }),
+    const req = makeSignedWebhookRequest({
+      event_type: "form.completed",
+      data: {
+        id: 99,
+        status: "completed",
+        documents: [{ url: "https://docuseal.com/signed.pdf" }],
+      },
     })
     const res = await POST(req)
 
@@ -370,13 +384,9 @@ describe("POST /api/webhooks/docuseal", () => {
     const { POST } = await import("@/app/api/webhooks/docuseal/route")
     const { writeActivity } = await import("@/lib/db/activity")
 
-    const req = new Request("http://localhost/api/webhooks/docuseal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event_type: "form.declined",
-        data: { id: 99, status: "declined", documents: [] },
-      }),
+    const req = makeSignedWebhookRequest({
+      event_type: "form.declined",
+      data: { id: 99, status: "declined", documents: [] },
     })
     const res = await POST(req)
 

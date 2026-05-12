@@ -47,7 +47,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         updatedBy: { select: { id: true, name: true } },
       },
     })
-    if (!tpl || tpl.isArchived) return new Response("Not Found", { status: 404 })
+    if (!tpl || tpl.isArchived || tpl.organizationId !== ctx.organizationId) {
+      return new Response("Not Found", { status: 404 })
+    }
     return Response.json(tpl)
   })
 }
@@ -76,9 +78,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const existing = await prisma.contractTemplate.findUnique({
       where: { id: params.id },
-      select: { id: true, isArchived: true, content: true, variables: true },
+      select: { id: true, isArchived: true, organizationId: true, content: true, variables: true },
     })
-    if (!existing || existing.isArchived) {
+    if (!existing || existing.isArchived || existing.organizationId !== ctx.organizationId) {
       return new Response("Not Found", { status: 404 })
     }
 
@@ -174,9 +176,9 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   return requestContext.run(ctx, async () => {
     const existing = await prisma.contractTemplate.findUnique({
       where: { id: params.id },
-      select: { id: true, isArchived: true },
+      select: { id: true, isArchived: true, organizationId: true },
     })
-    if (!existing || existing.isArchived) {
+    if (!existing || existing.isArchived || existing.organizationId !== ctx.organizationId) {
       return new Response("Not Found", { status: 404 })
     }
 

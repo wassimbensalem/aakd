@@ -1,4 +1,5 @@
 import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
+import { requireRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
@@ -98,7 +99,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       },
     })
 
-    if (!contract) return new Response("Not Found", { status: 404 })
+    if (!contract || contract.organizationId !== ctx.organizationId) {
+      return new Response("Not Found", { status: 404 })
+    }
 
     // The detail page only needs to know if extractedText exists (to gate the
     // Ask AI panel) — /ask fetches the real text. Keep the response light by
@@ -114,6 +117,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const roleError = requireRole(ctx.role, "member")
+  if (roleError) return roleError
   const scopeError = requireWriteScope(ctx)
   if (scopeError) return scopeError
 
@@ -262,6 +267,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const roleError = requireRole(ctx.role, "member")
+  if (roleError) return roleError
   const scopeError = requireWriteScope(ctx)
   if (scopeError) return scopeError
 

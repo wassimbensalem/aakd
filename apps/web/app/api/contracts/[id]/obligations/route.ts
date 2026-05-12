@@ -24,7 +24,12 @@ const CreateObligationSchema = z.object({
   description: z.string().max(2000).optional(),
   clauseReference: z.string().max(200).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
-  dueDate: z.string().datetime(),
+  dueDate: z
+    .string()
+    .datetime()
+    .refine((d) => new Date(d) > new Date(), {
+      message: "Due date must be in the future",
+    }),
   assigneeId: z.string().optional(),
   reminderDays: z.number().int().min(1).max(30).default(7),
 })

@@ -15,12 +15,23 @@ async function ensureSubTaskInScope(
   contractId: string,
   obligationId: string,
   subtaskId: string,
+  organizationId: string,
 ) {
   const obligation = await prisma.contractObligation.findUnique({
     where: { id: obligationId },
-    select: { id: true, contractId: true },
+    select: {
+      id: true,
+      contractId: true,
+      contract: { select: { organizationId: true } },
+    },
   })
-  if (!obligation || obligation.contractId !== contractId) return null
+  if (
+    !obligation ||
+    obligation.contractId !== contractId ||
+    obligation.contract.organizationId !== organizationId
+  ) {
+    return null
+  }
   const subTask = await prisma.obligationSubTask.findUnique({
     where: { id: subtaskId },
     select: { id: true, obligationId: true },
@@ -48,6 +59,7 @@ export async function PATCH(
       params.id,
       params.obligationId,
       params.subtaskId,
+      ctx.organizationId,
     )
     if (!subTask) return Response.json({ error: "Not Found" }, { status: 404 })
 
@@ -109,6 +121,7 @@ export async function DELETE(
       params.id,
       params.obligationId,
       params.subtaskId,
+      ctx.organizationId,
     )
     if (!subTask) return Response.json({ error: "Not Found" }, { status: 404 })
 

@@ -1,5 +1,6 @@
 import crypto from "node:crypto"
 import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
+import { requireRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { storage } from "@/lib/storage"
@@ -11,6 +12,8 @@ const MAX_ZIP_BYTES = 500 * 1024 * 1024
 export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const roleError = requireRole(ctx.role, "member")
+  if (roleError) return roleError
   const scopeError = requireWriteScope(ctx)
   if (scopeError) return scopeError
 

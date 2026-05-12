@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { encrypt } from "@/lib/notifications/crypto"
+import { validateWebhookUrl } from "@/lib/notifications/validate-webhook-url"
 
 const MAX_PER_TYPE = 5
 
@@ -54,6 +55,13 @@ export async function POST(req: Request) {
     const parsed = CreateChannelSchema.safeParse(body)
     if (!parsed.success) {
       return Response.json({ error: parsed.error.flatten() }, { status: 422 })
+    }
+
+    try {
+      await validateWebhookUrl(parsed.data.webhookUrl)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Invalid webhook URL"
+      return Response.json({ error: message }, { status: 422 })
     }
 
     const existingCount = await prisma.orgNotificationChannel.count({

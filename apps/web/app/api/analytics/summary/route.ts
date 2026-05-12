@@ -75,7 +75,7 @@ export async function GET(req: Request) {
           AND "endDate" <= ${d90}
       `,
       prisma.contract.findMany({
-        where: { status: "ACTIVE", endDate: { gte: now, lte: d90 } },
+        where: { organizationId: ctx.organizationId, status: "ACTIVE", endDate: { gte: now, lte: d90 } },
         orderBy: { endDate: "asc" },
         take: 10,
         select: {

@@ -28,16 +28,21 @@ type SigningStatus = "completed" | "declined" | "expired" | "failed"
 
 /**
  * Verify the HMAC-SHA256 signature from DocuSeal.
- * Returns true when:
- *   - No secret is configured (backwards-compatible dev mode)
+ * Returns true only when:
  *   - Secret is configured AND signature matches
- * Returns false when secret is configured but signature is missing or invalid.
+ * Returns false (reject) when:
+ *   - Secret is not configured (fail-secure — prevents forged webhook acceptance)
+ *   - Signature header is missing or invalid
  */
 function verifySignature(rawBody: string, signatureHeader: string | null): boolean {
   const secret = process.env.DOCUSEAL_WEBHOOK_SECRET
   if (!secret) {
-    // No secret configured — allow through for local dev / backwards compat
-    return true
+    // No secret configured — reject all webhook requests to prevent forged events
+    console.error(
+      "[DocuSeal webhook] DOCUSEAL_WEBHOOK_SECRET is not set — rejecting all webhook calls. " +
+      "Set this variable to enable DocuSeal webhook processing.",
+    )
+    return false
   }
 
   if (!signatureHeader) {
@@ -75,18 +80,12 @@ function normalizeSigningStatus(payload: DocuSealWebhookPayload): SigningStatus 
 }
 
 export async function POST(req: Request) {
-  if (!process.env.DOCUSEAL_WEBHOOK_SECRET) {
-    console.warn(
-      "[docuseal webhook] DOCUSEAL_WEBHOOK_SECRET is not set — all webhook requests will be accepted",
-    )
-  }
-
   // Read raw body first — needed for HMAC verification
   const rawBody = await req.text()
 
   const signatureHeader = req.headers.get("x-docuseal-signature")
   if (!verifySignature(rawBody, signatureHeader)) {
-    return Response.json({ error: "Invalid signature" }, { status: 401 })
+    return Response.json({ error: "Invalid or missing signature" }, { status: 403 })
   }
 
   let payload: DocuSealWebhookPayload

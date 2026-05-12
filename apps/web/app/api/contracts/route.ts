@@ -1,4 +1,5 @@
 import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
+import { requireRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
       return Number.isNaN(n) ? 20 : Math.min(Math.max(1, n), 100)
     })()
 
-    const where: Record<string, unknown> = {}
+    const where: Record<string, unknown> = { organizationId: ctx.organizationId }
     if (status) {
       where.status = status
     } else {
@@ -84,6 +85,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const roleError = requireRole(ctx.role, "member")
+  if (roleError) return roleError
   const scopeError = requireWriteScope(ctx)
   if (scopeError) return scopeError
 

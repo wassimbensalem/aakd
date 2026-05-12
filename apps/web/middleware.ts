@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/accept-invitation",
   "/api/auth",
   "/api/webhooks",
+  "/api/user/unsubscribe",
 ]
 
 // Locale resolution is cookie-based with no URL prefix — `i18n.ts` reads the
@@ -37,6 +38,15 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/favicon")
 
   if (isPublic) return ensureLocaleCookie(req, NextResponse.next())
+
+  // Allow API routes that carry a Bearer token — the route handler's
+  // resolveAuth() will validate the key. Without this check, requests
+  // with a valid cf_live_ token but no session cookie are redirected to
+  // /login before the route handler ever runs, making API key auth dead.
+  const authHeader = req.headers.get("Authorization")
+  if (pathname.startsWith("/api/") && authHeader?.startsWith("Bearer ")) {
+    return ensureLocaleCookie(req, NextResponse.next())
+  }
 
   // Check for Better Auth session cookie
   const sessionToken =

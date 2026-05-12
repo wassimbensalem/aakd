@@ -307,12 +307,14 @@ export async function DELETE(
     await prisma.$transaction(async (tx) => {
       await tx.approval.delete({ where: { id: params.approvalId } })
 
-      // If this was the only pending approval, revert contract to INTERNAL_REVIEW
+      // If this was the only pending *required* approval, revert contract to INTERNAL_REVIEW.
+      // Filter for required: true so optional approvals (step=0) don't block the revert.
       if (approval.status === "pending" && contract.status === "PENDING_APPROVAL") {
         const otherPending = await tx.approval.count({
           where: {
             contractId: params.id,
             status: "pending",
+            required: true,
             id: { not: params.approvalId },
           },
         })

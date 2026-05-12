@@ -32,6 +32,7 @@ describe("Contract lifecycle edge cases", () => {
     vi.mocked(prisma.contract.findUnique).mockResolvedValue({
       id: "c1",
       status: "ARCHIVED",
+      organizationId: "org-1",
     } as any)
 
     const { DELETE } = await import("@/app/api/contracts/[id]/route")
@@ -47,6 +48,7 @@ describe("Contract lifecycle edge cases", () => {
     vi.mocked(prisma.contract.findUnique).mockResolvedValue({
       id: "c1",
       status: "ACTIVE",
+      organizationId: "org-1",
     } as any)
 
     const { PATCH } = await import("@/app/api/contracts/[id]/route")
@@ -66,6 +68,7 @@ describe("Contract lifecycle edge cases", () => {
     vi.mocked(prisma.contract.findUnique).mockResolvedValue({
       id: "c1",
       status: "ACTIVE",
+      organizationId: "org-1",
     } as any)
     vi.mocked(prisma.contract.update).mockResolvedValue({
       id: "c1",

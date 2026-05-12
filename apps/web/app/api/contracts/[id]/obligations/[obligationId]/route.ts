@@ -43,12 +43,21 @@ export async function GET(
   return requestContext.run(ctx, async () => {
     const obligation = await prisma.contractObligation.findUnique({
       where: { id: params.obligationId },
-      include: OBLIGATION_INCLUDE,
+      include: {
+        ...OBLIGATION_INCLUDE,
+        contract: { select: { organizationId: true } },
+      },
     })
-    if (!obligation || obligation.contractId !== params.id) {
+    if (
+      !obligation ||
+      obligation.contractId !== params.id ||
+      obligation.contract.organizationId !== ctx.organizationId
+    ) {
       return Response.json({ error: "Not Found" }, { status: 404 })
     }
-    return Response.json(obligation)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { contract: _contract, ...obligationData } = obligation
+    return Response.json(obligationData)
   })
 }
 
@@ -72,9 +81,14 @@ export async function PATCH(
         contractId: true,
         status: true,
         title: true,
+        contract: { select: { organizationId: true } },
       },
     })
-    if (!existing || existing.contractId !== params.id) {
+    if (
+      !existing ||
+      existing.contractId !== params.id ||
+      existing.contract.organizationId !== ctx.organizationId
+    ) {
       return Response.json({ error: "Not Found" }, { status: 404 })
     }
 
@@ -164,9 +178,18 @@ export async function DELETE(
   return requestContext.run(ctx, async () => {
     const existing = await prisma.contractObligation.findUnique({
       where: { id: params.obligationId },
-      select: { id: true, contractId: true, title: true },
+      select: {
+        id: true,
+        contractId: true,
+        title: true,
+        contract: { select: { organizationId: true } },
+      },
     })
-    if (!existing || existing.contractId !== params.id) {
+    if (
+      !existing ||
+      existing.contractId !== params.id ||
+      existing.contract.organizationId !== ctx.organizationId
+    ) {
       return Response.json({ error: "Not Found" }, { status: 404 })
     }
 

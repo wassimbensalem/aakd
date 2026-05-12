@@ -3,10 +3,9 @@
 import { useEffect, useState, useCallback } from "react"
 import { formatDistanceToNow } from "date-fns"
 import { Camera, Trash2, GitCompare } from "lucide-react"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 
 interface Snapshot {
@@ -26,6 +25,7 @@ export function SnapshotHistoryPanel({
   contractId,
   refreshTrigger = 0,
 }: SnapshotHistoryPanelProps) {
+  const router = useRouter()
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -80,7 +80,7 @@ export function SnapshotHistoryPanel({
   }
 
   return (
-    <ScrollArea className="h-full">
+    <div className="overflow-y-auto h-full">
       <div className="p-2 space-y-1">
         {snapshots.map((snap) => (
           <div
@@ -104,11 +104,9 @@ export function SnapshotHistoryPanel({
                   variant="ghost"
                   className="h-6 w-6 text-indigo-500 hover:bg-indigo-50"
                   title="Compare with current"
-                  asChild
+                  onClick={() => router.push(`/contracts/${contractId}/comparison?a=${snap.id}&b=live`)}
                 >
-                  <Link href={`/contracts/${contractId}/comparison?a=${snap.id}&b=live`}>
-                    <GitCompare className="h-3 w-3" />
-                  </Link>
+                  <GitCompare className="h-3 w-3" />
                 </Button>
                 <Button
                   size="icon"
@@ -125,6 +123,6 @@ export function SnapshotHistoryPanel({
           </div>
         ))}
       </div>
-    </ScrollArea>
+    </div>
   )
 }

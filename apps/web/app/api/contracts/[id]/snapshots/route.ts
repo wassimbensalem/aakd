@@ -45,7 +45,7 @@ export async function GET(
 
 const CreateSnapshotSchema = z.object({
   label: z.string().min(1).max(200),
-  content: z.record(z.unknown()),
+  content: z.record(z.string(), z.unknown()),
 })
 
 export async function POST(
@@ -83,7 +83,8 @@ export async function POST(
         contractId: params.id,
         organizationId: ctx.organizationId,
         label: parsed.data.label,
-        content: parsed.data.content,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        content: parsed.data.content as any,
         wordCount,
         createdById: ctx.userId,
       },

@@ -102,7 +102,7 @@ export default function ComparisonPage() {
           {snapsLoading ? (
             <Skeleton className="h-8 w-48" />
           ) : (
-            <Select value={selectedA} onValueChange={setSelectedA}>
+            <Select value={selectedA} onValueChange={(v) => { if (v != null) setSelectedA(v) }}>
               <SelectTrigger className="h-8 w-56 text-xs">
                 <SelectValue placeholder="Select snapshot…" />
               </SelectTrigger>
@@ -124,7 +124,7 @@ export default function ComparisonPage() {
           {snapsLoading ? (
             <Skeleton className="h-8 w-48" />
           ) : (
-            <Select value={selectedB} onValueChange={setSelectedB}>
+            <Select value={selectedB} onValueChange={(v) => { if (v != null) setSelectedB(v) }}>
               <SelectTrigger className="h-8 w-56 text-xs">
                 <SelectValue placeholder="Select version…" />
               </SelectTrigger>

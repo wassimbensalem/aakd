@@ -6,7 +6,6 @@ import { formatDistanceToNow } from "date-fns"
 import { Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import {
   ChangeItem,
@@ -64,7 +63,7 @@ export function TrackChangeSidebar({
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-2 space-y-1">
           {changes.map((change) => (
             <div
@@ -134,7 +133,7 @@ export function TrackChangeSidebar({
             </div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }

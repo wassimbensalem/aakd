@@ -102,20 +102,26 @@ async function retrieveRelevantChunks(
   // Defense in depth: even though contractId is org-scoped above, JOIN to
   // Contract and filter by organizationId so a chunk row can never be returned
   // for a different tenant.
-  const rows = await prisma.$queryRaw<ChunkRow[]>(
-    Prisma.sql`
-      SELECT
-        cce."chunkIndex",
-        cce."text",
-        1 - (cce."embedding" <=> ${embeddingStr}::vector) AS similarity
-      FROM "ContractChunkEmbedding" cce
-      JOIN "Contract" c ON c."id" = cce."contractId"
-      WHERE cce."contractId" = ${contractId}
-        AND c."organizationId" = ${organizationId}
-      ORDER BY cce."embedding" <=> ${embeddingStr}::vector
-      LIMIT 5
-    `,
-  )
+  let rows: ChunkRow[] = []
+  try {
+    rows = await prisma.$queryRaw<ChunkRow[]>(
+      Prisma.sql`
+        SELECT
+          cce."chunkIndex",
+          cce."text",
+          1 - (cce."embedding" <=> ${embeddingStr}::vector) AS similarity
+        FROM "ContractChunkEmbedding" cce
+        JOIN "Contract" c ON c."id" = cce."contractId"
+        WHERE cce."contractId" = ${contractId}
+          AND c."organizationId" = ${organizationId}
+        ORDER BY cce."embedding" <=> ${embeddingStr}::vector
+        LIMIT 5
+      `,
+    )
+  } catch {
+    // Table may not exist yet or pgvector extension not loaded.
+    // Fall through to text-based chunking below.
+  }
 
   if (rows.length > 0) {
     return rows.map((row) => ({

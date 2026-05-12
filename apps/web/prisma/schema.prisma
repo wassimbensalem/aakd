@@ -45,6 +45,7 @@ model User {
   notifications               Notification[]
   commentsAuthored            ContractComment[]        @relation("CommentAuthor")
   commentsResolved            ContractComment[]        @relation("CommentResolver")
+  snapshotsCreated            DocumentSnapshot[]       @relation("SnapshotCreator")
 }
 
 model Session {
@@ -104,6 +105,7 @@ model Organization {
   outboundWebhooks        OutboundWebhook[]
   notificationPreferences UserNotificationPreference[]
   templates               ContractTemplate[]
+  snapshots               DocumentSnapshot[]
   obligations             ContractObligation[]
   crmIntegrations         CrmIntegration[]
   importJobs              ImportJob[]
@@ -186,6 +188,7 @@ model Contract {
   approvals           Approval[]
   embedding           ContractEmbedding?
   document              ContractDocument?
+  snapshots             DocumentSnapshot[]
   comments              ContractComment[]
   obligations           ContractObligation[]
   crmLinks              CrmLink[]
@@ -315,6 +318,8 @@ enum ActivityAction {
   CRM_SYNCED
   IMPORT_COMPLETED
   APPROVAL_CANCELLED
+  SNAPSHOT_CREATED
+  SNAPSHOT_DELETED
 }
 
 model Folder {
@@ -493,6 +498,25 @@ model ContractDocument {
   savedBy      User     @relation("DocumentSaver", fields: [savedById], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+// ─── M12: Document Snapshots (Redlining) ─────────────────────────────────────
+
+model DocumentSnapshot {
+  id             String       @id @default(cuid())
+  contractId     String
+  contract       Contract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  label          String       // e.g. "Before client review", max 200 chars
+  content        Json         // TipTap JSON — full snapshot of editor content
+  wordCount      Int          @default(0)
+  createdById    String
+  createdBy      User         @relation("SnapshotCreator", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([contractId, createdAt])
+  @@index([organizationId])
 }
 
 model ContractComment {

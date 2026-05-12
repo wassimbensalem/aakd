@@ -45,7 +45,16 @@ function createPrismaClient() {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
           const ctx = getRequestContext()
-          if (!ctx?.organizationId || !ORG_SCOPED_MODELS.has(model ?? "")) {
+          if (!ctx?.organizationId) {
+            if (ORG_SCOPED_MODELS.has(model ?? "")) {
+              console.warn(
+                `[org-scope] middleware fired but no org context — query model: ${model}, action: ${operation}. ` +
+                "Explicit organizationId filter in the route is the active guard.",
+              )
+            }
+            return query(args)
+          }
+          if (!ORG_SCOPED_MODELS.has(model ?? "")) {
             return query(args)
           }
 

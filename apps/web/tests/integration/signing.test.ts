@@ -349,7 +349,7 @@ describe("POST /api/webhooks/docuseal", () => {
     expect(prisma.$transaction).toHaveBeenCalled()
     expect(prisma.contract.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "contract-1", organizationId: "org-1" },
+        where: { id: "contract-1", organizationId: "org-1", status: "AWAITING_SIGNATURE" },
         data: expect.objectContaining({
           status: "ACTIVE",
           signingStatus: "completed",
@@ -393,7 +393,7 @@ describe("POST /api/webhooks/docuseal", () => {
     expect(res.status).toBe(200)
     expect(global.fetch).not.toHaveBeenCalled()
     expect(prisma.contract.update).toHaveBeenCalledWith({
-      where: { id: "contract-1", organizationId: "org-1" },
+      where: { id: "contract-1", organizationId: "org-1", status: "AWAITING_SIGNATURE" },
       data: { signingStatus: "declined" },
     })
     expect(writeActivity).toHaveBeenCalledWith(

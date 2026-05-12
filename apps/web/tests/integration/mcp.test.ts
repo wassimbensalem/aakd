@@ -52,7 +52,7 @@ describe("GET /api/mcp — discovery", () => {
     expect(body.protocol).toBe("json-rpc-2.0")
     expect(body.endpoint).toBe("/api/mcp")
     expect(body.organizationId).toBe("org-1")
-    expect(body.tools).toHaveLength(6)
+    expect(body.tools).toHaveLength(13)
   })
 })
 
@@ -74,7 +74,7 @@ describe("POST /api/mcp — authentication", () => {
 })
 
 describe("POST /api/mcp — tools/list", () => {
-  it("returns all 6 tools", async () => {
+  it("returns all 13 tools", async () => {
     const { POST } = await import("@/app/api/mcp/route")
     const res = await POST(mcpRequest("tools/list"))
 
@@ -82,7 +82,7 @@ describe("POST /api/mcp — tools/list", () => {
     const body = await res.json()
     expect(body.jsonrpc).toBe("2.0")
     expect(body.id).toBe(1)
-    expect(body.result.tools).toHaveLength(6)
+    expect(body.result.tools).toHaveLength(13)
 
     const names = body.result.tools.map((t: { name: string }) => t.name)
     expect(names).toContain("search_contracts")
@@ -91,6 +91,13 @@ describe("POST /api/mcp — tools/list", () => {
     expect(names).toContain("list_contracts")
     expect(names).toContain("semantic_search")
     expect(names).toContain("ask_contract")
+    expect(names).toContain("list_obligations")
+    expect(names).toContain("create_obligation")
+    expect(names).toContain("update_obligation")
+    expect(names).toContain("get_analytics_summary")
+    expect(names).toContain("list_crm_links")
+    expect(names).toContain("list_import_jobs")
+    expect(names).toContain("get_import_job")
   })
 
   it("each tool has name, description, and inputSchema", async () => {

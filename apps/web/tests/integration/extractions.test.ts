@@ -260,8 +260,10 @@ describe("PATCH /api/contracts/[id]/extractions", () => {
     ]
 
     vi.mocked(prisma.contract.findUnique).mockResolvedValueOnce(mockContract as any)
+    // The $transaction callback receives prisma as tx — these mocks are shared
     vi.mocked(prisma.aIExtraction.findMany).mockResolvedValueOnce(pending as any)
-    vi.mocked(prisma.$transaction).mockResolvedValueOnce([undefined, undefined] as any)
+    vi.mocked(prisma.aIExtraction.updateMany).mockResolvedValueOnce({ count: 3 } as any)
+    vi.mocked(prisma.contract.update).mockResolvedValueOnce({} as any)
 
     const { PATCH } = await import("@/app/api/contracts/[id]/extractions/route")
 
@@ -282,6 +284,7 @@ describe("PATCH /api/contracts/[id]/extractions", () => {
 
   it("accept_all returns { accepted: 0 } when no pending extractions exist", async () => {
     vi.mocked(prisma.contract.findUnique).mockResolvedValueOnce(mockContract as any)
+    // The $transaction callback receives prisma as tx — findMany inside returns []
     vi.mocked(prisma.aIExtraction.findMany).mockResolvedValueOnce([] as any)
 
     const { PATCH } = await import("@/app/api/contracts/[id]/extractions/route")
@@ -298,7 +301,9 @@ describe("PATCH /api/contracts/[id]/extractions", () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.accepted).toBe(0)
-    expect(prisma.$transaction).not.toHaveBeenCalled()
+    // $transaction is always called; it returns 0 early when there are no pending extractions
+    expect(prisma.$transaction).toHaveBeenCalled()
+    expect(prisma.aIExtraction.updateMany).not.toHaveBeenCalled()
   })
 
   it("edit updates rawValue then accepts and writes to contract", async () => {

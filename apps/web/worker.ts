@@ -26,7 +26,7 @@ import { prisma as appPrisma } from "@/lib/db/client"
 import { storage } from "@/lib/storage"
 import { checkAndFireAlerts } from "@/lib/alerts/check"
 import { generateEmbedding, currentEmbeddingModel } from "@/lib/embedding"
-import { getSubmission, isAllowedDocuSealUrl } from "@/lib/docuseal"
+// getSubmission and isAllowedDocuSealUrl moved to worker/jobs/signing-sync.ts
 import { chunkText } from "@/lib/ai/chunking"
 import { sendAlertEmailById } from "@/lib/email"
 import { sendApprovalRequestEmail, sendApprovalRejectionEmail } from "@/lib/email/approval"
@@ -80,6 +80,7 @@ import { htmlToPlateNodes } from "@/lib/editor/html-to-plate"
 import { plateToPlaintext, countWords, plaintextToPlateNodes } from "@/lib/editor/plate-to-plaintext"
 import { plateToDocxBuffer } from "@/lib/editor/plate-to-docx"
 import { plateToPdfBuffer } from "@/lib/editor/plate-to-pdf"
+import { createSigningSyncWorker } from "../../worker/jobs/signing-sync"
 
 // ─── Boot check: notification encryption key ─────────────────────────────────
 // Refuse to start if the key is missing — silently storing plaintext URLs and
@@ -681,22 +682,39 @@ const obligationsWorker = new Worker<ObligationsCheckJobData>(
     const now = new Date()
 
     // Step 1 — promote past-due active obligations to OVERDUE.
-    // Atomic claim: a row-level updateMany flips PENDING/IN_PROGRESS → OVERDUE.
-    // We then fetch only the rows whose updatedAt landed in this run's window,
-    // so concurrent workers never enqueue duplicate notifications. Whichever
-    // worker wins the row sees it in its window; losers see updatedAt outside.
+    // The updateMany + activity writes are wrapped in a single transaction so
+    // that a worker crash between the two cannot leave obligations stuck in
+    // OVERDUE with no audit trail. Notifications are enqueued AFTER the
+    // transaction commits — BullMQ and Prisma are separate systems; if the
+    // enqueue fails, the obligation is already OVERDUE with an activity row.
+    // The next cron run uses updatedAt windowing to re-enqueue, so no
+    // notification is permanently lost.
     const runStart = new Date(now.getTime() - 60_000)
-    const updateRes = await db.contractObligation.updateMany({
-      where: {
-        status: { in: ["PENDING", "IN_PROGRESS"] },
-        dueDate: { lt: now },
-      },
-      data: { status: "OVERDUE" },
-    })
 
-    let overdueNotified = 0
-    if (updateRes.count > 0) {
-      const nowOverdue = await db.contractObligation.findMany({
+    type OverdueObligation = {
+      id: string
+      contractId: string
+      title: string
+      dueDate: Date
+      assignee: { id: string; name: string | null } | null
+    }
+
+    let updateCount = 0
+    let nowOverdue: OverdueObligation[] = []
+
+    await db.$transaction(async (tx) => {
+      const updateRes = await tx.contractObligation.updateMany({
+        where: {
+          status: { in: ["PENDING", "IN_PROGRESS"] },
+          dueDate: { lt: now },
+        },
+        data: { status: "OVERDUE" },
+      })
+      updateCount = updateRes.count
+
+      if (updateRes.count === 0) return
+
+      nowOverdue = await tx.contractObligation.findMany({
         where: {
           status: "OVERDUE",
           updatedAt: { gte: runStart },
@@ -709,30 +727,36 @@ const obligationsWorker = new Worker<ObligationsCheckJobData>(
           assignee: { select: { id: true, name: true } },
         },
       })
-      for (const ob of nowOverdue) {
-        // Write an audit trail entry for system-initiated OVERDUE transition
-        await db.activity.create({
-          data: {
+
+      // Write activity rows inside the transaction — they roll back with the
+      // status update if anything fails, keeping audit trail consistent.
+      if (nowOverdue.length > 0) {
+        await tx.activity.createMany({
+          data: nowOverdue.map((ob) => ({
             contractId: ob.contractId,
             userId: null,
             actorLabel: "System",
             action: "OBLIGATION_UPDATED",
             detail: `Obligation auto-marked OVERDUE: ${ob.title}`,
             metadata: { obligationId: ob.id },
-          },
-        }).catch((err) =>
-          console.error("[obligations] writeActivity OVERDUE error:", err),
-        )
-
-        await enqueueNotification("obligation.overdue", ob.contractId, null, {
-          obligationId: ob.id,
-          obligationTitle: ob.title,
-          dueDate: ob.dueDate.toISOString(),
-          assigneeName: ob.assignee?.name ?? null,
-          daysUntilDue: 0,
+          })),
         })
-        overdueNotified += 1
       }
+    })
+
+    // Enqueue notifications outside the transaction — BullMQ cannot participate
+    // in a Prisma transaction. If this fails, the obligation is already OVERDUE
+    // with an activity record; the next cron run re-notifies via updatedAt guard.
+    let overdueNotified = 0
+    for (const ob of nowOverdue) {
+      await enqueueNotification("obligation.overdue", ob.contractId, null, {
+        obligationId: ob.id,
+        obligationTitle: ob.title,
+        dueDate: ob.dueDate.toISOString(),
+        assigneeName: ob.assignee?.name ?? null,
+        daysUntilDue: 0,
+      })
+      overdueNotified += 1
     }
 
     // Step 2 — send reminders. reminderDays varies per obligation, so we filter
@@ -779,7 +803,7 @@ const obligationsWorker = new Worker<ObligationsCheckJobData>(
     }
 
     console.log(
-      `[obligations] Marked ${updateRes.count} overdue (${overdueNotified} notified), sent ${remindersSent} reminders`,
+      `[obligations] Marked ${updateCount} overdue (${overdueNotified} notified), sent ${remindersSent} reminders`,
     )
   },
   { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
@@ -899,181 +923,10 @@ obligationExtractWorker.on("failed", (job, err) =>
 )
 
 // ─── Worker: signing.sync ─────────────────────────────────────────────────────
+// Handler extracted to worker/jobs/signing-sync.ts per CLAUDE.md convention.
+// "Job handlers live in worker/ — not in apps/web/"
 
-type SyncableContract = {
-  id: string
-  organizationId: string
-  ownerId: string
-  docusealSubmissionId: string | null
-  signingStatus: string | null
-}
-
-function normalizeDocuSealStatus(status: string): "completed" | "declined" | "expired" | "failed" | "sent" {
-  const normalized = status.toLowerCase()
-  if (normalized === "completed") return "completed"
-  if (normalized === "declined") return "declined"
-  if (normalized === "expired") return "expired"
-  if (normalized === "failed") return "failed"
-  return "sent"
-}
-
-async function persistSignedDocument(contract: SyncableContract, documentUrl: string) {
-  // SSRF guard: only fetch from the configured DocuSeal host
-  if (!isAllowedDocuSealUrl(documentUrl)) {
-    throw new Error(`Rejected signed document URL from disallowed host: ${documentUrl}`)
-  }
-
-  const signedRes = await fetch(documentUrl)
-  if (!signedRes.ok) {
-    throw new Error(`Failed to download signed PDF: ${signedRes.status}`)
-  }
-
-  const buffer = Buffer.from(await signedRes.arrayBuffer())
-  const newKey = storage.storageKey(
-    contract.organizationId,
-    contract.id,
-    `signed_${Date.now()}.pdf`,
-  )
-  await storage.upload(newKey, buffer, "application/pdf")
-
-  const db = getWorkerPrisma()
-  const latestFile = await db.contractFile.findFirst({
-    where: { contractId: contract.id, isLatest: true },
-    orderBy: { version: "desc" },
-    select: { id: true, version: true },
-  })
-
-  const nextVersion = (latestFile?.version ?? 0) + 1
-
-  await db.$transaction([
-    ...(latestFile
-      ? [
-          db.contractFile.update({
-            where: { id: latestFile.id },
-            data: { isLatest: false },
-          }),
-        ]
-      : []),
-    db.contractFile.create({
-      data: {
-        contractId: contract.id,
-        filename: "signed_document.pdf",
-        storageKey: newKey,
-        mimeType: "application/pdf",
-        sizeBytes: buffer.length,
-        isSigned: true,
-        isLatest: true,
-        version: nextVersion,
-        uploadedById: contract.ownerId,
-      },
-    }),
-    db.contract.update({
-      where: { id: contract.id },
-      data: {
-        status: "ACTIVE",
-        signingStatus: "completed",
-        signingUrl: null,
-      },
-    }),
-  ])
-
-  await db.activity.create({
-    data: {
-      contractId: contract.id,
-      userId: null,
-      actorLabel: "System",
-      action: "SIGNED",
-      detail: `Contract signed via DocuSeal sync (submission #${contract.docusealSubmissionId})`,
-    },
-  })
-
-  // Fan out contract.signed — system-actor; recipients resolved by fanout worker
-  await enqueueNotification("contract.signed", contract.id, null, {})
-}
-
-async function syncDocuSealContract(contract: SyncableContract) {
-  if (!contract.docusealSubmissionId) return
-
-  const submission = await getSubmission(Number(contract.docusealSubmissionId))
-  if (!submission) return
-
-  const signingStatus = normalizeDocuSealStatus(submission.status)
-  if (signingStatus === contract.signingStatus) return
-
-  if (signingStatus !== "completed") {
-    await getWorkerPrisma().contract.update({
-      where: { id: contract.id },
-      data: { signingStatus },
-    })
-    // Mirror the per-signer status so the UI badges reflect the outcome.
-    // For declined/expired we mark every still-pending signer as "declined"
-    // so the per-row badge shows the right state.
-    if (signingStatus === "declined" || signingStatus === "expired") {
-      await getWorkerPrisma().contractSigner.updateMany({
-        where: { contractId: contract.id, status: "pending" },
-        data: { status: "declined" },
-      })
-      await enqueueNotification("contract.signing_declined", contract.id, null, {
-        signingStatus,
-      })
-    }
-    return
-  }
-
-  const signedDocUrl = submission.documents?.[0]?.url
-  if (!signedDocUrl) {
-    console.warn(`[signing] Submission ${contract.docusealSubmissionId} is completed but has no document URL`)
-    return
-  }
-
-  await persistSignedDocument(contract, signedDocUrl)
-}
-
-const signingWorker = new Worker<SigningSyncJobData>(
-  "signing.sync",
-  async (job: Job<SigningSyncJobData>) => {
-    console.log(`[signing] Running sync job ${job.id} (triggered: ${job.data.triggeredAt})`)
-
-    const where = job.data.contractId
-      ? { id: job.data.contractId }
-      : job.data.submissionId
-        ? { docusealSubmissionId: job.data.submissionId }
-        : {
-            docusealSubmissionId: { not: null },
-            OR: [{ signingStatus: null }, { signingStatus: { not: "completed" } }],
-          }
-
-    const contracts = await getWorkerPrisma().contract.findMany({
-      where,
-      select: {
-        id: true,
-        organizationId: true,
-        ownerId: true,
-        docusealSubmissionId: true,
-        signingStatus: true,
-      },
-      take: job.data.contractId || job.data.submissionId ? 1 : 100,
-    })
-
-    for (const contract of contracts) {
-      try {
-        await syncDocuSealContract(contract)
-      } catch (err) {
-        console.error(`[signing] Failed to sync contract ${contract.id}:`, err)
-      }
-    }
-
-    console.log(`[signing] Synced ${contracts.length} DocuSeal submission(s)`)
-  },
-  { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
-)
-
-signingWorker.on("completed", (job) =>
-  console.log(`[signing] Job ${job.id} completed`),
-)
-signingWorker.on("failed", (job, err) =>
-  console.error(`[signing] Job ${job?.id} failed:`, err),
-)
+const signingWorker = createSigningSyncWorker(connection)
 
 // ─── Worker: email.send ───────────────────────────────────────────────────────
 

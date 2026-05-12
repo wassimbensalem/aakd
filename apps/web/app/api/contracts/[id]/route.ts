@@ -16,7 +16,7 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   INTERNAL_REVIEW:     ALL_STATUSES.filter((s) => s !== "INTERNAL_REVIEW"),
   PENDING_APPROVAL:    ALL_STATUSES.filter((s) => s !== "PENDING_APPROVAL"),
   AWAITING_SIGNATURE:  ALL_STATUSES.filter((s) => s !== "AWAITING_SIGNATURE"),
-  ACTIVE:              ALL_STATUSES.filter((s) => s !== "ACTIVE"),
+  ACTIVE:              ["EXPIRED", "TERMINATED", "ARCHIVED"], // once active, only forward moves allowed
   EXPIRED:             ALL_STATUSES.filter((s) => s !== "EXPIRED"),
   TERMINATED:          ALL_STATUSES.filter((s) => s !== "TERMINATED"),
   ARCHIVED:            ["DRAFT"], // unarchive → back to draft only

@@ -26,6 +26,7 @@ vi.mock("@/lib/email/approval", () => ({
 }))
 vi.mock("@/lib/jobs/queues", () => ({
   emailQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
+  notificationFanoutQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
 }))
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -384,13 +385,16 @@ describe("PATCH /api/contracts/[id]/approvals/[approvalId]", () => {
     vi.mocked(prisma.approval.findUnique).mockResolvedValueOnce({
       ...mockApproval,
       assignedToId: "user-1",
+      required: true,
     } as any)
     vi.mocked(prisma.approval.update).mockResolvedValueOnce({
       ...mockApproval,
       status: "approved",
       decidedAt: new Date(),
     } as any)
-    vi.mocked(prisma.approval.findMany).mockResolvedValueOnce([])
+    vi.mocked(prisma.approval.findFirst).mockResolvedValueOnce(null) // no next waiting
+    vi.mocked(prisma.approval.findMany).mockResolvedValueOnce([]) // no unresolved required
+    vi.mocked(prisma.approval.count).mockResolvedValueOnce(1) // 1 required approval exists
 
     const { PATCH } = await import("@/app/api/contracts/[id]/approvals/[approvalId]/route")
 
@@ -421,13 +425,15 @@ describe("PATCH /api/contracts/[id]/approvals/[approvalId]", () => {
     vi.mocked(prisma.approval.findUnique).mockResolvedValueOnce({
       ...mockApproval,
       assignedToId: "user-1",
+      required: true,
     } as any)
     vi.mocked(prisma.approval.update).mockResolvedValueOnce({
       ...mockApproval,
       status: "approved",
       decidedAt: new Date(),
     } as any)
-    vi.mocked(prisma.approval.findMany).mockResolvedValueOnce([{ id: "approval-2" }] as any)
+    vi.mocked(prisma.approval.findFirst).mockResolvedValueOnce(null) // no next waiting
+    vi.mocked(prisma.approval.findMany).mockResolvedValueOnce([{ id: "approval-2" }] as any) // still unresolved
 
     const { PATCH } = await import("@/app/api/contracts/[id]/approvals/[approvalId]/route")
 
@@ -496,6 +502,7 @@ describe("PATCH /api/contracts/[id]/approvals/[approvalId]", () => {
     vi.mocked(prisma.approval.findUnique).mockResolvedValueOnce({
       ...mockApproval,
       assignedToId: "user-1",
+      required: true,
     } as any)
     vi.mocked(prisma.approval.update).mockResolvedValueOnce({
       ...mockApproval,

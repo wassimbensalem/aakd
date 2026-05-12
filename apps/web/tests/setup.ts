@@ -5,6 +5,8 @@ vi.mock("@/lib/jobs/queues", () => ({
   contractExtractQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
   contractAiExtractQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
   contractEmbedQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
+  notificationFanoutQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
+  emailQueue: { add: vi.fn().mockResolvedValue(undefined), close: vi.fn() },
 }))
 
 vi.mock("@/lib/db/client", () => {
@@ -22,7 +24,8 @@ vi.mock("@/lib/db/client", () => {
     apiKey: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn() },
     aIExtraction: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), upsert: vi.fn() },
     contractAlert: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), upsert: vi.fn() },
-    approval: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    approval: { findMany: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn(), count: vi.fn(), aggregate: vi.fn().mockResolvedValue({ _max: { step: null } }) },
+    contractSigner: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     $use: vi.fn(),
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),

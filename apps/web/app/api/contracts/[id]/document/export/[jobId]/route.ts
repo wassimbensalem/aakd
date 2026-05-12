@@ -13,9 +13,11 @@ export async function GET(
   return requestContext.run(ctx, async () => {
     const contract = await prisma.contract.findUnique({
       where: { id: params.id },
-      select: { id: true },
+      select: { id: true, organizationId: true },
     })
-    if (!contract) return new Response("Not Found", { status: 404 })
+    if (!contract || contract.organizationId !== ctx.organizationId) {
+      return new Response("Not Found", { status: 404 })
+    }
 
     const queue = getDocumentExportQueue()
     const job = await queue.getJob(params.jobId)

@@ -19,9 +19,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   return requestContext.run(ctx, async () => {
     const contract = await prisma.contract.findUnique({
       where: { id: params.id },
-      select: { id: true },
+      select: { id: true, organizationId: true },
     })
-    if (!contract) return new Response("Not Found", { status: 404 })
+    if (!contract || contract.organizationId !== ctx.organizationId) {
+      return new Response("Not Found", { status: 404 })
+    }
 
     const document = await prisma.contractDocument.findUnique({
       where: { contractId: params.id },

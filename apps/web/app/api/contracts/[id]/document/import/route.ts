@@ -31,7 +31,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       where: { id: params.id },
       select: { id: true, organizationId: true, status: true },
     })
-    if (!contract) return new Response("Not Found", { status: 404 })
+    if (!contract || contract.organizationId !== ctx.organizationId) {
+      return new Response("Not Found", { status: 404 })
+    }
 
     if (READ_ONLY_STATUSES.has(contract.status)) {
       return Response.json({ error: "read_only_status" }, { status: 422 })

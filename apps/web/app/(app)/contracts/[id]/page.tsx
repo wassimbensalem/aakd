@@ -1776,7 +1776,7 @@ export default function ContractDetailPage() {
                 </div>
                 <Button
                   onClick={analyzeRisk}
-                  disabled={analyzingRisk || !contract.extractedText}
+                  disabled={analyzingRisk || !contract.hasExtractedText}
                 >
                   {analyzingRisk ? (
                     <>
@@ -1790,7 +1790,7 @@ export default function ContractDetailPage() {
                     </>
                   )}
                 </Button>
-                {!contract.extractedText && (
+                {!contract.hasExtractedText && (
                   <p className="text-xs text-muted-foreground">Upload a document first to enable risk analysis.</p>
                 )}
               </div>

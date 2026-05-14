@@ -5,8 +5,9 @@ import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { QA_SYSTEM_PROMPT } from "@/lib/ai/prompts"
 import { generateEmbedding } from "@/lib/embedding"
 import { chunkText } from "@/lib/ai/chunking"
-import { resolveAiConfig } from "@/lib/ai/resolve"
+import { resolveAiConfig, withAiConfigCache } from "@/lib/ai/resolve"
 import { logger } from "@/lib/logger"
+import Anthropic from "@anthropic-ai/sdk"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -32,7 +33,6 @@ async function callQaLLM(
   const aiConfig = await resolveAiConfig(organizationId)
 
   if (aiConfig.provider === "anthropic" && aiConfig.apiKey) {
-    const Anthropic = (await import("@anthropic-ai/sdk")).default
     const anthropic = new Anthropic({ apiKey: aiConfig.apiKey })
     const msg = await anthropic.messages.create({
       model: aiConfig.model ?? "claude-haiku-4-5",
@@ -175,7 +175,7 @@ export async function POST(
 
   const { question } = parsed.data
 
-  return requestContext.run(ctx, async () => {
+  return withAiConfigCache(() => requestContext.run(ctx, async () => {
     const contract = await prisma.contract.findUnique({
       where: { id },
       select: {
@@ -249,5 +249,5 @@ export async function POST(
       contractTitle: contract.title,
       citations,
     })
-  })
+  }))
 }

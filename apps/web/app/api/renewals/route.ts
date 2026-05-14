@@ -10,6 +10,9 @@ export async function GET(req: Request) {
   const rl = await rateLimit(`${ctx.organizationId}:renewals`, 60, 60_000)
   if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
+  const url = new URL(req.url)
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100"), 200)
+
   return requestContext.run(ctx, async () => {
     const contracts = await prisma.contract.findMany({
       where: {
@@ -28,6 +31,8 @@ export async function GET(req: Request) {
         riskScore: true,
         status: true,
       },
+      orderBy: { endDate: "asc" },
+      take: limit,
     })
 
     const now = Date.now()
@@ -46,15 +51,6 @@ export async function GET(req: Request) {
         noticeDeadlineDate,
         daysUntilDeadline,
       }
-    })
-
-    // Sort ascending by daysUntilDeadline — most urgent first.
-    // Contracts without a deadline go to the end.
-    withDeadlines.sort((a, b) => {
-      if (a.daysUntilDeadline == null && b.daysUntilDeadline == null) return 0
-      if (a.daysUntilDeadline == null) return 1
-      if (b.daysUntilDeadline == null) return -1
-      return a.daysUntilDeadline - b.daysUntilDeadline
     })
 
     return Response.json({ renewals: withDeadlines })

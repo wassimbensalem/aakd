@@ -208,6 +208,9 @@ model Contract {
 
   @@index([organizationId, updatedAt])
   @@index([docusealSubmissionId])
+  @@index([organizationId, autoRenewal, endDate])
+  @@index([organizationId, riskScore])
+  @@index([organizationId, isOcrExtracted])
 }
 
 model ContractSigner {

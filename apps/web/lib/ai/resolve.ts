@@ -12,6 +12,7 @@
 
 import { prisma } from "@/lib/db/client"
 import { decrypt } from "@/lib/notifications/crypto"
+import { logger } from "@/lib/logger"
 
 export type AiProvider = "anthropic" | "openai" | "ollama"
 
@@ -38,8 +39,8 @@ export async function resolveAiConfig(
       try {
         apiKey = decrypt(orgConfig.encryptedKey)
       } catch (err) {
-        console.error(
-          `[resolveAiConfig] Failed to decrypt key for org ${organizationId}:`,
+        logger.error(
+          `[resolveAiConfig] Failed to decrypt key for org ${organizationId}`,
           err,
         )
         // Fall through to env vars if decryption fails
@@ -55,8 +56,8 @@ export async function resolveAiConfig(
       }
     }
   } catch (err) {
-    console.error(
-      `[resolveAiConfig] DB lookup failed for org ${organizationId}:`,
+    logger.error(
+      `[resolveAiConfig] DB lookup failed for org ${organizationId}`,
       err,
     )
     // Fall through to env vars

@@ -4,6 +4,9 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { resolveAiConfig } from "@/lib/ai/resolve"
+import { logger } from "@/lib/logger"
+import Anthropic from "@anthropic-ai/sdk"
+import OpenAI from "openai"
 
 const RISK_SYSTEM_PROMPT = `You are a contract risk analyzer. Analyze the contract text and return ONLY a valid JSON object with this exact shape:
 
@@ -27,38 +30,54 @@ Risk level guidelines:
 - MEDIUM: anything between
 Return ONLY the JSON, no markdown.`
 
+function getAnthropicClient(apiKey: string): Anthropic {
+  return new Anthropic({ apiKey })
+}
+
+function getOpenAIClient(apiKey: string): OpenAI {
+  return new OpenAI({ apiKey })
+}
+
 async function callAiForRiskScore(text: string, organizationId: string): Promise<unknown | null> {
   const aiConfig = await resolveAiConfig(organizationId)
   const truncated = text.slice(0, 60_000)
 
   if (aiConfig.provider === "anthropic" && aiConfig.apiKey) {
-    const Anthropic = (await import("@anthropic-ai/sdk")).default
-    const client = new Anthropic({ apiKey: aiConfig.apiKey })
-    const msg = await client.messages.create({
-      model: aiConfig.model ?? "claude-3-5-haiku-latest",
-      max_tokens: 1024,
-      system: RISK_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: `Contract text:\n\n${truncated}` }],
-    })
-    const raw = msg.content.find((b) => b.type === "text")?.text ?? null
-    if (!raw) return null
-    return JSON.parse(raw)
+    const client = getAnthropicClient(aiConfig.apiKey)
+    try {
+      const msg = await client.messages.create({
+        model: aiConfig.model ?? "claude-3-5-haiku-latest",
+        max_tokens: 1024,
+        system: RISK_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: `Contract text:\n\n${truncated}` }],
+      }, { signal: AbortSignal.timeout(30_000) })
+      const raw = msg.content.find((b) => b.type === "text")?.text ?? null
+      if (!raw) return null
+      return JSON.parse(raw)
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return null
+      throw err
+    }
   }
 
   if (aiConfig.provider === "openai" && aiConfig.apiKey) {
-    const OpenAI = (await import("openai")).default
-    const client = new OpenAI({ apiKey: aiConfig.apiKey })
-    const resp = await client.chat.completions.create({
-      model: aiConfig.model ?? "gpt-4o-mini",
-      messages: [
-        { role: "system", content: RISK_SYSTEM_PROMPT },
-        { role: "user", content: `Contract text:\n\n${truncated}` },
-      ],
-      response_format: { type: "json_object" },
-    })
-    const raw = resp.choices[0]?.message?.content ?? null
-    if (!raw) return null
-    return JSON.parse(raw)
+    const client = getOpenAIClient(aiConfig.apiKey)
+    try {
+      const resp = await client.chat.completions.create({
+        model: aiConfig.model ?? "gpt-4o-mini",
+        messages: [
+          { role: "system", content: RISK_SYSTEM_PROMPT },
+          { role: "user", content: `Contract text:\n\n${truncated}` },
+        ],
+        response_format: { type: "json_object" },
+      }, { signal: AbortSignal.timeout(30_000) })
+      const raw = resp.choices[0]?.message?.content ?? null
+      if (!raw) return null
+      return JSON.parse(raw)
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return null
+      throw err
+    }
   }
 
   if (aiConfig.provider === "ollama") {
@@ -73,6 +92,7 @@ async function callAiForRiskScore(text: string, organizationId: string): Promise
         stream: false,
         format: "json",
       }),
+      signal: AbortSignal.timeout(30_000),
     })
     if (!res.ok) return null
     const data = await res.json()
@@ -110,7 +130,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     try {
       riskDetails = await callAiForRiskScore(contract.extractedText, contract.organizationId)
     } catch (err) {
-      console.error("[risk-score] AI call failed:", err)
+      logger.error("[risk-score] AI call failed", err)
       return Response.json({ error: "AI provider error" }, { status: 502 })
     }
 

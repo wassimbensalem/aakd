@@ -2,6 +2,7 @@ import { resolveAuth } from "@/lib/auth/middleware"
 import { hasRole } from "@/lib/auth/roles"
 import { prisma } from "@/lib/db/client"
 import { encrypt } from "@/lib/notifications/crypto"
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { z } from "zod"
 
 const UpsertSchema = z.object({
@@ -13,6 +14,9 @@ const UpsertSchema = z.object({
 export async function GET(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return new Response("Unauthorized", { status: 401 })
+
+  const rl = await rateLimit(`${ctx.organizationId}:ai-config-read`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   const config = await prisma.orgAiConfig.findUnique({
     where: { organizationId: ctx.organizationId },
@@ -86,6 +90,9 @@ export async function DELETE(req: Request) {
   if (!hasRole(ctx.role, "legal")) {
     return new Response("Forbidden", { status: 403 })
   }
+
+  const rl = await rateLimit(`${ctx.organizationId}:ai-config-delete`, 10, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   await prisma.orgAiConfig.deleteMany({
     where: { organizationId: ctx.organizationId },

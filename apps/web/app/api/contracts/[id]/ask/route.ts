@@ -6,6 +6,7 @@ import { QA_SYSTEM_PROMPT } from "@/lib/ai/prompts"
 import { generateEmbedding } from "@/lib/embedding"
 import { chunkText } from "@/lib/ai/chunking"
 import { resolveAiConfig } from "@/lib/ai/resolve"
+import { logger } from "@/lib/logger"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -219,7 +220,7 @@ export async function POST(
         question,
       )
     } catch (err) {
-      console.error(`[ask] Retrieval failed for contract ${id}:`, err)
+      logger.error(`[ask] Retrieval failed for contract ${id}`, err)
       return Response.json({ error: "Retrieval failed" }, { status: 503 })
     }
 
@@ -234,7 +235,7 @@ export async function POST(
     try {
       answer = await callQaLLM(contract.title, buildContext(citations), question, contract.organizationId)
     } catch (err) {
-      console.error(`[ask] LLM call failed for contract ${id}:`, err)
+      logger.error(`[ask] LLM call failed for contract ${id}`, err)
       return Response.json({ error: "AI call failed" }, { status: 503 })
     }
 

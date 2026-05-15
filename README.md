@@ -1,7 +1,6 @@
 # ClauseFlow
 
-**Open-source, self-hostable Contract Lifecycle Management.**  
-Upload a contract → AI extracts obligations, flags risks, and answers your questions — in seconds.
+Stop paying $1,500 to find out your MSA is fine.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](./docker-compose.yml)

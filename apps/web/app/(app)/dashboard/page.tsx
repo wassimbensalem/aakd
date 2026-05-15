@@ -132,7 +132,58 @@ export default function DashboardPage() {
   const expiringCount = analytics?.expiringSoon.next30 ?? 0
   const pendingCount  = analytics?.approvalFunnel.pending ?? 0
 
+  const totalContracts = analytics?.byStatus.reduce((sum, s) => sum + s.count, 0) ?? null
+
   const tableHeaders = [t("table.contract"), t("table.counterparty"), t("table.value"), t("table.due"), t("table.status"), ""]
+
+  // Show full-page empty state when analytics have loaded and org has zero contracts.
+  if (!loading && totalContracts === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between px-7 py-4 border-b border-border shrink-0">
+          <div>
+            <h1 className="text-[18px] font-bold tracking-tight leading-snug">{greeting}, {firstName}</h1>
+            <p className="text-[12.5px] text-muted-foreground mt-0.5">{t("subtitle")}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/settings/notifications"
+              title="Notification settings"
+              className="flex h-[34px] w-[34px] items-center justify-center rounded-[var(--radius)] border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Settings2 className="h-[15px] w-[15px]" />
+            </Link>
+            <Link
+              href="/contracts/new"
+              className="inline-flex items-center gap-1.5 h-[34px] px-3 text-[13px] font-medium rounded-[var(--radius)] bg-primary text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("newContract")}
+            </Link>
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <div className="flex flex-col items-center gap-4 text-center max-w-sm px-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-100">
+              <FileText className="h-8 w-8 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-900">Upload your first contract</h2>
+              <p className="mt-1.5 text-sm text-zinc-500 leading-relaxed">
+                Get started by uploading a PDF or DOCX contract. ClauseFlow will extract key dates, parties, and risk signals automatically.
+              </p>
+            </div>
+            <Link
+              href="/contracts/new"
+              className="inline-flex items-center gap-1.5 h-9 px-4 text-sm font-medium rounded-[var(--radius)] bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+            >
+              Get started →
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full">

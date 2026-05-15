@@ -1,0 +1,46 @@
+# ClauseFlow — Caddy reverse proxy config
+# Handles automatic SSL (Let's Encrypt), HTTP→HTTPS redirect, and routing.
+# Replace {$DOMAIN} — Caddy reads this from the DOMAIN env var at runtime.
+
+# ── Main app ─────────────────────────────────────────────────────────────────
+{$DOMAIN} {
+  reverse_proxy app:3000
+
+  # Security headers
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
+  }
+
+  # Compress responses
+  encode gzip zstd
+
+  # Log access
+  log {
+    output stdout
+    format console
+  }
+}
+
+# ── DocuSeal (e-signatures) ──────────────────────────────────────────────────
+sign.{$DOMAIN} {
+  reverse_proxy docuseal:3000
+
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    -Server
+  }
+
+  encode gzip
+}
+
+# ── MinIO console (storage admin — optional, comment out to disable) ─────────
+# storage.{$DOMAIN} {
+#   reverse_proxy minio:9001
+#   basicauth {
+#     admin $2a$14$... # generate with: caddy hash-password
+#   }
+# }

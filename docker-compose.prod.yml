@@ -1,0 +1,219 @@
+# ClauseFlow — Production docker-compose
+# Usage: docker compose -f docker-compose.prod.yml up -d
+#
+# BEFORE STARTING:
+#   1. Copy .env.prod.example → .env.prod and fill every value
+#   2. Point your domain's A record to this server's IP
+#   3. docker compose -f docker-compose.prod.yml up -d
+
+services:
+
+  # ── PostgreSQL (pgvector for semantic search) ────────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: clauseflow
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # Not exposed to host — only reachable inside the Docker network
+
+  # ── Redis (BullMQ job queues) ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: >
+      sh -c 'redis-server --requirepass "$$REDIS_PASSWORD" --save 60 1 --loglevel warning'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+  # ── MinIO (S3-compatible file storage) ──────────────────────────────────
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    # Console reachable via Caddy at storage.yourdomain.com (optional)
+
+  # ── Create storage bucket on first boot ──────────────────────────────────
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      /usr/bin/mc mb local/clauseflow --ignore-existing;
+      /usr/bin/mc anonymous set download local/clauseflow/public 2>/dev/null || true;
+      exit 0;
+      "
+    restart: "no"
+
+  # ── DocuSeal (self-hosted e-signatures) ──────────────────────────────────
+  docuseal:
+    image: docuseal/docuseal:latest
+    volumes:
+      - docusealdata:/data
+    environment:
+      SECRET_KEY_BASE: ${DOCUSEAL_SECRET_KEY_BASE:?DOCUSEAL_SECRET_KEY_BASE must be set}
+      HOST: sign.${DOMAIN:?DOMAIN must be set}
+      FORCE_SSL: "false"  # Caddy handles SSL
+    restart: unless-stopped
+
+  # ── ClauseFlow web app (Next.js) ─────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/clauseflow
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
+      BETTER_AUTH_URL: https://${DOMAIN}
+      NEXT_PUBLIC_APP_URL: https://${DOMAIN}
+      INTERNAL_APP_URL: http://app:3000
+      # Storage
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET: clauseflow
+      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER}
+      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      STORAGE_REGION: us-east-1
+      # Notification encryption (required)
+      NOTIFICATION_ENCRYPTION_KEY: ${NOTIFICATION_ENCRYPTION_KEY:?NOTIFICATION_ENCRYPTION_KEY must be set}
+      # AI (optional — users bring their own key)
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      # Email (Resend SMTP)
+      SMTP_HOST: smtp.resend.com
+      SMTP_PORT: 465
+      SMTP_SECURE: "true"
+      SMTP_USER: resend
+      SMTP_PASS: ${RESEND_API_KEY:?RESEND_API_KEY must be set}
+      SMTP_FROM: ${SMTP_FROM:-noreply@${DOMAIN}}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      # DocuSeal
+      DOCUSEAL_API_URL: http://docuseal:3000
+      DOCUSEAL_API_KEY: ${DOCUSEAL_API_KEY:-}
+      DOCUSEAL_WEBHOOK_SECRET: ${DOCUSEAL_WEBHOOK_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ── ClauseFlow worker (BullMQ background jobs) ────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.worker
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/clauseflow
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET: clauseflow
+      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER}
+      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      STORAGE_REGION: us-east-1
+      NOTIFICATION_ENCRYPTION_KEY: ${NOTIFICATION_ENCRYPTION_KEY}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      SMTP_HOST: smtp.resend.com
+      SMTP_PORT: 465
+      SMTP_SECURE: "true"
+      SMTP_USER: resend
+      SMTP_PASS: ${RESEND_API_KEY}
+      SMTP_FROM: ${SMTP_FROM:-noreply@${DOMAIN}}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      DOCUSEAL_API_URL: http://docuseal:3000
+      DOCUSEAL_API_KEY: ${DOCUSEAL_API_KEY:-}
+      DOCUSEAL_WEBHOOK_SECRET: ${DOCUSEAL_WEBHOOK_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── Caddy (reverse proxy + automatic SSL) ────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+    depends_on:
+      - app
+      - docuseal
+    restart: unless-stopped
+
+  # ── PostgreSQL daily backup ──────────────────────────────────────────────
+  backup:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - backups:/backups
+    entrypoint: >
+      /bin/sh -c "
+      while true; do
+        sleep 86400;
+        pg_dump -h db -U postgres clauseflow | gzip > /backups/clauseflow-$$(date +%Y%m%d-%H%M%S).sql.gz;
+        find /backups -name '*.sql.gz' -mtime +7 -delete;
+        echo 'Backup completed at '$$(date);
+      done
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  docusealdata:
+  caddy_data:
+  caddy_config:
+  backups:

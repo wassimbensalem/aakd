@@ -155,7 +155,7 @@ export default function AIAgentsPage() {
               AI Agents — Cloud Feature
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              AI Agents will be available in the Aakd Cloud plan. Self-hosted users
+              AI Agents will be available in the ClauseFlow Cloud plan. Self-hosted users
               can configure their own AI providers via the API.
             </p>
           </div>

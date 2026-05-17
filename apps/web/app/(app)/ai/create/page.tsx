@@ -146,7 +146,7 @@ export default function AICreatePage() {
               Create with AI
             </h2>
             <p className="text-sm text-muted-foreground text-center max-w-xs mb-5">
-              Guided AI contracting is available in the Aakd Cloud plan.
+              Guided AI contracting is available in the ClauseFlow Cloud plan.
             </p>
             <Link
               href="mailto:hello@clauseflow.io"

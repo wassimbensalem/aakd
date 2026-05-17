@@ -29,7 +29,7 @@ const sora = Sora({
 })
 
 export const metadata: Metadata = {
-  title: "Aakd",
+  title: "ClauseFlow",
   description: "Open source, self-hostable contract management",
 }
 
@@ -51,7 +51,7 @@ export default async function RootLayout({
     >
       <body className="font-sans antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="aakd-theme">
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="clauseflow-theme">
             {children}
             <Toaster richColors />
           </ThemeProvider>

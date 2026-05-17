@@ -2,7 +2,7 @@
  * PandaDoc export ZIP import handler.
  *
  * Expects: <folder>/metadata.json + <folder>/document.{pdf|docx} pairs in the archive.
- * Maps PandaDoc's metadata schema to Aakd contract fields per the spec.
+ * Maps PandaDoc's metadata schema to ClauseFlow contract fields per the spec.
  */
 import { unzipSync } from "fflate"
 import type { ImportJob } from "@prisma/client"

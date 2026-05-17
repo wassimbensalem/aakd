@@ -317,7 +317,7 @@ function DeveloperSection() {
             <StatusBadge label="Active" variant="success" />
           </div>
           <p className="text-xs text-muted-foreground mb-2">
-            Access Aakd programmatically using Bearer API keys.
+            Access ClauseFlow programmatically using Bearer API keys.
           </p>
           <Link
             href="/settings/api-keys"
@@ -331,12 +331,12 @@ function DeveloperSection() {
       <SoonCard
         logo="ZP"
         name="Zapier"
-        description="Connect Aakd to 5,000+ apps via Zapier automation."
+        description="Connect ClauseFlow to 5,000+ apps via Zapier automation."
       />
       <SoonCard
         logo="MK"
         name="Make (Integromat)"
-        description="Build powerful workflows with Aakd and Make."
+        description="Build powerful workflows with ClauseFlow and Make."
       />
     </div>
   )
@@ -660,7 +660,7 @@ export default function IntegrationsPage() {
         <div>
           <h1 className="text-xl font-semibold">Integrations</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Connect Aakd to the tools your team already uses.
+            Connect ClauseFlow to the tools your team already uses.
           </p>
         </div>
       </div>

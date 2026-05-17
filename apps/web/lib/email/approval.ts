@@ -40,7 +40,7 @@ function buildApprovalRequestHtml(params: ApprovalRequestEmailParams): string {
 
     ${message ? `<div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:6px;border:1px solid #e5e7eb"><p style="margin:0;font-size:13px;color:#374151"><strong>Message:</strong> ${escapeHtml(message)}</p></div>` : ""}
 
-    <p style="margin:24px 0 0;font-size:12px;color:#9ca3af">This is an automated notification from Aakd. Please log in to review and decide on this approval.</p>
+    <p style="margin:24px 0 0;font-size:12px;color:#9ca3af">This is an automated notification from ClauseFlow. Please log in to review and decide on this approval.</p>
   </div>
 </body>
 </html>`.trim()
@@ -65,7 +65,7 @@ export async function sendApprovalRequestEmail(params: ApprovalRequestEmailParam
   await transporter.sendMail({
     from: process.env.SMTP_FROM ?? "noreply@clauseflow.io",
     to: params.to,
-    subject: `[Aakd] Approval requested — ${params.contractTitle}`,
+    subject: `[ClauseFlow] Approval requested — ${params.contractTitle}`,
     html: buildApprovalRequestHtml(params),
   })
 }
@@ -117,7 +117,7 @@ export async function sendApprovalRejectionEmail(params: ApprovalRejectionEmailP
   await transporter.sendMail({
     from: process.env.SMTP_FROM ?? "noreply@clauseflow.io",
     to: params.to,
-    subject: `[Aakd] Approval rejected — ${params.contractTitle}`,
+    subject: `[ClauseFlow] Approval rejected — ${params.contractTitle}`,
     html: buildApprovalRejectionHtml(params),
   })
 }

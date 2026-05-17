@@ -149,7 +149,7 @@ export function CsvImportTab({ onJobCreated }: { onJobCreated?: () => void }) {
             <thead className="bg-zinc-50 text-xs text-zinc-500">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Your column</th>
-                <th className="px-4 py-2 text-left font-medium">Aakd field</th>
+                <th className="px-4 py-2 text-left font-medium">ClauseFlow field</th>
               </tr>
             </thead>
             <tbody>

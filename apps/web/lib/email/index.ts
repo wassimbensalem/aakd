@@ -55,7 +55,7 @@ function buildAlertHtml(alert: ContractAlertWithContract): string {
     </table>
 
     ${contract.counterpartyName ? `<p style="margin:24px 0 0;font-size:13px;color:#6b7280">Counterparty: <strong>${escapeHtml(contract.counterpartyName)}</strong></p>` : ""}
-    <p style="margin:24px 0 0;font-size:12px;color:#9ca3af">This is an automated alert from Aakd. Please log in to review the contract.</p>
+    <p style="margin:24px 0 0;font-size:12px;color:#9ca3af">This is an automated alert from ClauseFlow. Please log in to review the contract.</p>
   </div>
 </body>
 </html>`.trim()
@@ -118,7 +118,7 @@ export async function sendAlertEmail(alert: ContractAlertWithContract): Promise<
   if (to.length === 0) return
 
   const label = ALERT_LABELS[alert.alertType] ?? alert.alertType
-  const subject = `[Aakd] ${label} — ${alert.contract.title}`
+  const subject = `[ClauseFlow] ${label} — ${alert.contract.title}`
 
   const transporter = getTransporter()
   await transporter.sendMail({

@@ -1,5 +1,5 @@
 /**
- * Canonical CSV column -> Aakd contract field mapping.
+ * Canonical CSV column -> ClauseFlow contract field mapping.
  *
  * Used by:
  *   - The CSV preview API to auto-suggest mappings from a user-uploaded header.

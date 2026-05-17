@@ -144,7 +144,7 @@ export async function sendEventNotificationEmail(
     "http://localhost:3000"
 
   const label = eventLabel(params.eventName)
-  const subject = `[Aakd] ${label} — ${params.contractTitle}`
+  const subject = `[ClauseFlow] ${label} — ${params.contractTitle}`
 
   const transporter = getTransporter()
   await transporter.sendMail({

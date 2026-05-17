@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { GlobalProviders } from "@/components/global-providers"
-import { AakdLogoMark } from "@/components/aakd-logo"
+import { ClauseFlowLogoMark } from "@/components/aakd-logo"
 import { useTranslations } from "next-intl"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -137,9 +137,9 @@ function Sidebar({
     <aside className="flex flex-col h-full w-[232px] shrink-0 bg-muted border-r border-border">
       {/* Logo row */}
       <div className="flex items-center gap-2.5 px-3 py-3 border-b border-border">
-        <AakdLogoMark size={26} />
+        <ClauseFlowLogoMark size={26} />
         <span className="font-extrabold text-sm flex-1 min-w-0 truncate" style={{ fontFamily: "var(--font-sora), 'Sora', sans-serif", letterSpacing: '-0.02em' }}>
-          Aakd
+          ClauseFlow
         </span>
         <NotificationBell />
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />

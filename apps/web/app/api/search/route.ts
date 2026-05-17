@@ -1,11 +1,16 @@
 import { resolveAuth } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+  // Rate limit: 30 req/min per org
+  const rl = await rateLimit(`${ctx.organizationId}:search`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   return requestContext.run(ctx, async () => {
     const url = new URL(req.url)

@@ -4,6 +4,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { getContractAiExtractQueue } from "@/lib/jobs/queues"
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 
 // ─── POST /api/contracts/[id]/extractions/rerun ───────────────────────────────
 // Re-enqueues the AI extraction job for a contract using its stored extracted
@@ -18,6 +19,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (roleError) return roleError
   const scopeError = requireWriteScope(ctx)
   if (scopeError) return scopeError
+
+  // Rate limit: 10 req/min per org (AI extraction is expensive)
+  const rl = await rateLimit(`${ctx.organizationId}:ai-extract`, 10, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   return requestContext.run(ctx, async () => {
     const contract = await prisma.contract.findUnique({

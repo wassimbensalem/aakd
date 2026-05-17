@@ -5,6 +5,7 @@ import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
 import { contractExtractQueue, documentConvertQueue } from "@/lib/jobs/queues"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 
 // GET /api/contracts/[id]/upload?fileId=... — generate a signed download URL
 export async function GET(req: Request, { params }: { params: { id: string } }) {
@@ -60,6 +61,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
   const scopeError = requireWriteScope(ctx)
   if (scopeError) return scopeError
+
+  // Rate limit: 20 uploads/min per org (file parsing is expensive)
+  const rl = await rateLimit(`${ctx.organizationId}:upload`, 20, 60_000)
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   return requestContext.run(ctx, async () => {
     const existing = await prisma.contract.findUnique({

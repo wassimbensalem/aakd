@@ -32,10 +32,10 @@ interface Props {
 }
 
 const STATUS_BADGE: Record<ObligationStatus, string> = {
-  PENDING: "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200",
-  IN_PROGRESS: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
-  COMPLETED: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-  OVERDUE: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+  PENDING: "bg-muted text-muted-foreground ring-1 ring-border",
+  IN_PROGRESS: "bg-sky-50 text-sky-700 ring-1 ring-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:ring-sky-800",
+  COMPLETED: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-800",
+  OVERDUE: "bg-destructive/10 text-destructive ring-1 ring-destructive/20",
 }
 
 const PRIORITY_DOT: Record<Obligation["priority"], string> = {
@@ -183,7 +183,8 @@ export function ObligationList({
     setAcceptingIdx(idx)
     try {
       const dueDate = new Date()
-      dueDate.setDate(dueDate.getDate() + s.suggestedDueDays)
+      // Ensure at least 1 day in the future to pass server validation
+      dueDate.setDate(dueDate.getDate() + Math.max(s.suggestedDueDays ?? 30, 1))
       const res = await fetch(`/api/contracts/${contractId}/obligations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -216,11 +217,14 @@ export function ObligationList({
 
     const created: Obligation[] = []
     const newDismissed = new Set(dismissedIds)
+    let failCount = 0
 
     for (const { s, idx } of pending) {
       try {
         const dueDate = new Date()
-        dueDate.setDate(dueDate.getDate() + s.suggestedDueDays)
+        // Ensure at least 1 day in the future to pass server validation
+        const days = Math.max(s.suggestedDueDays ?? 30, 1)
+        dueDate.setDate(dueDate.getDate() + days)
         const res = await fetch(`/api/contracts/${contractId}/obligations`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -237,21 +241,30 @@ export function ObligationList({
           const ob = await res.json()
           created.push(ob)
           newDismissed.add(idx)
+        } else {
+          failCount++
         }
       } catch {
-        // partial success is ok
+        failCount++
       }
     }
 
     if (created.length > 0) {
       onChange([...obligations, ...created])
+      setDismissedIds(newDismissed)
+      // Only clear the suggestions panel when at least some were saved.
+      // If everything succeeded, also clear localStorage.
+      if (failCount === 0) {
+        setSuggestions([])
+        localStorage.removeItem(`obligation_extract_job_${contractId}`)
+        setJobId(null)
+      }
+      toast.success(`${created.length} obligation${created.length !== 1 ? "s" : ""} created.${failCount > 0 ? ` ${failCount} failed — remaining suggestions kept.` : ""}`)
+    } else {
+      // Nothing was created — keep suggestions visible so the user can retry.
+      toast.error("Failed to create obligations. Please try again.")
     }
-    setDismissedIds(newDismissed)
     setAcceptingAll(false)
-    setSuggestions([])
-    localStorage.removeItem(`obligation_extract_job_${contractId}`)
-    setJobId(null)
-    toast.success(`${created.length} obligation${created.length !== 1 ? "s" : ""} created.`)
   }
 
   function openEdit(ob: Obligation) {
@@ -300,10 +313,10 @@ export function ObligationList({
   if (obligations.length === 0 && suggestions.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-12">
-        <CheckSquare className="size-10 text-zinc-300" />
+        <CheckSquare className="size-10 text-muted-foreground/40" />
         <div className="text-center">
-          <p className="text-sm font-medium text-zinc-700">No obligations yet</p>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <p className="text-sm font-medium text-foreground">No obligations yet</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Track deliverables, payments, and commitments here.
           </p>
         </div>
@@ -323,17 +336,17 @@ export function ObligationList({
         </div>
 
         {extracting && (
-          <div className="w-full max-w-lg rounded-lg border border-zinc-200 bg-zinc-50 p-4 space-y-3 animate-pulse">
-            <div className="h-4 w-48 rounded bg-zinc-200" />
+          <div className="w-full max-w-lg rounded-[var(--radius)] border border-border bg-muted/40 p-4 space-y-3 animate-pulse">
+            <div className="h-4 w-48 rounded bg-muted" />
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="rounded-md border border-zinc-100 bg-white p-3 flex items-start gap-3">
-                  <div className="mt-1.5 size-2 rounded-full bg-zinc-200 shrink-0" />
+                <div key={i} className="rounded-[var(--radius)] border border-border bg-card p-3 flex items-start gap-3">
+                  <div className="mt-1.5 size-2 rounded-full bg-muted shrink-0" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-3/4 rounded bg-zinc-200" />
-                    <div className="h-3 w-full rounded bg-zinc-100" />
+                    <div className="h-3.5 w-3/4 rounded bg-muted" />
+                    <div className="h-3 w-full rounded bg-muted/60" />
                   </div>
-                  <div className="h-7 w-16 rounded bg-zinc-200 shrink-0" />
+                  <div className="h-7 w-16 rounded bg-muted shrink-0" />
                 </div>
               ))}
             </div>
@@ -365,8 +378,8 @@ export function ObligationList({
               className={cn(
                 "rounded-full px-3 py-1 text-xs font-medium transition-colors",
                 filter === f.key
-                  ? "bg-indigo-600 text-white"
-                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
               )}
             >
               {f.label}
@@ -400,18 +413,18 @@ export function ObligationList({
 
       {/* Loading skeleton */}
       {extracting && (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 space-y-3 animate-pulse">
-          <div className="h-4 w-48 rounded bg-zinc-200" />
+        <div className="rounded-[var(--radius)] border border-border bg-muted/40 p-4 space-y-3 animate-pulse">
+          <div className="h-4 w-48 rounded bg-muted" />
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="rounded-md border border-zinc-100 bg-white p-3 flex items-start gap-3">
-                <div className="mt-1.5 size-2 rounded-full bg-zinc-200 shrink-0" />
+              <div key={i} className="rounded-[var(--radius)] border border-border bg-card p-3 flex items-start gap-3">
+                <div className="mt-1.5 size-2 rounded-full bg-muted shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3.5 w-3/4 rounded bg-zinc-200" />
-                  <div className="h-3 w-full rounded bg-zinc-100" />
-                  <div className="h-3 w-1/2 rounded bg-zinc-100" />
+                  <div className="h-3.5 w-3/4 rounded bg-muted" />
+                  <div className="h-3 w-full rounded bg-muted/60" />
+                  <div className="h-3 w-1/2 rounded bg-muted/60" />
                 </div>
-                <div className="h-7 w-16 rounded bg-zinc-200 shrink-0" />
+                <div className="h-7 w-16 rounded bg-muted shrink-0" />
               </div>
             ))}
           </div>
@@ -420,9 +433,9 @@ export function ObligationList({
 
       {/* AI Suggestions Panel */}
       {suggestions.length > 0 && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+        <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-indigo-900">
+            <p className="text-sm font-semibold text-foreground">
               AI found {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""} — review and accept
             </p>
             <div className="flex items-center gap-2">
@@ -442,7 +455,7 @@ export function ObligationList({
                   localStorage.removeItem(`obligation_extract_job_${contractId}`)
                   setJobId(null)
                 }}
-                className="rounded p-1 text-indigo-400 hover:text-indigo-700"
+                className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Dismiss all suggestions"
               >
                 <X className="size-4" />
@@ -454,23 +467,23 @@ export function ObligationList({
               const dismissed = dismissedIds.has(idx)
               if (dismissed) return null
               const dueDate = new Date()
-              dueDate.setDate(dueDate.getDate() + s.suggestedDueDays)
+              dueDate.setDate(dueDate.getDate() + Math.max(s.suggestedDueDays ?? 30, 1))
               return (
-                <div key={idx} className="rounded-md border border-indigo-100 bg-white p-3 flex items-start gap-3">
+                <div key={idx} className="rounded-[var(--radius)] border border-border bg-card p-3 flex items-start gap-3">
                   <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", PRIORITY_DOT[s.priority])} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-900">{s.title}</p>
-                    {s.description && <p className="text-xs text-zinc-500 mt-0.5">{s.description}</p>}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-zinc-400">
+                    <p className="text-sm font-medium text-foreground">{s.title}</p>
+                    {s.description && <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                       {s.clauseReference && <span>{s.clauseReference}</span>}
                       <span
                         className={cn(
                           "rounded-full px-1.5 py-0.5 font-medium text-[10px]",
                           s.confidence >= 0.8
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
                             : s.confidence >= 0.5
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-zinc-100 text-zinc-500",
+                              ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                              : "bg-muted text-muted-foreground",
                         )}
                       >
                         {Math.round(s.confidence * 100)}% confidence
@@ -506,7 +519,7 @@ export function ObligationList({
                           duration: 5000,
                         })
                       }}
-                      className="rounded p-1.5 text-zinc-400 hover:text-zinc-700"
+                      className="rounded p-1.5 text-muted-foreground hover:text-foreground transition-colors"
                       aria-label="Dismiss suggestion"
                     >
                       <X className="size-3" />
@@ -521,7 +534,7 @@ export function ObligationList({
 
       {/* List */}
       {visible.length === 0 ? (
-        <p className="text-center text-sm text-zinc-500 py-8">
+        <p className="text-center text-sm text-muted-foreground py-8">
           No obligations match this filter.
         </p>
       ) : (
@@ -533,7 +546,7 @@ export function ObligationList({
             return (
               <div
                 key={ob.id}
-                className="rounded-lg border border-zinc-200 bg-white p-4"
+                className="rounded-[var(--radius)] border border-border bg-card p-4"
               >
                 <div className="flex items-start gap-3">
                   <span
@@ -545,7 +558,7 @@ export function ObligationList({
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         href={`/contracts/${contractId}/obligations/${ob.id}`}
-                        className="text-sm font-semibold text-zinc-900 hover:text-primary hover:underline underline-offset-2 transition-colors"
+                        className="text-sm font-semibold text-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
                       >
                         {ob.title}
                       </Link>
@@ -559,44 +572,44 @@ export function ObligationList({
                       </span>
                     </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span
                         className={cn(
                           "font-medium",
-                          dueUrgent ? "text-rose-600" : "text-zinc-600",
+                          dueUrgent ? "text-destructive" : "text-foreground/70",
                         )}
                       >
                         Due {format(new Date(ob.dueDate), "MMM d, yyyy")}
                       </span>
                       {ob.assignee && (
                         <span className="inline-flex items-center gap-1">
-                          <span className="flex size-4 items-center justify-center rounded-full bg-zinc-100 text-[10px] font-medium text-zinc-600">
+                          <span className="flex size-4 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
                             {ob.assignee.name.charAt(0).toUpperCase()}
                           </span>
                           {ob.assignee.name}
                         </span>
                       )}
                       {ob.clauseReference && (
-                        <span className="text-zinc-400">{ob.clauseReference}</span>
+                        <span className="text-muted-foreground/60">{ob.clauseReference}</span>
                       )}
                     </div>
 
                     {ob.description && (
-                      <p className="mt-2 line-clamp-2 text-sm text-zinc-600">
+                      <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
                         {ob.description}
                       </p>
                     )}
 
                     {subTotal > 0 && (
                       <div className="mt-3">
-                        <div className="flex items-center justify-between text-xs text-zinc-500">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>
                             {subDone} / {subTotal} tasks
                           </span>
                         </div>
-                        <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100">
+                        <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
                           <div
-                            className="h-full bg-indigo-500 transition-[width]"
+                            className="h-full bg-primary transition-[width]"
                             style={{
                               width: `${Math.round((subDone / subTotal) * 100)}%`,
                             }}
@@ -620,7 +633,7 @@ export function ObligationList({
                       <button
                         type="button"
                         onClick={() => openEdit(ob)}
-                        className="rounded p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                        className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                         aria-label="Edit obligation"
                       >
                         <Pencil className="size-4" />
@@ -629,7 +642,7 @@ export function ObligationList({
                         <button
                           type="button"
                           onClick={() => complete(ob)}
-                          className="rounded p-1.5 text-zinc-500 hover:bg-emerald-50 hover:text-emerald-700"
+                          className="rounded p-1.5 text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-300 transition-colors"
                           aria-label="Mark complete"
                         >
                           <Check className="size-4" />
@@ -639,7 +652,7 @@ export function ObligationList({
                         <button
                           type="button"
                           onClick={() => remove(ob)}
-                          className="rounded p-1.5 text-zinc-500 hover:bg-rose-50 hover:text-rose-700"
+                          className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                           aria-label="Delete obligation"
                         >
                           <Trash2 className="size-4" />

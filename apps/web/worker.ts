@@ -430,6 +430,7 @@ async function callExtractionLLM(text: string): Promise<string | null> {
     const msg = await getAnthropic().messages.create({
       model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
       max_tokens: 2048,
+      temperature: 0, // structured extraction — deterministic output
       system: EXTRACTION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: `Here is the contract text to analyze:\n\n${text}` }],
     })
@@ -442,6 +443,7 @@ async function callExtractionLLM(text: string): Promise<string | null> {
     const res = await getOpenAI().chat.completions.create({
       model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
       max_tokens: 2048,
+      temperature: 0, // structured extraction — deterministic output
       messages: [
         { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
         { role: "user", content: `Here is the contract text to analyze:\n\n${text}` },
@@ -969,6 +971,7 @@ async function callObligationLLM(text: string): Promise<string | null> {
     const msg = await getAnthropic().messages.create({
       model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
       max_tokens: 2048,
+      temperature: 0, // obligation extraction — deterministic, factual output
       system: OBLIGATION_EXTRACTION_PROMPT,
       messages: [{ role: "user", content: `Here is the contract text to analyze:\n\n${text}` }],
     })
@@ -981,6 +984,7 @@ async function callObligationLLM(text: string): Promise<string | null> {
     const res = await getOpenAI().chat.completions.create({
       model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
       max_tokens: 2048,
+      temperature: 0, // obligation extraction — deterministic, factual output
       messages: [
         { role: "system", content: OBLIGATION_EXTRACTION_PROMPT },
         { role: "user", content: `Here is the contract text to analyze:\n\n${text}` },

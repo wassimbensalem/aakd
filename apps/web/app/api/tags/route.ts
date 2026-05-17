@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       create: {
         name: parsed.data.name,
         color: parsed.data.color,
-        organization: { connect: { id: ctx.organizationId } },
+        organizationId: ctx.organizationId,
       },
       update: {},
       include: { _count: { select: { contracts: true } } },

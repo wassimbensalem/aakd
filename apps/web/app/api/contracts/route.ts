@@ -168,14 +168,17 @@ export async function POST(req: Request) {
       }
     }
 
-    const data: Prisma.ContractCreateInput = {
+    // Use scalar FK instead of relation connect — middleware (lib/db/client.ts)
+    // also injects organizationId as a scalar; Prisma 7 rejects having both a
+    // scalar FK and a relation connect for the same field simultaneously.
+    const data: Prisma.ContractUncheckedCreateInput = {
       ...rest,
-      owner: { connect: { id: ctx.userId } },
-      organization: { connect: { id: ctx.organizationId } },
+      ownerId: ctx.userId,
+      organizationId: ctx.organizationId,
       startDate: startDate ? new Date(startDate) : undefined,
       endDate: endDate ? new Date(endDate) : undefined,
       renewalDate: renewalDate ? new Date(renewalDate) : undefined,
-      folder: folderId ? { connect: { id: folderId } } : undefined,
+      folderId: folderId ?? undefined,
       tags: tagIds.length > 0 ? { connect: tagIds.map((id) => ({ id })) } : undefined,
     }
 

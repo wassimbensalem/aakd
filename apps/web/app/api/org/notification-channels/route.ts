@@ -76,8 +76,8 @@ export async function POST(req: Request) {
 
     const channel = await prisma.orgNotificationChannel.create({
       data: {
-        organization: { connect: { id: ctx.organizationId } },
-        createdBy: { connect: { id: ctx.userId } },
+        organizationId: ctx.organizationId,
+        createdById: ctx.userId,
         channelType: parsed.data.channelType,
         webhookUrl: encrypt(parsed.data.webhookUrl),
         label: parsed.data.label,

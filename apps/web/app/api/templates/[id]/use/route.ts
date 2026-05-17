@@ -88,13 +88,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const substituted = substituteVariables(tpl.content, parsed.data.values, declared)
     const wordCount = countWords(plateToPlaintext(substituted))
 
-    const contractData: Prisma.ContractCreateInput = {
+    const contractData: Prisma.ContractUncheckedCreateInput = {
       title: parsed.data.title,
       contractType: tpl.contractType ?? undefined,
       status: "DRAFT",
-      owner: { connect: { id: ctx.userId } },
-      organization: { connect: { id: ctx.organizationId } },
-      folder: parsed.data.folderId ? { connect: { id: parsed.data.folderId } } : undefined,
+      ownerId: ctx.userId,
+      organizationId: ctx.organizationId,
+      folderId: parsed.data.folderId ?? undefined,
       tags:
         parsed.data.tagIds.length > 0
           ? { connect: parsed.data.tagIds.map((id) => ({ id })) }

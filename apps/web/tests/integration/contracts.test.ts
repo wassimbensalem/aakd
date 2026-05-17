@@ -56,7 +56,8 @@ describe("POST /api/contracts", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           title: "Test NDA",
-          owner: { connect: { id: "user-1" } },
+          ownerId: "user-1",
+          organizationId: "org-1",
         }),
       }),
     )

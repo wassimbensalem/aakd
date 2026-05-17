@@ -50,12 +50,10 @@ export async function POST(req: Request) {
       return Response.json({ error: parsed.error.flatten() }, { status: 422 })
     }
 
-    const data: Prisma.FolderCreateInput = {
+    const data: Prisma.FolderUncheckedCreateInput = {
       name: parsed.data.name,
-      parent: parsed.data.parentId
-        ? { connect: { id: parsed.data.parentId } }
-        : undefined,
-      organization: { connect: { id: ctx.organizationId } },
+      parentId: parsed.data.parentId ?? undefined,
+      organizationId: ctx.organizationId,
     }
 
     const folder = await prisma.folder.create({ data })

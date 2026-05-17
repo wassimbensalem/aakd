@@ -536,10 +536,10 @@ async function toolCreateContract(
 
   const { startDate, endDate, ...rest } = parsed.data
 
-  const data: Prisma.ContractCreateInput = {
+  const data: Prisma.ContractUncheckedCreateInput = {
     ...rest,
-    owner: { connect: { id: userId } },
-    organization: { connect: { id: orgId } },
+    ownerId: userId,
+    organizationId: orgId,
     startDate: startDate ? new Date(startDate) : undefined,
     endDate: endDate ? new Date(endDate) : undefined,
   }
@@ -787,6 +787,11 @@ async function toolCreateObligation(
   userId: string,
   id: string | number,
 ): Promise<Response> {
+  const rl = await rateLimit(`${orgId}:create-obligation`, 30, 60_000)
+  if (!rl.allowed) {
+    return toolError(id, `Rate limit exceeded — retry after ${rl.retryAfter}s`)
+  }
+
   const parsed = CreateObligationMcpSchema.safeParse(args)
   if (!parsed.success) {
     return toolError(id, `Invalid arguments: ${JSON.stringify(parsed.error.flatten())}`)
@@ -863,6 +868,11 @@ async function toolUpdateObligation(
   userId: string,
   id: string | number,
 ): Promise<Response> {
+  const rl = await rateLimit(`${orgId}:update-obligation`, 60, 60_000)
+  if (!rl.allowed) {
+    return toolError(id, `Rate limit exceeded — retry after ${rl.retryAfter}s`)
+  }
+
   const parsed = UpdateObligationMcpSchema.safeParse(args)
   if (!parsed.success) {
     return toolError(id, `Invalid arguments: ${JSON.stringify(parsed.error.flatten())}`)
@@ -899,7 +909,7 @@ async function toolUpdateObligation(
   })
 
   // Audit trail — must not be fire-and-forget
-  await writeActivity(contractId, userId, "UPDATED", `Obligation updated: ${obligation.title}`, {
+  await writeActivity(contractId, userId, "OBLIGATION_UPDATED", `Obligation updated: ${obligation.title}`, {
     obligationId: obligation.id,
   })
 
@@ -1181,7 +1191,20 @@ export async function POST(req: Request) {
     return new Response("Invalid JSON", { status: 400 })
   }
 
-  // Validate JSON-RPC envelope
+  // JSON-RPC 2.0 notifications have no `id` — they don't expect a response.
+  // Accept and silently acknowledge them (e.g. notifications/initialized).
+  const raw = body as Record<string, unknown>
+  if (
+    raw &&
+    typeof raw === "object" &&
+    raw.jsonrpc === "2.0" &&
+    typeof raw.method === "string" &&
+    raw.id === undefined
+  ) {
+    return new Response(null, { status: 202 })
+  }
+
+  // Validate JSON-RPC request envelope
   const envelope = body as McpRequest
   if (
     !envelope ||
@@ -1199,6 +1222,20 @@ export async function POST(req: Request) {
   const { id, method, params } = envelope
 
   return requestContext.run(ctx, async () => {
+    // initialize — MCP 2024-11-05 handshake (required by all standard clients)
+    if (method === "initialize") {
+      return jsonRpcResult(id, {
+        protocolVersion: "2024-11-05",
+        capabilities: { tools: {} },
+        serverInfo: { name: "Aakd MCP", version: "1.0.0" },
+      })
+    }
+
+    // ping — keepalive
+    if (method === "ping") {
+      return jsonRpcResult(id, {})
+    }
+
     // tools/list
     if (method === "tools/list") {
       return jsonRpcResult(id, { tools: TOOLS })

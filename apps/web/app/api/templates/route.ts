@@ -145,7 +145,7 @@ export async function POST(req: Request) {
     // organizationId is injected by the Prisma middleware from AsyncLocalStorage,
     // so the cast tells TS that this object satisfies ContractTemplateCreateInput
     // without us spelling the org connect manually here.
-    const data: Prisma.ContractTemplateCreateInput = {
+    const data: Prisma.ContractTemplateUncheckedCreateInput = {
       name: parsed.data.name,
       description: parsed.data.description,
       contractType: parsed.data.contractType,
@@ -154,9 +154,9 @@ export async function POST(req: Request) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       variables: parsed.data.variables as any,
       wordCount: parsed.data.wordCount,
-      createdBy: { connect: { id: ctx.userId } },
-      updatedBy: { connect: { id: ctx.userId } },
-      organization: { connect: { id: ctx.organizationId } },
+      createdById: ctx.userId,
+      updatedById: ctx.userId,
+      organizationId: ctx.organizationId,
     }
     const created = await prisma.contractTemplate.create({
       data,

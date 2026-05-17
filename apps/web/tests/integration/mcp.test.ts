@@ -415,16 +415,464 @@ describe("POST /api/mcp — error handling", () => {
     expect(body.result.content[0].text).toMatch(/unknown tool/i)
   })
 
-  it("returns 400 for malformed JSON-RPC (missing id)", async () => {
+  it("returns 202 for a JSON-RPC notification (no id)", async () => {
+    // In JSON-RPC 2.0, a message without an `id` is a notification. The server
+    // must NOT return a response body — 202 is the correct acknowledgement.
     const { POST } = await import("@/app/api/mcp/route")
     const res = await POST(
       new Request("http://localhost/api/mcp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", method: "tools/list" }), // no id
+        body: JSON.stringify({ jsonrpc: "2.0", method: "tools/list" }), // no id → notification
       }),
     )
 
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(202)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// MCP protocol — initialize + ping
+// ---------------------------------------------------------------------------
+
+describe("POST /api/mcp — initialize", () => {
+  it("returns protocolVersion, capabilities, and serverInfo", async () => {
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(mcpRequest("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "test-client", version: "0.0.1" },
+    }))
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.jsonrpc).toBe("2.0")
+    expect(body.result.protocolVersion).toBe("2024-11-05")
+    expect(body.result.capabilities).toHaveProperty("tools")
+    expect(body.result.serverInfo.name).toBe("Aakd MCP")
+  })
+
+  it("returns 202 for notifications/initialized (no id)", async () => {
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      new Request("http://localhost/api/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer cf_live_test" },
+        body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }), // no id
+      }),
+    )
+
+    expect(res.status).toBe(202)
+  })
+
+  it("returns empty result for ping", async () => {
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(mcpRequest("ping"))
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result).toEqual({})
+  })
+})
+
+// ---------------------------------------------------------------------------
+// M7: obligations tools
+// ---------------------------------------------------------------------------
+
+describe("POST /api/mcp — tools/call list_obligations", () => {
+  it("returns obligations for a valid contract in the same org", async () => {
+    const mockContract = { id: "c1", organizationId: "org-1" }
+    const mockObligations = [
+      {
+        id: "obl-1",
+        contractId: "c1",
+        title: "Pay invoice",
+        status: "PENDING",
+        priority: "HIGH",
+        dueDate: new Date("2025-12-31"),
+        assignee: null,
+        createdBy: { id: "user-1", name: "Alice" },
+        subTasks: [],
+      },
+    ]
+
+    vi.mocked(prisma.contract.findUnique).mockResolvedValue(mockContract as any)
+    vi.mocked(prisma.contractObligation.findMany).mockResolvedValue(mockObligations as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "list_obligations", arguments: { contractId: "c1" } }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBeUndefined()
+    const data = JSON.parse(body.result.content[0].text)
+    expect(data.obligations).toHaveLength(1)
+    expect(data.count).toBe(1)
+  })
+
+  it("returns isError:true when contract belongs to a different org", async () => {
+    vi.mocked(prisma.contract.findUnique).mockResolvedValue({
+      id: "c2",
+      organizationId: "org-2",
+    } as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "list_obligations", arguments: { contractId: "c2" } }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBe(true)
+    expect(body.result.content[0].text).toMatch(/not found/i)
+  })
+
+  it("returns isError:true when contractId is missing", async () => {
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "list_obligations", arguments: {} }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBe(true)
+  })
+})
+
+describe("POST /api/mcp — tools/call create_obligation", () => {
+  it("creates an obligation and returns it", async () => {
+    const mockContract = { id: "c1", organizationId: "org-1", status: "ACTIVE" }
+    const mockObligation = {
+      id: "obl-new",
+      contractId: "c1",
+      title: "Send report",
+      status: "PENDING",
+      priority: "MEDIUM",
+      dueDate: new Date("2025-12-31T00:00:00Z"),
+      assignee: null,
+      subTasks: [],
+    }
+
+    vi.mocked(prisma.contract.findUnique).mockResolvedValue(mockContract as any)
+    vi.mocked(prisma.member.findFirst).mockResolvedValue(null)
+    vi.mocked(prisma.contractObligation.count).mockResolvedValue(0 as any)
+    vi.mocked(prisma.contractObligation.create).mockResolvedValue(mockObligation as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", {
+        name: "create_obligation",
+        arguments: { contractId: "c1", title: "Send report", dueDate: "2025-12-31T00:00:00Z" },
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBeUndefined()
+    const data = JSON.parse(body.result.content[0].text)
+    expect(data.id).toBe("obl-new")
+  })
+
+  it("returns isError:true when creating obligation on archived contract", async () => {
+    vi.mocked(prisma.contract.findUnique).mockResolvedValue({
+      id: "c1",
+      organizationId: "org-1",
+      status: "ARCHIVED",
+    } as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", {
+        name: "create_obligation",
+        arguments: { contractId: "c1", title: "Cannot add", dueDate: "2025-12-31T00:00:00Z" },
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBe(true)
+    expect(body.result.content[0].text).toMatch(/archived/i)
+  })
+
+  it("returns isError:true when obligation limit (100) is reached", async () => {
+    vi.mocked(prisma.contract.findUnique).mockResolvedValue({
+      id: "c1",
+      organizationId: "org-1",
+      status: "ACTIVE",
+    } as any)
+    vi.mocked(prisma.contractObligation.count).mockResolvedValue(100 as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", {
+        name: "create_obligation",
+        arguments: { contractId: "c1", title: "One too many", dueDate: "2025-12-31T00:00:00Z" },
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBe(true)
+    expect(body.result.content[0].text).toMatch(/limit/i)
+  })
+
+  it("rejects create_obligation without write scope", async () => {
+    vi.mocked(resolveAuth).mockResolvedValueOnce({
+      ...mockCtx,
+      source: "api_key" as const,
+      scopes: ["read"],
+    })
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", {
+        name: "create_obligation",
+        arguments: { contractId: "c1", title: "Blocked", dueDate: "2025-12-31T00:00:00Z" },
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBe(true)
+    expect(body.result.content[0].text).toMatch(/write scope/i)
+  })
+})
+
+describe("POST /api/mcp — tools/call update_obligation", () => {
+  it("updates an obligation and returns it", async () => {
+    const mockExisting = {
+      id: "obl-1",
+      contractId: "c1",
+      organizationId: "org-1",
+    }
+    const mockUpdated = {
+      id: "obl-1",
+      contractId: "c1",
+      title: "Updated title",
+      status: "IN_PROGRESS",
+      priority: "HIGH",
+      dueDate: new Date("2025-12-31"),
+      assignee: null,
+      subTasks: [],
+    }
+
+    vi.mocked(prisma.contractObligation.findUnique).mockResolvedValue(mockExisting as any)
+    vi.mocked(prisma.contractObligation.update).mockResolvedValue(mockUpdated as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", {
+        name: "update_obligation",
+        arguments: { contractId: "c1", obligationId: "obl-1", status: "IN_PROGRESS" },
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBeUndefined()
+    const data = JSON.parse(body.result.content[0].text)
+    expect(data.id).toBe("obl-1")
+  })
+
+  it("returns isError:true for obligation belonging to different org", async () => {
+    vi.mocked(prisma.contractObligation.findUnique).mockResolvedValue({
+      id: "obl-x",
+      contractId: "c1",
+      organizationId: "org-2",
+    } as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", {
+        name: "update_obligation",
+        arguments: { contractId: "c1", obligationId: "obl-x", status: "COMPLETED" },
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBe(true)
+    expect(body.result.content[0].text).toMatch(/not found/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// M8: analytics
+// ---------------------------------------------------------------------------
+
+describe("POST /api/mcp — tools/call get_analytics_summary", () => {
+  it("returns all expected analytics fields", async () => {
+    // Mock the five parallel prisma calls
+    vi.mocked(prisma.contract.count)
+      .mockResolvedValueOnce(2)  // next30
+      .mockResolvedValueOnce(4)  // next60
+      .mockResolvedValueOnce(6)  // next90
+    vi.mocked(prisma.contract.findMany).mockResolvedValue([])
+    vi.mocked(prisma.contract.groupBy as any)
+      .mockResolvedValueOnce([{ status: "ACTIVE", _count: { _all: 10 } }])
+      .mockResolvedValueOnce([]) // valueByType
+    vi.mocked(prisma.$queryRaw as any).mockResolvedValue([])
+    vi.mocked(prisma.approval.count as any)
+      .mockResolvedValueOnce(5)  // totalRequested
+      .mockResolvedValueOnce(3)  // approved
+      .mockResolvedValueOnce(1)  // rejected
+    vi.mocked(prisma.contractObligation.count as any)
+      .mockResolvedValueOnce(2)  // overdue
+      .mockResolvedValueOnce(3)  // dueSoon
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "get_analytics_summary", arguments: {} }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBeUndefined()
+    const data = JSON.parse(body.result.content[0].text)
+    expect(data).toHaveProperty("expiringSoon")
+    expect(data).toHaveProperty("byStatus")
+    expect(data).toHaveProperty("monthlyVolume")
+    expect(data).toHaveProperty("valueByType")
+    expect(data).toHaveProperty("approvalFunnel")
+    expect(data).toHaveProperty("obligations")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// M9: CRM links
+// ---------------------------------------------------------------------------
+
+describe("POST /api/mcp — tools/call list_crm_links", () => {
+  it("returns CRM links for a contract", async () => {
+    const mockContract = { id: "c1", organizationId: "org-1" }
+    const mockLinks = [
+      {
+        id: "link-1",
+        provider: "HUBSPOT",
+        externalDealId: "hs-123",
+        externalDealName: "Deal A",
+        externalDealUrl: null,
+        lastSyncedAt: null,
+        lastSyncStatus: null,
+        createdAt: new Date("2025-01-01"),
+      },
+    ]
+
+    vi.mocked(prisma.contract.findUnique).mockResolvedValue(mockContract as any)
+    vi.mocked(prisma.crmLink.findMany).mockResolvedValue(mockLinks as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "list_crm_links", arguments: { contractId: "c1" } }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBeUndefined()
+    const data = JSON.parse(body.result.content[0].text)
+    expect(data.links).toHaveLength(1)
+    expect(data.count).toBe(1)
+  })
+
+  it("returns isError:true when contract belongs to a different org", async () => {
+    vi.mocked(prisma.contract.findUnique).mockResolvedValue({
+      id: "c-other",
+      organizationId: "org-2",
+    } as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "list_crm_links", arguments: { contractId: "c-other" } }),
+    )
+
+    const body = await res.json()
+    expect(body.result.isError).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// M10: import jobs
+// ---------------------------------------------------------------------------
+
+describe("POST /api/mcp — tools/call list_import_jobs", () => {
+  it("returns import jobs with pagination metadata", async () => {
+    const mockJobs = [
+      {
+        id: "job-1",
+        source: "CSV",
+        status: "COMPLETED",
+        totalRows: 50,
+        succeededRows: 48,
+        failedRows: 2,
+        createdAt: new Date("2025-03-01"),
+        completedAt: new Date("2025-03-01"),
+        createdBy: { id: "user-1", name: "Alice" },
+      },
+    ]
+
+    vi.mocked(prisma.importJob.findMany).mockResolvedValue(mockJobs as any)
+    vi.mocked(prisma.importJob.count as any).mockResolvedValue(1)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "list_import_jobs", arguments: {} }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBeUndefined()
+    const data = JSON.parse(body.result.content[0].text)
+    expect(data.jobs).toHaveLength(1)
+    expect(data.total).toBe(1)
+  })
+})
+
+describe("POST /api/mcp — tools/call get_import_job", () => {
+  it("returns job details and rows", async () => {
+    const mockJob = {
+      id: "job-1",
+      organizationId: "org-1",
+      source: "CSV",
+      status: "COMPLETED",
+      totalRows: 3,
+      succeededRows: 3,
+      failedRows: 0,
+      createdAt: new Date("2025-03-01"),
+      completedAt: new Date("2025-03-01"),
+      createdBy: { id: "user-1", name: "Alice" },
+    }
+
+    vi.mocked(prisma.importJob.findUnique).mockResolvedValue(mockJob as any)
+    vi.mocked(prisma.importRow.findMany).mockResolvedValue([])
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "get_import_job", arguments: { jobId: "job-1" } }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.result.isError).toBeUndefined()
+    const data = JSON.parse(body.result.content[0].text)
+    expect(data.job.id).toBe("job-1")
+    expect(data.rows).toBeDefined()
+  })
+
+  it("returns isError:true when job belongs to a different org", async () => {
+    vi.mocked(prisma.importJob.findUnique).mockResolvedValue({
+      id: "job-other",
+      organizationId: "org-2",
+    } as any)
+
+    const { POST } = await import("@/app/api/mcp/route")
+    const res = await POST(
+      mcpRequest("tools/call", { name: "get_import_job", arguments: { jobId: "job-other" } }),
+    )
+
+    const body = await res.json()
+    expect(body.result.isError).toBe(true)
+    expect(body.result.content[0].text).toMatch(/not found/i)
   })
 })

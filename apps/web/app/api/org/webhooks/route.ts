@@ -97,8 +97,8 @@ export async function POST(req: Request) {
 
     const webhook = await prisma.outboundWebhook.create({
       data: {
-        organization: { connect: { id: ctx.organizationId } },
-        createdBy: { connect: { id: ctx.userId } },
+        organizationId: ctx.organizationId,
+        createdById: ctx.userId,
         url: encrypt(parsed.data.url),
         label: parsed.data.label,
         signingSecret: encrypt(signingSecret),

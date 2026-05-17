@@ -328,8 +328,9 @@ const extractWorker = new Worker<ContractExtractJobData>(
         extractedText = result.text?.trim() ?? null
         logger.debug({ fileId, chars: extractedText?.length ?? 0 }, "[extract] PDF text extracted")
       } catch (err) {
-        logger.error({ err, fileId, contractId }, "[extract] pdf-parse failed")
-        throw err
+        // pdf-parse can throw on malformed/corrupted PDFs (e.g. "bad XRef entry").
+        // Don't re-throw — fall through to the OCR path which may still succeed.
+        logger.warn({ err, fileId, contractId }, "[extract] pdf-parse failed — will attempt OCR")
       }
       // If text is absent or suspiciously short (scanned/image PDF), attempt OCR
       if (!extractedText || extractedText.length < 100) {
@@ -352,8 +353,8 @@ const extractWorker = new Worker<ContractExtractJobData>(
         extractedText = result.value?.trim() || null
         logger.debug({ fileId, chars: extractedText?.length ?? 0 }, "[extract] DOCX text extracted")
       } catch (err) {
+        // Don't re-throw — null extractedText triggers the graceful "no text" path below.
         logger.error({ err, fileId, contractId }, "[extract] mammoth failed")
-        throw err
       }
     } else {
       logger.warn({ fileId, contractId, mimeType: contractFile.mimeType }, "[extract] unsupported mime type")

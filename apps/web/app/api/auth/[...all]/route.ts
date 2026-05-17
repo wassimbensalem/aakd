@@ -6,14 +6,17 @@ const handler = toNextJsHandler(auth)
 
 export const GET = handler.GET
 
-// Wrap POST with per-IP rate limiting (10 req/min) to protect login/register
+// Wrap POST with per-IP rate limiting (30 req/min) to protect login/register.
+// 10/min was too restrictive — a single login flow can touch the auth endpoint
+// several times (session check, sign-in, callback), and Docker routes all
+// browser traffic through a single gateway IP.
 export async function POST(req: Request) {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     req.headers.get("x-real-ip") ??
     "unknown"
 
-  const rl = await rateLimit(`ip:auth:${ip}`, 10, 60_000)
+  const rl = await rateLimit(`ip:auth:${ip}`, 30, 60_000)
   if (!rl.allowed) return rateLimitResponse(rl.retryAfter)
 
   // For sign-up requests: validate email length and sanitize the name field

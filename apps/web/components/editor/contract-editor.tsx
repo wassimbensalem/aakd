@@ -441,7 +441,7 @@ export function ContractEditor({
   enableAutoSave = true,
   onAddComment,
   currentUserId,
-  currentUserName,
+  currentUserName: _currentUserName,
   onAcceptAllChanges,
   onRejectAllChanges,
   onSelectionChange,

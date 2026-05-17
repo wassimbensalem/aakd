@@ -78,7 +78,7 @@ services:
     volumes:
       - docusealdata:/data
     environment:
-      SECRET_KEY_BASE: ${DOCUSEAL_SECRET_KEY_BASE:?DOCUSEAL_SECRET_KEY_BASE must be set in .env (generate with: openssl rand -hex 64)}
+      SECRET_KEY_BASE: "${DOCUSEAL_SECRET_KEY_BASE:?DOCUSEAL_SECRET_KEY_BASE must be set in .env (generate with openssl rand -hex 64)}"
     restart: unless-stopped
 
   app:

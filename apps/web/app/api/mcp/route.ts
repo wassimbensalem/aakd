@@ -5,7 +5,6 @@ import { writeActivity } from "@/lib/db/activity"
 import { generateEmbedding } from "@/lib/embedding"
 import { QA_SYSTEM_PROMPT } from "@/lib/ai/prompts"
 import { rateLimit } from "@/lib/rate-limit"
-import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 

@@ -68,6 +68,16 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # Distributed tracing UI — http://localhost:16686 (enable with OTEL_ENABLED=true)
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4318:4318"     # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped
+
   # Dev MinIO uses port 9010 (mapped 9010→9000 inside container)
   createbuckets:
     image: minio/mc

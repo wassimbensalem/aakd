@@ -4,6 +4,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { getCrmProvider } from "@/lib/crm"
 import { ensureFreshToken, normalizeProvider } from "@/lib/crm/route-helpers"
+import { logger } from "@/lib/logger"
 
 export async function GET(req: Request, { params }: { params: { provider: string } }) {
   const ctx = await resolveAuth(req)
@@ -33,7 +34,7 @@ export async function GET(req: Request, { params }: { params: { provider: string
     try {
       fresh = await ensureFreshToken(integration)
     } catch (err) {
-      console.error(`[crm.deals] ${provider} token refresh failed:`, err)
+      logger.error({ err, provider }, "[crm.deals] token refresh failed")
       return Response.json({ error: "token_refresh_failed" }, { status: 502 })
     }
 
@@ -41,7 +42,7 @@ export async function GET(req: Request, { params }: { params: { provider: string
       const deals = await getCrmProvider(provider).searchDeals(fresh, q)
       return Response.json({ deals })
     } catch (err) {
-      console.error(`[crm.deals] ${provider} searchDeals failed:`, err)
+      logger.error({ err, provider, q }, "[crm.deals] searchDeals failed")
       return Response.json({ error: "search_failed" }, { status: 502 })
     }
   })

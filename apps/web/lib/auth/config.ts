@@ -3,6 +3,7 @@ import { organization } from "better-auth/plugins"
 import { prismaAdapter } from "better-auth/adapters/prisma"
 import { prisma } from "@/lib/db/client"
 import { sendInvitationEmail } from "@/lib/email/invitation"
+import { logger } from "@/lib/logger"
 
 const authOrigin = process.env.BETTER_AUTH_URL ?? "http://localhost:3000"
 const publicAppOrigin = process.env.NEXT_PUBLIC_APP_URL ?? authOrigin
@@ -58,7 +59,7 @@ export const auth = betterAuth({
         }).catch((err) => {
           // Failing to send the email should not abort the invitation;
           // the row is already persisted and can be resent.
-          console.error("[invitation] sendInvitationEmail failed:", err)
+          logger.error({ err }, "[invitation] sendInvitationEmail failed")
         })
       },
     }),

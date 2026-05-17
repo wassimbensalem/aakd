@@ -10,6 +10,7 @@
 import { getWorkerPrisma } from "@/lib/db/worker-client"
 import { storage } from "@/lib/storage"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { logger } from "@/lib/logger"
 import type { ImportJob } from "@prisma/client"
 
 import { runCsvHandler } from "./handlers/csv"
@@ -33,7 +34,7 @@ export async function processImportJob(ctx: ImportProcessContext): Promise<void>
 
   const job = await db.importJob.findUnique({ where: { id: ctx.importJobId } })
   if (!job) {
-    console.warn(`[import] Job ${ctx.importJobId} not found — skipping`)
+    logger.warn({ importJobId: ctx.importJobId }, "[import] job not found — skipping")
     return
   }
 
@@ -94,7 +95,7 @@ export async function processImportJob(ctx: ImportProcessContext): Promise<void>
       })
     }
   } catch (err) {
-    console.error(`[import] Job ${job.id} failed catastrophically:`, err)
+    logger.error({ err, importJobId: job.id }, "[import] job failed catastrophically")
     await db.importJob.update({
       where: { id: job.id },
       data: {

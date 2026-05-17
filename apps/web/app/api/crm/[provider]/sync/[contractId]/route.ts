@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { getCrmProvider } from "@/lib/crm"
 import { ensureFreshToken, normalizeProvider } from "@/lib/crm/route-helpers"
+import { logger } from "@/lib/logger"
 
 const ROLES_CAN_SYNC = new Set(["admin", "legal"])
 
@@ -47,7 +48,7 @@ export async function POST(
     try {
       fresh = await ensureFreshToken(integration)
     } catch (err) {
-      console.error(`[crm.sync] ${provider} token refresh failed:`, err)
+      logger.error({ err, provider, contractId: params.contractId }, "[crm.sync] token refresh failed")
       await prisma.crmLink.update({
         where: { id: link.id },
         data: { lastSyncedAt: new Date(), lastSyncStatus: "token_refresh_failed" },
@@ -59,7 +60,7 @@ export async function POST(
     try {
       deal = await getCrmProvider(provider).getDeal(fresh, link.externalDealId)
     } catch (err) {
-      console.error(`[crm.sync] ${provider} getDeal failed:`, err)
+      logger.error({ err, provider, contractId: params.contractId }, "[crm.sync] getDeal failed")
       await prisma.crmLink.update({
         where: { id: link.id },
         data: { lastSyncedAt: new Date(), lastSyncStatus: "fetch_failed" },

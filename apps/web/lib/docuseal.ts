@@ -3,6 +3,7 @@
  * All functions return null (and log a warning) when DOCUSEAL_API_KEY is not set.
  * Never import any third-party DocuSeal SDK — use fetch only.
  */
+import { logger } from "@/lib/logger"
 
 const BASE = process.env.DOCUSEAL_API_URL || process.env.DOCUSEAL_BASE_URL || "https://api.docuseal.com"
 const KEY = process.env.DOCUSEAL_API_KEY
@@ -40,7 +41,7 @@ function authHeaders(): Record<string, string> {
 }
 
 function warnMissing(): null {
-  console.warn("[docuseal] DOCUSEAL_API_KEY is not configured — skipping DocuSeal call")
+  logger.warn("[docuseal] DOCUSEAL_API_KEY is not configured — skipping DocuSeal call")
   return null
 }
 
@@ -74,7 +75,7 @@ export async function createTemplate(
 
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    console.error(`[docuseal] createTemplate failed: ${res.status} ${text}`)
+    logger.error({ status: res.status, body: text }, "[docuseal] createTemplate failed")
     return null
   }
 
@@ -128,7 +129,7 @@ export async function addFieldsToTemplate(
 
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    console.error(`[docuseal] addFieldsToTemplate failed: ${res.status} ${text}`)
+    logger.error({ templateId, status: res.status, body: text }, "[docuseal] addFieldsToTemplate failed")
     return false
   }
 
@@ -177,7 +178,7 @@ export async function createSubmission(
 
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    console.error(`[docuseal] createSubmission failed: ${res.status} ${text}`)
+    logger.error({ templateId, status: res.status, body: text }, "[docuseal] createSubmission failed")
     return null
   }
 
@@ -235,7 +236,7 @@ export async function archiveSubmission(submissionId: number): Promise<boolean> 
   })
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    console.error(`[docuseal] archiveSubmission failed: ${res.status} ${text}`)
+    logger.error({ submissionId, status: res.status, body: text }, "[docuseal] archiveSubmission failed")
     return false
   }
   return true
@@ -266,7 +267,7 @@ export async function getSubmission(
 
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    console.error(`[docuseal] getSubmission failed: ${res.status} ${text}`)
+    logger.error({ submissionId, status: res.status, body: text }, "[docuseal] getSubmission failed")
     return null
   }
 

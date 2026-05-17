@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger"
+
 /**
  * fireAndLog — run a promise as a non-blocking side-effect.
  *
@@ -14,10 +16,9 @@
  * @param promise  The promise to run in the background.
  * @param label    A short identifier included in the error log (e.g. "enqueueNotification:contractCreated").
  */
+
 export function fireAndLog(promise: Promise<unknown>, label: string): void {
   promise.catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error(`[background] ${label} failed:`, message)
-    // TODO: when structured logging is added, replace with logger.error()
+    logger.error({ err, label }, "[background] fire-and-forget task failed")
   })
 }

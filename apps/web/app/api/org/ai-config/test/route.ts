@@ -1,6 +1,7 @@
 import { resolveAuth } from "@/lib/auth/middleware"
 import { hasRole } from "@/lib/auth/roles"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { logger } from "@/lib/logger"
 import { z } from "zod"
 
 const TestSchema = z.object({
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
       }
 
       const errText = await res.text().catch(() => "")
-      console.error(`[ai-config/test] Anthropic API error ${res.status}:`, errText)
+      logger.error({ status: res.status, body: errText }, "[ai-config/test] Anthropic API error")
       return Response.json({ valid: false, error: `Anthropic API error ${res.status}` })
     }
 
@@ -102,13 +103,13 @@ export async function POST(req: Request) {
       }
 
       const errData = await res.json().catch(() => ({}))
-      console.error(`[ai-config/test] OpenAI API error ${res.status}:`, errData)
+      logger.error({ status: res.status, body: errData }, "[ai-config/test] OpenAI API error")
       return Response.json({ valid: false, error: `OpenAI API error ${res.status}` })
     }
 
     return Response.json({ valid: false, error: "Unknown provider" }, { status: 400 })
   } catch (err) {
-    console.error("[ai-config/test] provider connectivity error:", err)
+    logger.error({ err }, "[ai-config/test] provider connectivity error")
     return Response.json({ valid: false, error: "Network error — unable to reach provider" })
   }
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { archiveSubmission } from "@/lib/docuseal"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { logger } from "@/lib/logger"
 
 // POST /api/contracts/[id]/signing/reset
 // Voids the DocuSeal submission (best-effort) and resets signing state so
@@ -66,8 +67,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (contract.docusealSubmissionId) {
       const voided = await archiveSubmission(Number(contract.docusealSubmissionId))
       if (!voided) {
-        console.warn(
-          `[signing-reset] DocuSeal archive failed for submission ${contract.docusealSubmissionId} — continuing with local reset`,
+        logger.warn(
+          { submissionId: contract.docusealSubmissionId, contractId: params.id },
+          "[signing-reset] DocuSeal archive failed — continuing with local reset",
         )
       }
     }

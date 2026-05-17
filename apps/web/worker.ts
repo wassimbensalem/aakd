@@ -24,6 +24,7 @@ import libre from "libreoffice-convert"
 import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
+import { logger } from "@/lib/logger"
 import { getWorkerPrisma } from "@/lib/db/worker-client"
 import { prisma as appPrisma } from "@/lib/db/client"
 import { storage } from "@/lib/storage"
@@ -102,10 +103,10 @@ async function waitForMigrations(maxWaitMs = 60_000): Promise<void> {
   while (Date.now() - start < maxWaitMs) {
     try {
       await getWorkerPrisma().$queryRaw`SELECT 1 FROM "_prisma_migrations" LIMIT 1`
-      console.log("[worker] Database migrations verified — starting job workers")
+      logger.info("[worker] database migrations verified — starting job workers")
       return
     } catch {
-      console.log("[worker] Waiting for database migrations...")
+      logger.info("[worker] waiting for database migrations...")
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
   }
@@ -176,7 +177,7 @@ async function attemptOcr(buffer: Buffer): Promise<string | null> {
         .sort()
 
       if (files.length === 0) {
-        console.warn("[ocr] pdftoppm produced no page images")
+        logger.warn("[ocr] pdftoppm produced no page images")
       } else {
         const { createWorker } = await import("tesseract.js")
         const tWorker = await createWorker("eng")
@@ -188,7 +189,7 @@ async function attemptOcr(buffer: Buffer): Promise<string | null> {
         await tWorker.terminate()
       }
     } catch (err) {
-      console.warn("[ocr] pdftoppm+tesseract strategy failed:", err)
+      logger.warn({ err }, "[ocr] pdftoppm+tesseract strategy failed")
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
     }
@@ -201,7 +202,7 @@ async function attemptOcr(buffer: Buffer): Promise<string | null> {
       ocrText = data.text ?? ""
       await tWorker.terminate()
     } catch (err) {
-      console.warn("[ocr] tesseract direct-PDF strategy failed:", err)
+      logger.warn({ err }, "[ocr] tesseract direct-PDF strategy failed")
       return null
     }
   }
@@ -216,7 +217,7 @@ async function pdfToDocxBuffer(pdfBuffer: Buffer): Promise<Buffer | null> {
     const result = await libreConvert(pdfBuffer, ".docx", undefined)
     return result as Buffer
   } catch (err) {
-    console.warn("[import] LibreOffice PDF→DOCX failed, falling back to text:", err)
+    logger.warn({ err }, "[import] LibreOffice PDF→DOCX failed, falling back to text")
     return null
   }
 }
@@ -271,7 +272,7 @@ const extractWorker = new Worker<ContractExtractJobData>(
   async (job: Job<ContractExtractJobData>) => {
     const { contractId, fileId, storageKey } = job.data
 
-    console.log(`[extract] Processing job ${job.id} for contract ${contractId}, file ${fileId}`)
+    logger.info({ jobId: job.id, contractId, fileId }, "[extract] processing job")
 
     // Idempotency guard: if a previous run already extracted text and kicked
     // off the embed step, a retry would duplicate Activity rows and re-enqueue
@@ -281,9 +282,7 @@ const extractWorker = new Worker<ContractExtractJobData>(
       select: { extractedText: true },
     })
     if (existingContract?.extractedText) {
-      console.log(
-        `[extract] Contract ${contractId} already has extracted text — skipping (no double Activity / re-enqueue)`,
-      )
+      logger.info({ contractId }, "[extract] contract already has extracted text — skipping")
       return
     }
 
@@ -294,7 +293,7 @@ const extractWorker = new Worker<ContractExtractJobData>(
     })
 
     if (!contractFile) {
-      console.warn(`[extract] ContractFile ${fileId} not found — skipping`)
+      logger.warn({ fileId, contractId }, "[extract] ContractFile not found — skipping")
       return
     }
 
@@ -316,21 +315,21 @@ const extractWorker = new Worker<ContractExtractJobData>(
       try {
         const result = await pdfParse(buffer)
         extractedText = result.text?.trim() ?? null
-        console.log(`[extract] PDF text extracted: ${extractedText?.length ?? 0} chars`)
+        logger.debug({ fileId, chars: extractedText?.length ?? 0 }, "[extract] PDF text extracted")
       } catch (err) {
-        console.error(`[extract] pdf-parse failed for file ${fileId}:`, err)
+        logger.error({ err, fileId, contractId }, "[extract] pdf-parse failed")
         throw err
       }
       // If text is absent or suspiciously short (scanned/image PDF), attempt OCR
       if (!extractedText || extractedText.length < 100) {
-        console.log(`[extract] PDF has ${extractedText?.length ?? 0} chars — attempting OCR for file ${fileId}`)
+        logger.info({ fileId, chars: extractedText?.length ?? 0 }, "[extract] PDF text thin — attempting OCR")
         const ocrResult = await attemptOcr(buffer)
         if (ocrResult) {
           extractedText = ocrResult
           isOcrExtracted = true
-          console.log(`[extract] OCR succeeded: ${ocrResult.length} chars for file ${fileId}`)
+          logger.info({ fileId, chars: ocrResult.length }, "[extract] OCR succeeded")
         } else {
-          console.warn(`[extract] OCR also failed for file ${fileId}`)
+          logger.warn({ fileId, contractId }, "[extract] OCR also failed")
         }
       }
     } else if (
@@ -340,13 +339,13 @@ const extractWorker = new Worker<ContractExtractJobData>(
       try {
         const result = await mammoth.extractRawText({ buffer })
         extractedText = result.value?.trim() || null
-        console.log(`[extract] DOCX text extracted: ${extractedText?.length ?? 0} chars`)
+        logger.debug({ fileId, chars: extractedText?.length ?? 0 }, "[extract] DOCX text extracted")
       } catch (err) {
-        console.error(`[extract] mammoth failed for file ${fileId}:`, err)
+        logger.error({ err, fileId, contractId }, "[extract] mammoth failed")
         throw err
       }
     } else {
-      console.warn(`[extract] Unsupported mime type ${contractFile.mimeType} for file ${fileId}`)
+      logger.warn({ fileId, contractId, mimeType: contractFile.mimeType }, "[extract] unsupported mime type")
     }
 
     // 4. Persist extracted text to the Contract record
@@ -370,14 +369,12 @@ const extractWorker = new Worker<ContractExtractJobData>(
       // embed worker chains ai_extract once embeddings land so semantic search
       // is always populated even when the LLM extractor fails or is missing.
       await contractEmbedQueue.add("embed", { contractId, extractedText })
-      console.log(`[extract] Enqueued embed job for contract ${contractId}`)
+      logger.info({ contractId }, "[extract] enqueued embed job")
     } else {
       // Silent failures (typically scanned/image PDFs) used to disappear into
       // the void — log + write an Activity row so users see why downstream
       // AI features are missing.
-      console.warn(
-        `[extract] No text extracted for file ${fileId} (contract ${contractId}) — likely a scanned image`,
-      )
+      logger.warn({ fileId, contractId }, "[extract] no text extracted — likely a scanned image")
       await getWorkerPrisma().activity.create({
         data: {
           contractId,
@@ -394,10 +391,10 @@ const extractWorker = new Worker<ContractExtractJobData>(
 )
 
 extractWorker.on("completed", (job) =>
-  console.log(`[extract] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[extract] job completed"),
 )
 extractWorker.on("failed", (job, err) =>
-  console.error(`[extract] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[extract] job failed"),
 )
 
 // ─── Provider abstraction ─────────────────────────────────────────────────────
@@ -413,12 +410,12 @@ async function callExtractionLLM(text: string): Promise<string | null> {
   )
 
   if (!provider) {
-    console.warn("[ai_extract] No AI provider configured — set AI_PROVIDER or one of ANTHROPIC_API_KEY / OPENAI_API_KEY / OLLAMA_BASE_URL")
+    logger.warn("[ai_extract] no AI provider configured — set AI_PROVIDER or one of ANTHROPIC_API_KEY / OPENAI_API_KEY / OLLAMA_BASE_URL")
     return null
   }
 
   if (provider === "anthropic") {
-    if (!process.env.ANTHROPIC_API_KEY) { console.warn("[ai_extract] AI_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set"); return null }
+    if (!process.env.ANTHROPIC_API_KEY) { logger.warn("[ai_extract] AI_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set"); return null }
     const msg = await getAnthropic().messages.create({
       model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
       max_tokens: 2048,
@@ -430,7 +427,7 @@ async function callExtractionLLM(text: string): Promise<string | null> {
   }
 
   if (provider === "openai") {
-    if (!process.env.OPENAI_API_KEY) { console.warn("[ai_extract] AI_PROVIDER=openai but OPENAI_API_KEY is not set"); return null }
+    if (!process.env.OPENAI_API_KEY) { logger.warn("[ai_extract] AI_PROVIDER=openai but OPENAI_API_KEY is not set"); return null }
     const res = await getOpenAI().chat.completions.create({
       model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
       max_tokens: 2048,
@@ -462,7 +459,7 @@ async function callExtractionLLM(text: string): Promise<string | null> {
     return data.message?.content?.trim() ?? ""
   }
 
-  console.warn(`[ai_extract] Unknown AI_PROVIDER="${provider}"`)
+  logger.warn({ provider }, "[ai_extract] unknown AI_PROVIDER")
   return null
 }
 
@@ -473,14 +470,15 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
   async (job: Job<ContractAiExtractJobData>) => {
     const { contractId, extractedText } = job.data
 
-    console.log(`[ai_extract] Processing job ${job.id} for contract ${contractId}`)
+    logger.info({ jobId: job.id, contractId }, "[ai_extract] processing job")
 
     const limit = getTextLimitForProvider()
     const textToAnalyze =
       extractedText.length > limit ? extractedText.slice(0, limit) : extractedText
     if (extractedText.length > limit) {
-      console.log(
-        `[ai_extract] Truncated contract text from ${extractedText.length} to ${limit} chars for provider ${process.env.AI_PROVIDER ?? "(auto)"}`,
+      logger.debug(
+        { contractId, originalChars: extractedText.length, limitChars: limit, provider: process.env.AI_PROVIDER ?? "(auto)" },
+        "[ai_extract] truncated contract text for provider",
       )
     }
 
@@ -488,9 +486,7 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
     try {
       const result = await callExtractionLLM(textToAnalyze)
       if (result === null) {
-        console.warn(
-          `[ai_extract] AI extraction skipped for contract ${contractId}: no AI provider configured`,
-        )
+        logger.warn({ contractId }, "[ai_extract] extraction skipped — no AI provider configured")
         await getWorkerPrisma().activity.create({
           data: {
             contractId,
@@ -505,7 +501,7 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
       }
       rawJson = result
     } catch (err) {
-      console.error(`[ai_extract] LLM call failed for contract ${contractId}:`, err)
+      logger.error({ err, contractId }, "[ai_extract] LLM call failed")
       await getWorkerPrisma().activity.create({
         data: {
           contractId,
@@ -529,9 +525,9 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
     try {
       extracted = JSON.parse(cleaned)
     } catch {
-      console.error(
-        `[ai_extract] Failed to parse LLM response as JSON for contract ${contractId}:`,
-        rawJson,
+      logger.error(
+        { contractId, rawJson: rawJson.slice(0, 200) },
+        "[ai_extract] failed to parse LLM response as JSON",
       )
       await getWorkerPrisma().activity.create({
         data: {
@@ -590,7 +586,7 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
       .filter((entry): entry is { field: string; data: FieldExtraction } => entry.data !== null)
 
     if (fieldData.length === 0) {
-      console.log(`[ai_extract] No fields extracted for contract ${contractId}`)
+      logger.info({ contractId }, "[ai_extract] no fields extracted")
       return
     }
 
@@ -631,8 +627,9 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
       data: { contractId, userId: null, actorLabel: "System", action: "METADATA_EXTRACTED", detail: `AI extracted ${fieldData.length} fields` },
     })
 
-    console.log(
-      `[ai_extract] Upserted ${fieldData.length} extraction records for contract ${contractId}: ${fieldData.map((f) => f.field).join(", ")}`,
+    logger.info(
+      { contractId, count: fieldData.length, fields: fieldData.map((f) => f.field) },
+      "[ai_extract] upserted extraction records",
     )
 
     // Fan out the contract.extracted event — system-actor (no user)
@@ -642,10 +639,10 @@ const aiExtractWorker = new Worker<ContractAiExtractJobData>(
 )
 
 aiExtractWorker.on("completed", (job) =>
-  console.log(`[ai_extract] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[ai_extract] job completed"),
 )
 aiExtractWorker.on("failed", (job, err) =>
-  console.error(`[ai_extract] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[ai_extract] job failed"),
 )
 
 // ─── Worker: contract.embed ───────────────────────────────────────────────────
@@ -655,7 +652,7 @@ const embedWorker = new Worker<ContractEmbedJobData>(
   async (job: Job<ContractEmbedJobData>) => {
     const { contractId, extractedText } = job.data
 
-    console.log(`[embed] Processing job ${job.id} for contract ${contractId}`)
+    logger.info({ jobId: job.id, contractId }, "[embed] processing job")
 
     // ai_extract runs after embed in the spec'd pipeline (extract → embed →
     // ai_extract). It's independent of embeddings: chain it whether or not
@@ -665,12 +662,12 @@ const embedWorker = new Worker<ContractEmbedJobData>(
       contractAiExtractQueue
         .add("ai_extract", { contractId, extractedText })
         .catch((err) =>
-          console.error(`[embed] failed to enqueue ai_extract for ${contractId}:`, err),
+          logger.error({ err, contractId }, "[embed] failed to enqueue ai_extract"),
         )
 
     const embedding = await generateEmbedding(extractedText)
     if (!embedding) {
-      console.warn(`[embed] No embedding provider configured — skipping ${contractId}`)
+      logger.warn({ contractId }, "[embed] no embedding provider configured — skipping")
       await chainAiExtract()
       return
     }
@@ -705,14 +702,15 @@ const embedWorker = new Worker<ContractEmbedJobData>(
         }
         collected.push({ index: chunk.index, text: chunk.text, embedding: chunkEmbedding })
       } catch (err) {
-        console.error(`[embed] Chunk ${chunk.index} failed for contract ${contractId}:`, err)
+        logger.error({ err, contractId, chunkIndex: chunk.index }, "[embed] chunk embedding failed")
         failures += 1
       }
     }
 
     if (collected.length === 0) {
-      console.warn(
-        `[embed] All ${chunks.length} chunk embeddings failed for contract ${contractId} — leaving existing rows intact`,
+      logger.warn(
+        { contractId, totalChunks: chunks.length },
+        "[embed] all chunk embeddings failed — leaving existing rows intact",
       )
       await db.activity.create({
         data: {
@@ -724,7 +722,7 @@ const embedWorker = new Worker<ContractEmbedJobData>(
           metadata: { skipped: true, reason: "embedding_failed", chunks: chunks.length },
         },
       })
-      console.log(`[embed] Embedded contract ${contractId} (${embedding.length} dims, 0 new chunks)`)
+      logger.info({ contractId, dims: embedding.length, newChunks: 0 }, "[embed] embedded contract")
       await chainAiExtract()
       return
     }
@@ -741,13 +739,12 @@ const embedWorker = new Worker<ContractEmbedJobData>(
     ])
 
     if (failures > 0) {
-      console.warn(
-        `[embed] ${failures}/${chunks.length} chunks failed for contract ${contractId}`,
-      )
+      logger.warn({ contractId, failures, totalChunks: chunks.length }, "[embed] some chunks failed")
     }
 
-    console.log(
-      `[embed] Embedded contract ${contractId} (${embedding.length} dims, ${collected.length}/${chunks.length} chunks)`,
+    logger.info(
+      { contractId, dims: embedding.length, succeededChunks: collected.length, totalChunks: chunks.length },
+      "[embed] embedded contract",
     )
 
     await chainAiExtract()
@@ -756,10 +753,10 @@ const embedWorker = new Worker<ContractEmbedJobData>(
 )
 
 embedWorker.on("completed", (job) =>
-  console.log(`[embed] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[embed] job completed"),
 )
 embedWorker.on("failed", (job, err) =>
-  console.error(`[embed] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[embed] job failed"),
 )
 
 // ─── Worker: alerts.check ─────────────────────────────────────────────────────
@@ -767,18 +764,18 @@ embedWorker.on("failed", (job, err) =>
 const alertsWorker = new Worker<AlertsCheckJobData>(
   "alerts.check",
   async (job: Job<AlertsCheckJobData>) => {
-    console.log(`[alerts] Running check job ${job.id} (triggered: ${job.data.triggeredAt})`)
+    logger.info({ jobId: job.id, triggeredAt: job.data.triggeredAt }, "[alerts] running check job")
     const { fired, errors } = await checkAndFireAlerts()
-    console.log(`[alerts] Fired ${fired} alerts, ${errors} errors`)
+    logger.info({ fired, errors }, "[alerts] check job complete")
   },
   { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
 )
 
 alertsWorker.on("completed", (job) =>
-  console.log(`[alerts] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[alerts] job completed"),
 )
 alertsWorker.on("failed", (job, err) =>
-  console.error(`[alerts] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[alerts] job failed"),
 )
 
 // ─── Worker: obligations.check ────────────────────────────────────────────────
@@ -786,9 +783,7 @@ alertsWorker.on("failed", (job, err) =>
 const obligationsWorker = new Worker<ObligationsCheckJobData>(
   "obligations.check",
   async (job: Job<ObligationsCheckJobData>) => {
-    console.log(
-      `[obligations] Running check job ${job.id} (triggered: ${job.data.triggeredAt})`,
-    )
+    logger.info({ jobId: job.id, triggeredAt: job.data.triggeredAt }, "[obligations] running check job")
 
     const db = getWorkerPrisma()
     const now = new Date()
@@ -914,18 +909,19 @@ const obligationsWorker = new Worker<ObligationsCheckJobData>(
       remindersSent += 1
     }
 
-    console.log(
-      `[obligations] Marked ${updateCount} overdue (${overdueNotified} notified), sent ${remindersSent} reminders`,
+    logger.info(
+      { updateCount, overdueNotified, remindersSent },
+      "[obligations] check job complete",
     )
   },
   { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
 )
 
 obligationsWorker.on("completed", (job) =>
-  console.log(`[obligations] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[obligations] job completed"),
 )
 obligationsWorker.on("failed", (job, err) =>
-  console.error(`[obligations] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[obligations] job failed"),
 )
 
 // ─── Worker: obligations.ai_extract ──────────────────────────────────────────
@@ -1009,7 +1005,7 @@ const obligationExtractWorker = new Worker<ObligationExtractJobData>(
   "obligations.ai_extract",
   async (job: Job<ObligationExtractJobData>) => {
     const { contractId, extractedText } = job.data
-    console.log(`[obligations.extract] Processing job ${job.id} for contract ${contractId}`)
+    logger.info({ jobId: job.id, contractId }, "[obligations.extract] processing job")
 
     const raw = await callObligationLLM(extractedText)
     if (!raw) throw new Error("no_ai_provider")
@@ -1028,10 +1024,10 @@ const obligationExtractWorker = new Worker<ObligationExtractJobData>(
 )
 
 obligationExtractWorker.on("completed", (job) =>
-  console.log(`[obligations.extract] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[obligations.extract] job completed"),
 )
 obligationExtractWorker.on("failed", (job, err) =>
-  console.error(`[obligations.extract] Job ${job?.id} failed:`, err.message),
+  logger.error({ err, jobId: job?.id }, "[obligations.extract] job failed"),
 )
 
 // ─── Worker: signing.sync ─────────────────────────────────────────────────────
@@ -1094,8 +1090,7 @@ const emailWorker = new Worker<EmailJobData>(
       // attempts: 1 — failed jobs land in BullMQ's failed queue rather than
       // retrying. SMTP sends are not idempotent, so a retry of a partially-
       // succeeded send would duplicate the email.
-      const message = err instanceof Error ? err.message : String(err)
-      console.error(`[email.send] Failed for job ${job.id} (${data.kind}):`, message)
+      logger.error({ err, jobId: job.id, kind: data.kind }, "[email.send] failed")
       throw err
     }
   },
@@ -1103,10 +1098,10 @@ const emailWorker = new Worker<EmailJobData>(
 )
 
 emailWorker.on("completed", (job) =>
-  console.log(`[email] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[email] job completed"),
 )
 emailWorker.on("failed", (job, err) =>
-  console.error(`[email] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[email] job failed"),
 )
 
 // ─── Worker: notification.fanout ──────────────────────────────────────────────
@@ -1126,7 +1121,7 @@ const fanoutWorker = new Worker<NotificationFanoutJobData>(
   "notification.fanout",
   async (job: Job<NotificationFanoutJobData>) => {
     const { eventName, contractId, actorId, metadata } = job.data
-    console.log(`[fanout] ${eventName} contract=${contractId} actor=${actorId ?? "system"}`)
+    logger.info({ eventName, contractId, actorId: actorId ?? "system" }, "[fanout] processing event")
 
     const db = getWorkerPrisma()
 
@@ -1144,7 +1139,7 @@ const fanoutWorker = new Worker<NotificationFanoutJobData>(
       },
     })
     if (!contract) {
-      console.warn(`[fanout] Contract ${contractId} not found — skipping`)
+      logger.warn({ contractId }, "[fanout] contract not found — skipping")
       return
     }
 
@@ -1207,7 +1202,7 @@ const fanoutWorker = new Worker<NotificationFanoutJobData>(
           "sha256=" +
           crypto.createHmac("sha256", secretBytes).update(payload).digest("hex")
       } catch (err) {
-        console.error(`[fanout] failed to decrypt signingSecret for webhook ${wh.id}:`, err)
+        logger.error({ err, webhookId: wh.id }, "[fanout] failed to decrypt signingSecret — skipping webhook")
         continue
       }
 
@@ -1294,10 +1289,10 @@ const fanoutWorker = new Worker<NotificationFanoutJobData>(
 )
 
 fanoutWorker.on("completed", (job) =>
-  console.log(`[fanout] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[fanout] job completed"),
 )
 fanoutWorker.on("failed", (job, err) =>
-  console.error(`[fanout] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[fanout] job failed"),
 )
 
 // ─── In-app notification helper ───────────────────────────────────────────────
@@ -1329,7 +1324,7 @@ async function createInAppNotifications(
         title,
         body,
       },
-    }).catch((err) => console.error(`[fanout] in-app notification write failed:`, err))
+    }).catch((err) => logger.error({ err }, "[fanout] in-app notification write failed"))
   }
 
   switch (eventName) {
@@ -1625,7 +1620,7 @@ const deliverWorker = new Worker<NotificationDeliverJobData>(
         select: { channelType: true, webhookUrl: true, enabled: true },
       })
       if (!channel || !channel.enabled) {
-        console.warn(`[deliver] channel ${data.channelId} missing or disabled`)
+        logger.warn({ channelId: data.channelId }, "[deliver] channel missing or disabled")
         return
       }
 
@@ -1633,7 +1628,7 @@ const deliverWorker = new Worker<NotificationDeliverJobData>(
       try {
         plaintextUrl = decrypt(channel.webhookUrl)
       } catch (err) {
-        console.error(`[deliver] failed to decrypt webhookUrl for channel ${data.channelId}:`, err)
+        logger.error({ err, channelId: data.channelId }, "[deliver] failed to decrypt webhookUrl")
         return
       }
 
@@ -1653,7 +1648,7 @@ const deliverWorker = new Worker<NotificationDeliverJobData>(
       } else if (channel.channelType === "teams") {
         await sendTeamsEvent(opts)
       } else {
-        console.warn(`[deliver] unknown channelType="${channel.channelType}" for channel ${data.channelId}`)
+        logger.warn({ channelType: channel.channelType, channelId: data.channelId }, "[deliver] unknown channelType")
       }
       return
     }
@@ -1665,7 +1660,7 @@ const deliverWorker = new Worker<NotificationDeliverJobData>(
         select: { url: true, enabled: true },
       })
       if (!webhook || !webhook.enabled) {
-        console.warn(`[deliver] webhook ${data.webhookId} missing or disabled`)
+        logger.warn({ webhookId: data.webhookId }, "[deliver] webhook missing or disabled")
         await db.webhookDeliveryLog.update({
           where: { id: data.deliveryLogId },
           data: { status: "failed", responseBody: "webhook disabled or deleted" },
@@ -1677,7 +1672,7 @@ const deliverWorker = new Worker<NotificationDeliverJobData>(
       try {
         plaintextUrl = decrypt(webhook.url)
       } catch (err) {
-        console.error(`[deliver] failed to decrypt webhook URL for ${data.webhookId}:`, err)
+        logger.error({ err, webhookId: data.webhookId }, "[deliver] failed to decrypt webhook URL")
         await db.webhookDeliveryLog.update({
           where: { id: data.deliveryLogId },
           data: { status: "failed", responseBody: "decryption failed" },
@@ -1711,7 +1706,7 @@ const deliverWorker = new Worker<NotificationDeliverJobData>(
         }
         success = res.ok
       } catch (err) {
-        console.error(`[deliver] webhook ${data.webhookId} attempt ${data.attempt} failed:`, err)
+        logger.error({ err, webhookId: data.webhookId, attempt: data.attempt }, "[deliver] webhook fetch failed")
       } finally {
         clearTimeout(timer)
       }
@@ -1785,10 +1780,10 @@ const deliverWorker = new Worker<NotificationDeliverJobData>(
 )
 
 deliverWorker.on("completed", (job) =>
-  console.log(`[deliver] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[deliver] job completed"),
 )
 deliverWorker.on("failed", (job, err) =>
-  console.error(`[deliver] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[deliver] job failed"),
 )
 
 // ─── Worker: document.convert (M6 — Word import → Plate JSON) ─────────────────
@@ -1797,7 +1792,7 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
   "document.convert",
   async (job: Job<DocumentConvertJobData>) => {
     const { contractId, storageKey, requestedById, fileType = "docx" } = job.data
-    console.log(`[document.convert] Job ${job.id} contract=${contractId} fileType=${fileType}`)
+    logger.info({ jobId: job.id, contractId, fileType }, "[document.convert] processing job")
 
     const db = getWorkerPrisma()
 
@@ -1808,7 +1803,7 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
       if (!res.ok) throw new Error(`Failed to download file from storage: ${res.status}`)
       buffer = Buffer.from(await res.arrayBuffer())
     } catch (err) {
-      console.error(`[document.convert] download failed for ${storageKey}:`, err)
+      logger.error({ err, contractId, storageKey }, "[document.convert] download failed")
       await storage.delete(storageKey).catch(() => {})
       throw err
     }
@@ -1824,9 +1819,9 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
         try {
           const result = await mammoth.convertToHtml({ buffer: docxBuffer })
           html = result.value ?? ""
-          console.log(`[document.convert] PDF→DOCX via LibreOffice, mammoth HTML: ${html.length} chars`)
+          logger.debug({ contractId, htmlChars: html.length }, "[document.convert] PDF→DOCX via LibreOffice, mammoth HTML")
         } catch (err) {
-          console.error(`[document.convert] mammoth failed on LibreOffice DOCX for ${contractId}:`, err)
+          logger.error({ err, contractId }, "[document.convert] mammoth failed on LibreOffice DOCX")
           await storage.delete(storageKey).catch(() => {})
           throw err
         }
@@ -1837,9 +1832,9 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
         try {
           const result = await pdfParse(buffer)
           rawText = result.text ?? ""
-          console.log(`[document.convert] PDF text extracted (fallback): ${rawText.length} chars`)
+          logger.debug({ contractId, rawChars: rawText.length }, "[document.convert] PDF text extracted (fallback)")
         } catch (err) {
-          console.error(`[document.convert] pdf-parse failed for ${contractId}:`, err)
+          logger.error({ err, contractId }, "[document.convert] pdf-parse failed")
           await storage.delete(storageKey).catch(() => {})
           throw err
         }
@@ -1852,7 +1847,7 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
         const result = await mammoth.convertToHtml({ buffer })
         html = result.value ?? ""
       } catch (err) {
-        console.error(`[document.convert] mammoth failed for ${contractId}:`, err)
+        logger.error({ err, contractId }, "[document.convert] mammoth failed for DOCX")
         await storage.delete(storageKey).catch(() => {})
         throw err
       }
@@ -1892,7 +1887,7 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
     }
 
     await storage.delete(storageKey).catch((err) =>
-      console.warn(`[document.convert] Failed to delete tmp object ${storageKey}:`, err),
+      logger.warn({ err, storageKey }, "[document.convert] failed to delete tmp object"),
     )
 
     const sourceLabel = fileType === "pdf" ? "PDF" : "Word document"
@@ -1905,16 +1900,16 @@ const documentConvertWorker = new Worker<DocumentConvertJobData>(
       },
     })
 
-    console.log(`[document.convert] Imported ${wordCount} words from ${fileType} for contract ${contractId}`)
+    logger.info({ contractId, wordCount, fileType }, "[document.convert] imported document")
   },
   { connection, defaultJobOptions: { removeOnComplete: 100, removeOnFail: 200, attempts: 1 } },
 )
 
 documentConvertWorker.on("completed", (job) =>
-  console.log(`[document.convert] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[document.convert] job completed"),
 )
 documentConvertWorker.on("failed", (job, err) =>
-  console.error(`[document.convert] Job ${job?.id} failed:`, err),
+  logger.error({ err, jobId: job?.id }, "[document.convert] job failed"),
 )
 
 // ─── Worker: salesforce.poll (M9 — periodic CRM sync) ────────────────────────
@@ -1922,14 +1917,14 @@ documentConvertWorker.on("failed", (job, err) =>
 const salesforcePollWorker = new Worker<SalesforcePollJobData>(
   "salesforce.poll",
   async (job: Job<SalesforcePollJobData>) => {
-    console.log(`[salesforce.poll] Job ${job.id} (triggered: ${job.data.triggeredAt})`)
+    logger.info({ jobId: job.id, triggeredAt: job.data.triggeredAt }, "[salesforce.poll] processing job")
 
     const db = getWorkerPrisma()
     const integrations = await db.crmIntegration.findMany({
       where: { provider: "SALESFORCE" },
     })
     if (integrations.length === 0) {
-      console.log("[salesforce.poll] No Salesforce integrations connected")
+      logger.info("[salesforce.poll] no Salesforce integrations connected")
       return
     }
 
@@ -1955,9 +1950,9 @@ const salesforcePollWorker = new Worker<SalesforcePollJobData>(
             },
           })
         } catch (err) {
-          console.error(
-            `[salesforce.poll] Refresh failed for integration ${integration.id}:`,
-            err,
+          logger.error(
+            { err, integrationId: integration.id },
+            "[salesforce.poll] Refresh failed for integration",
           )
           continue
         }
@@ -1978,9 +1973,9 @@ const salesforcePollWorker = new Worker<SalesforcePollJobData>(
         try {
           deal = await sf.getDeal(active, link.externalDealId)
         } catch (err) {
-          console.error(
-            `[salesforce.poll] getDeal failed for link ${link.id}:`,
-            err,
+          logger.error(
+            { err, linkId: link.id },
+            "[salesforce.poll] getDeal failed for link",
           )
           await db.crmLink.update({
             where: { id: link.id },
@@ -2042,18 +2037,19 @@ const salesforcePollWorker = new Worker<SalesforcePollJobData>(
       }
     }
 
-    console.log(
-      `[salesforce.poll] Polled ${integrations.length} integration(s)`,
+    logger.info(
+      { count: integrations.length },
+      "[salesforce.poll] Polled integrations",
     )
   },
   { connection, defaultJobOptions: { attempts: 1, removeOnComplete: 50, removeOnFail: 100 } },
 )
 
 salesforcePollWorker.on("completed", (job) =>
-  console.log(`[salesforce.poll] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[salesforce.poll] Job completed"),
 )
 salesforcePollWorker.on("failed", (job, err) =>
-  console.error(`[salesforce.poll] Job ${job?.id} failed:`, err),
+  logger.error({ jobId: job?.id, err }, "[salesforce.poll] Job failed"),
 )
 
 // ─── Worker: import.process (M10 — bulk contract import) ─────────────────────
@@ -2061,17 +2057,17 @@ salesforcePollWorker.on("failed", (job, err) =>
 const importWorker = new Worker<ImportProcessJobData>(
   "import.process",
   async (job: Job<ImportProcessJobData>) => {
-    console.log(`[import] Job ${job.id} importJob=${job.data.importJobId}`)
+    logger.info({ jobId: job.id, importJobId: job.data.importJobId }, "[import] Job started")
     await processImportJob(job.data)
   },
   { connection, concurrency: 2, defaultJobOptions: { attempts: 1, removeOnComplete: 200, removeOnFail: 500 } },
 )
 
 importWorker.on("completed", (job) =>
-  console.log(`[import] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[import] Job completed"),
 )
 importWorker.on("failed", (job, err) =>
-  console.error(`[import] Job ${job?.id} failed:`, err),
+  logger.error({ jobId: job?.id, err }, "[import] Job failed"),
 )
 
 // ─── Worker: document.export (M6 — Plate JSON → DOCX or PDF) ──────────────────
@@ -2080,7 +2076,7 @@ const documentExportWorker = new Worker<DocumentExportJobData>(
   "document.export",
   async (job: Job<DocumentExportJobData>) => {
     const { contractId, format, requestedById } = job.data
-    console.log(`[document.export] Job ${job.id} contract=${contractId} format=${format}`)
+    logger.info({ jobId: job.id, contractId, format }, "[document.export] Job started")
 
     const db = getWorkerPrisma()
     const document = await db.contractDocument.findUnique({
@@ -2114,17 +2110,17 @@ const documentExportWorker = new Worker<DocumentExportJobData>(
       },
     })
 
-    console.log(`[document.export] Exported contract ${contractId} as ${format} (${buffer.length} bytes)`)
+    logger.info({ contractId, format, bytes: buffer.length }, "[document.export] Export complete")
     return { downloadUrl }
   },
   { connection, defaultJobOptions: { removeOnComplete: 100, removeOnFail: 200, attempts: 1 } },
 )
 
 documentExportWorker.on("completed", (job) =>
-  console.log(`[document.export] Job ${job.id} completed`),
+  logger.info({ jobId: job.id }, "[document.export] Job completed"),
 )
 documentExportWorker.on("failed", (job, err) =>
-  console.error(`[document.export] Job ${job?.id} failed:`, err),
+  logger.error({ jobId: job?.id, err }, "[document.export] Job failed"),
 )
 
 // Register the daily cron (9 AM UTC). BullMQ deduplicates by name + pattern,
@@ -2133,8 +2129,8 @@ alertsCheckQueue.add(
   "daily-check",
   { triggeredAt: new Date().toISOString() },
   { repeat: { pattern: "0 9 * * *" }, jobId: "alerts-daily" },
-).then(() => console.log("[alerts] Daily cron registered (0 9 * * *)"))
-  .catch((err) => console.error("[alerts] Failed to register cron:", err))
+).then(() => logger.info("[alerts] Daily cron registered (0 9 * * *)"))
+  .catch((err) => logger.error({ err }, "[alerts] Failed to register cron"))
 
 // Webhooks are the primary path, but this periodic sync recovers missed or
 // delayed DocuSeal callbacks.
@@ -2142,8 +2138,8 @@ signingSyncQueue.add(
   "poll-docuseal",
   { triggeredAt: new Date().toISOString() },
   { repeat: { pattern: "*/15 * * * *" } },
-).then(() => console.log("[signing] Sync cron registered (*/15 * * * *)"))
-  .catch((err) => console.error("[signing] Failed to register sync cron:", err))
+).then(() => logger.info("[signing] Sync cron registered (*/15 * * * *)"))
+  .catch((err) => logger.error({ err }, "[signing] Failed to register sync cron"))
 
 // Daily obligation sweep — auto-mark overdue + send reminders.
 // jobId: "obligations-daily" prevents a second run from being enqueued while
@@ -2153,16 +2149,16 @@ obligationsCheckQueue.add(
   "daily-check",
   { triggeredAt: new Date().toISOString() },
   { repeat: { pattern: "0 9 * * *" }, jobId: "obligations-daily" },
-).then(() => console.log("[obligations] Daily cron registered (0 9 * * *)"))
-  .catch((err) => console.error("[obligations] Failed to register cron:", err))
+).then(() => logger.info("[obligations] Daily cron registered (0 9 * * *)"))
+  .catch((err) => logger.error({ err }, "[obligations] Failed to register cron"))
 
 // Salesforce uses polling (no webhooks). Sweep linked deals every 15 minutes.
 salesforcePollQueue.add(
   "poll-salesforce",
   { triggeredAt: new Date().toISOString() },
   { repeat: { pattern: "*/15 * * * *" } },
-).then(() => console.log("[salesforce.poll] Sync cron registered (*/15 * * * *)"))
-  .catch((err) => console.error("[salesforce.poll] Failed to register cron:", err))
+).then(() => logger.info("[salesforce.poll] Sync cron registered (*/15 * * * *)"))
+  .catch((err) => logger.error({ err }, "[salesforce.poll] Failed to register cron"))
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 // Collect all Worker instances so the shutdown handler can pause and drain them
@@ -2186,14 +2182,14 @@ const allWorkers: Worker[] = [
 ]
 
 async function gracefulShutdown(signal: string) {
-  console.log(`[worker] Received ${signal}, shutting down gracefully...`)
+  logger.info({ signal }, "[worker] Received signal, shutting down gracefully")
 
   // Stop workers from picking up new jobs while in-flight jobs finish.
   await Promise.all(allWorkers.map((w) => w.pause()))
 
   // Enforce a hard ceiling — if jobs haven't drained after 30 s, force exit.
   const drainTimeout = setTimeout(() => {
-    console.error("[worker] Graceful shutdown timeout — forcing exit")
+    logger.error("[worker] Graceful shutdown timeout — forcing exit")
     process.exit(1)
   }, 30_000)
 
@@ -2225,26 +2221,29 @@ async function gracefulShutdown(signal: string) {
   await getWorkerPrisma().$disconnect()
   await appPrisma.$disconnect().catch(() => {})
 
-  console.log("[worker] Graceful shutdown complete")
+  logger.info("[worker] Graceful shutdown complete")
   process.exit(0)
 }
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"))
 process.on("SIGINT", () => gracefulShutdown("SIGINT"))
 
-console.log("[worker] ClauseFlow BullMQ worker started")
-console.log(`[worker] Redis: ${maskRedisUrl(process.env.REDIS_URL ?? "redis://localhost:6379")}`)
+logger.info("[worker] ClauseFlow BullMQ worker started")
+logger.info(
+  { redis: maskRedisUrl(process.env.REDIS_URL ?? "redis://localhost:6379") },
+  "[worker] Redis connection",
+)
 const _provider = process.env.AI_PROVIDER?.toLowerCase() || (
   process.env.ANTHROPIC_API_KEY ? "anthropic"
     : process.env.OPENAI_API_KEY     ? "openai"
     : process.env.OLLAMA_BASE_URL    ? "ollama"
     : "none"
 )
-console.log(`[worker] AI provider: ${_provider}`)
+logger.info({ provider: _provider }, "[worker] AI provider")
 if (!process.env.SMTP_HOST) {
-  console.warn(
-    "[worker] ⚠  SMTP_HOST is not set — reminder and alert emails will be silently skipped.\n" +
-    "          In-app notifications and Slack/Teams will still fire.\n" +
-    "          Set SMTP_HOST (+ SMTP_USER, SMTP_PASS) in .env.local to enable email delivery.",
+  logger.warn(
+    "[worker] SMTP_HOST is not set — reminder and alert emails will be silently skipped. " +
+    "In-app notifications and Slack/Teams will still fire. " +
+    "Set SMTP_HOST (+ SMTP_USER, SMTP_PASS) in .env.local to enable email delivery.",
   )
 }

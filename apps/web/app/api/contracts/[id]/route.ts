@@ -7,6 +7,7 @@ import { generateAlertsForContract } from "@/lib/alerts/generate"
 import { enqueueNotification } from "@/lib/notifications/fanout"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { SECURE_HEADERS } from "@/lib/api-headers"
+import { logger } from "@/lib/logger"
 import { z } from "zod"
 
 // Allowed status transitions — all forward and backward moves permitted so
@@ -144,7 +145,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         select: { id: true, status: true, endDate: true, renewalDate: true, noticePeriodDays: true },
       })
     } catch (err) {
-      console.error("[PATCH /contracts/:id] findUnique error:", err)
+      logger.error({ err, contractId: params.id }, "[PATCH /contracts/:id] findUnique error")
       return Response.json({ error: "Database error looking up contract" }, { status: 500 })
     }
     if (!existing) return new Response("Not Found", { status: 404 })
@@ -222,7 +223,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         },
       })
     } catch (err) {
-      console.error("[PATCH /contracts/:id] update error:", err)
+      logger.error({ err, contractId: params.id }, "[PATCH /contracts/:id] update error")
       return Response.json({ error: "Database error updating contract" }, { status: 500 })
     }
 

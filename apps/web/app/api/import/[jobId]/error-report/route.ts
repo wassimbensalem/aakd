@@ -2,6 +2,7 @@ import { resolveAuth } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { storage } from "@/lib/storage"
+import { logger } from "@/lib/logger"
 
 export async function GET(req: Request, { params }: { params: { jobId: string } }) {
   const ctx = await resolveAuth(req)
@@ -29,7 +30,7 @@ export async function GET(req: Request, { params }: { params: { jobId: string } 
     try {
       signedUrl = await storage.getSignedDownloadUrl(job.errorReportKey, 3600)
     } catch (err) {
-      console.error("[import.error-report] failed to sign url:", err)
+      logger.error({ err, importJobId: params.jobId }, "[import.error-report] failed to sign url")
       return Response.json({ error: "signing_failed" }, { status: 502 })
     }
 

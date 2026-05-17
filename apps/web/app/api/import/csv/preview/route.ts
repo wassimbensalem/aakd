@@ -2,6 +2,7 @@ import crypto from "node:crypto"
 import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { storage } from "@/lib/storage"
 import { parseCsv, suggestColumnMapping } from "@/lib/types/import-helpers"
+import { logger } from "@/lib/logger"
 
 const MAX_CSV_BYTES = 10 * 1024 * 1024 // 10 MB
 const MAX_ROWS = 1000
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
   try {
     await storage.upload(storageKey, buffer, "text/csv")
   } catch (err) {
-    console.error("[import.csv.preview] storage upload failed:", err)
+    logger.error({ err, storageKey }, "[import.csv.preview] storage upload failed")
     return Response.json({ error: "storage_failed" }, { status: 502 })
   }
 

@@ -3,6 +3,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { generateEmbedding } from "@/lib/embedding"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { logger } from "@/lib/logger"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
     try {
       rl = await rateLimit(`${ctx.organizationId}:semantic-search`, 30, 60_000)
     } catch (err) {
-      console.error("[semantic] rateLimit error:", err)
+      logger.error({ err }, "[semantic] rateLimit error — continuing without rate limiting")
       // If Redis is unavailable, continue without rate limiting rather than 500ing
       rl = { allowed: true, retryAfter: 0 }
     }
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
       try {
         embedding = await generateEmbedding(query)
       } catch (err) {
-        console.error("[semantic] Embedding generation failed:", err)
+        logger.error({ err }, "[semantic] embedding generation failed")
         return Response.json(
           { error: "Embedding generation failed" },
           { status: 503 },
@@ -111,7 +112,7 @@ export async function POST(req: Request) {
           `,
         )
       } catch (err) {
-        console.error("[semantic] pgvector query failed:", err)
+        logger.error({ err }, "[semantic] pgvector query failed — returning empty results")
         // pgvector extension not loaded, no embeddings indexed yet, or
         // vector cast failed — return empty results rather than 500
         return Response.json({ results: [], total: 0, indexed: false })
@@ -120,7 +121,7 @@ export async function POST(req: Request) {
       return Response.json({ results: rows, total: rows.length })
     })
   } catch (err) {
-    console.error("[semantic-search] Unhandled error:", err)
+    logger.error({ err }, "[semantic-search] unhandled error")
     return Response.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { enqueueImportProcess } from "@/lib/types/import-queue"
+import { logger } from "@/lib/logger"
 import { z } from "zod"
 
 const ImportSchema = z.object({
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
         createdById: ctx.userId,
       })
     } catch (err) {
-      console.error("[import.gdrive] enqueue failed:", err)
+      logger.error({ err, importJobId: job.id }, "[import.gdrive] enqueue failed")
     }
 
     return Response.json({ jobId: job.id, totalRows: job.totalRows }, { status: 201 })

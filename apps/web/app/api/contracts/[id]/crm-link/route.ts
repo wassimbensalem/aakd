@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { getCrmProvider } from "@/lib/crm"
 import { ensureFreshToken, normalizeProvider } from "@/lib/crm/route-helpers"
+import { logger } from "@/lib/logger"
 
 const ROLES_CAN_LINK = new Set(["admin", "legal", "member"])
 
@@ -109,7 +110,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     try {
       fresh = await ensureFreshToken(integration)
     } catch (err) {
-      console.error(`[crm-link] ${provider} token refresh failed:`, err)
+      logger.error({ err, provider, contractId: params.id }, "[crm-link] token refresh failed")
       return Response.json({ error: "token_refresh_failed" }, { status: 502 })
     }
 
@@ -117,7 +118,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     try {
       deal = await getCrmProvider(provider).getDeal(fresh, dealId)
     } catch (err) {
-      console.error(`[crm-link] ${provider} getDeal failed:`, err)
+      logger.error({ err, provider, contractId: params.id, dealId }, "[crm-link] getDeal failed")
       return Response.json({ error: "deal_lookup_failed" }, { status: 502 })
     }
     if (!deal) return Response.json({ error: "deal_not_found" }, { status: 404 })

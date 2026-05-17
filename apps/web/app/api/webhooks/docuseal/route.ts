@@ -5,6 +5,7 @@ import { storage } from "@/lib/storage"
 import { isAllowedDocuSealUrl } from "@/lib/docuseal"
 import { enqueueNotification } from "@/lib/notifications/fanout"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
+import { logger } from "@/lib/logger"
 
 // ─── POST /api/webhooks/docuseal ──────────────────────────────────────────────
 // Receives DocuSeal webhook events.
@@ -39,7 +40,7 @@ function verifySignature(rawBody: string, signatureHeader: string | null): boole
   const secret = process.env.DOCUSEAL_WEBHOOK_SECRET
   if (!secret) {
     // No secret configured — reject all webhook requests to prevent forged events
-    console.error(
+    logger.error(
       "[DocuSeal webhook] DOCUSEAL_WEBHOOK_SECRET is not set — rejecting all webhook calls. " +
       "Set this variable to enable DocuSeal webhook processing.",
     )
@@ -185,21 +186,19 @@ export async function POST(req: Request) {
   // ── download signed PDF from DocuSeal ─────────────────────────────────────
   const signedDocUrl = data.documents?.[0]?.url
   if (!signedDocUrl) {
-    console.warn(`[docuseal-webhook] No document URL in submission ${data.id}`)
+    logger.warn({ submissionId: data.id }, "[docuseal-webhook] no document URL in completed submission")
     return Response.json({ ok: true })
   }
 
   // SSRF guard: only fetch from the configured DocuSeal host
   if (!isAllowedDocuSealUrl(signedDocUrl)) {
-    console.error(
-      `[docuseal-webhook] Rejected document URL from disallowed host: ${signedDocUrl}`,
-    )
+    logger.error({ url: signedDocUrl }, "[docuseal-webhook] rejected document URL from disallowed host")
     return Response.json({ ok: true })
   }
 
   const signedRes = await fetch(signedDocUrl)
   if (!signedRes.ok) {
-    console.error(`[docuseal-webhook] Failed to download signed PDF: ${signedRes.status}`)
+    logger.error({ status: signedRes.status, submissionId: data.id }, "[docuseal-webhook] failed to download signed PDF")
     return Response.json({ ok: true })
   }
 

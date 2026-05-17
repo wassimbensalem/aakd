@@ -7,6 +7,7 @@
  * Embedding dimension is fixed at 1536 — never parameterized.
  * Uses fetch only — no openai SDK imported here.
  */
+import { logger } from "@/lib/logger"
 
 let _ollamaDimWarned = false
 
@@ -15,7 +16,7 @@ function warnOllamaDimensionMismatch() {
   _ollamaDimWarned = true
   const model = process.env.OLLAMA_EMBEDDING_MODEL
   if (!model) {
-    console.error(
+    logger.error(
       "[embedding] OLLAMA_EMBEDDING_MODEL is not set. ClauseFlow will use " +
         "'mxbai-embed-large', which produces 1536-dim vectors to match the " +
         "ContractEmbedding column.",
@@ -86,8 +87,6 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
     return data.embedding
   }
 
-  console.warn(
-    "[embedding] No embedding provider configured — set OPENAI_API_KEY or OLLAMA_BASE_URL",
-  )
+  logger.warn("[embedding] No embedding provider configured — set OPENAI_API_KEY or OLLAMA_BASE_URL")
   return null
 }

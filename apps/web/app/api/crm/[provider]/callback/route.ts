@@ -9,6 +9,7 @@ import {
   getWebhookUrl,
   normalizeProvider,
 } from "@/lib/crm/route-helpers"
+import { logger } from "@/lib/logger"
 
 const STATE_COOKIE = "crm_oauth_state"
 
@@ -76,7 +77,7 @@ export async function GET(req: Request, { params }: { params: { provider: string
   try {
     tokenSet = await getCrmProvider(provider).exchangeCode(code, redirectUri)
   } catch (err) {
-    console.error(`[crm.callback] ${provider} exchangeCode failed:`, err)
+    logger.error({ err, provider }, "[crm.callback] exchangeCode failed")
     return settingsRedirect(provider, `error=${encodeURIComponent("exchange_failed")}`)
   }
 
@@ -117,12 +118,12 @@ export async function GET(req: Request, { params }: { params: { provider: string
           getWebhookUrl(provider),
         )
         if (subscriptionId) {
-          console.log(`[crm.callback] Registered ${provider} webhook ${subscriptionId}`)
+          logger.info({ provider, subscriptionId }, "[crm.callback] webhook registered")
         }
       } catch (err) {
         // Webhook registration is best-effort — the integration is still usable
         // for manual sync and (for Salesforce) polling.
-        console.warn(`[crm.callback] ${provider} registerWebhook failed:`, err)
+        logger.warn({ err, provider }, "[crm.callback] registerWebhook failed")
       }
     }
 

@@ -4,6 +4,7 @@ import { requestContext } from "@/lib/context"
 import { getCrmProvider } from "@/lib/crm"
 import { writeActivity } from "@/lib/db/activity"
 import { normalizeProvider } from "@/lib/crm/route-helpers"
+import { logger } from "@/lib/logger"
 
 export async function POST(req: Request, { params }: { params: { provider: string } }) {
   const provider = normalizeProvider(params.provider)
@@ -49,7 +50,7 @@ export async function POST(req: Request, { params }: { params: { provider: strin
         break
       }
     } catch (err) {
-      console.warn(`[crm.webhook] ${provider} parse failed for integration ${candidate.id}:`, err)
+      logger.warn({ err, provider, integrationId: candidate.id }, "[crm.webhook] parse failed for integration")
     }
   }
 

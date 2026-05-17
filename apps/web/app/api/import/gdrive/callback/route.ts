@@ -3,6 +3,7 @@ import { hasRole } from "@/lib/auth/roles"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { encrypt } from "@/lib/notifications/crypto"
+import { logger } from "@/lib/logger"
 
 const STATE_COOKIE = "gdrive_oauth_state"
 
@@ -88,12 +89,12 @@ export async function GET(req: Request) {
     })
     if (!tokenRes.ok) {
       const text = await tokenRes.text()
-      console.error("[gdrive.callback] token exchange failed:", tokenRes.status, text)
+      logger.error({ status: tokenRes.status, body: text }, "[gdrive.callback] token exchange failed")
       return settingsRedirect(`error=${encodeURIComponent("exchange_failed")}`)
     }
     tokenResponse = await tokenRes.json()
   } catch (err) {
-    console.error("[gdrive.callback] token exchange threw:", err)
+    logger.error({ err }, "[gdrive.callback] token exchange threw")
     return settingsRedirect(`error=${encodeURIComponent("exchange_failed")}`)
   }
 

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client"
 import { encrypt } from "@/lib/notifications/crypto"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { SECURE_HEADERS } from "@/lib/api-headers"
+import { logger } from "@/lib/logger"
 import { z } from "zod"
 
 const UpsertSchema = z.object({
@@ -61,7 +62,7 @@ export async function POST(req: Request) {
   try {
     encryptedKey = encrypt(apiKey)
   } catch (err) {
-    console.error("[ai-config] Encryption failed:", err)
+    logger.error({ err }, "[ai-config] encryption failed")
     return Response.json({ error: "Encryption not configured on this server" }, { status: 500 })
   }
 

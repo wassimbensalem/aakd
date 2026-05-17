@@ -10,6 +10,7 @@
  * This file re-exports them so callers don't need to update their import paths.
  */
 import { notificationFanoutQueue } from "@/lib/jobs/queues"
+import { logger } from "@/lib/logger"
 
 export {
   type NotificationEventName,
@@ -41,9 +42,6 @@ export async function enqueueNotification(
       metadata,
     })
   } catch (err) {
-    console.error(
-      `[notifications] failed to enqueue fanout for ${eventName} contract=${contractId}:`,
-      err,
-    )
+    logger.error({ err, eventName, contractId }, "[notifications] failed to enqueue fanout")
   }
 }

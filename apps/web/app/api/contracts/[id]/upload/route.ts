@@ -6,6 +6,7 @@ import { storage } from "@/lib/storage"
 import { contractExtractQueue, documentConvertQueue } from "@/lib/jobs/queues"
 import { enqueueNotification } from "@/lib/notifications/fanout"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { logger } from "@/lib/logger"
 
 // GET /api/contracts/[id]/upload?fileId=... — generate a signed download URL
 export async function GET(req: Request, { params }: { params: { id: string } }) {
@@ -105,7 +106,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     try {
       await storage.upload(key, buffer, mimeType)
     } catch (err) {
-      console.error("[upload] storage upload failed:", err)
+      logger.error({ err, contractId: params.id, storageKey: key }, "[upload] storage upload failed")
       return new Response("Storage upload failed", { status: 502 })
     }
 
@@ -163,7 +164,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         storageKey: key,
       })
     } catch (err) {
-      console.error("[upload] failed to enqueue extraction job:", err)
+      logger.error({ err, contractId: params.id }, "[upload] failed to enqueue extraction job")
       return Response.json({ ...contractFile, downloadUrl: null, extractionQueued: false }, { status: 201 })
     }
 
@@ -181,7 +182,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     } catch (err) {
       // Non-fatal — the extraction job is already queued; the editor will just
       // start blank (user can still write from scratch or re-import later).
-      console.error("[upload] failed to enqueue document.convert job:", err)
+      logger.error({ err, contractId: params.id }, "[upload] failed to enqueue document.convert job")
     }
 
     const downloadUrl = await storage.getSignedDownloadUrl(key)

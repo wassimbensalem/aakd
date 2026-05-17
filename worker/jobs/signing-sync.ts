@@ -11,6 +11,7 @@ import { getWorkerPrisma } from "@/lib/db/worker-client"
 import { storage } from "@/lib/storage"
 import { getSubmission, isAllowedDocuSealUrl } from "@/lib/docuseal"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { logger } from "@/lib/logger"
 import type { SigningSyncJobData } from "@/lib/jobs/queues"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -137,8 +138,9 @@ async function syncDocuSealContract(contract: SyncableContract) {
 
   const signedDocUrl = submission.documents?.[0]?.url
   if (!signedDocUrl) {
-    console.warn(
-      `[signing] Submission ${contract.docusealSubmissionId} is completed but has no document URL`,
+    logger.warn(
+      { submissionId: contract.docusealSubmissionId },
+      "[signing] Submission is completed but has no document URL",
     )
     return
   }
@@ -155,7 +157,7 @@ export function createSigningSyncWorker(connection: { url: string }) {
   const worker = new Worker<SigningSyncJobData>(
     "signing.sync",
     async (job: Job<SigningSyncJobData>) => {
-      console.log(`[signing] Running sync job ${job.id} (triggered: ${job.data.triggeredAt})`)
+      logger.info({ jobId: job.id, triggeredAt: job.data.triggeredAt }, "[signing] Running sync job")
 
       const where = job.data.contractId
         ? { id: job.data.contractId }
@@ -184,12 +186,15 @@ export function createSigningSyncWorker(connection: { url: string }) {
           await syncDocuSealContract(contract)
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
-          console.error(`[signing] Failed to sync contract ${contract.id}:`, message)
+          logger.error({ contractId: contract.id, error: message }, "[signing] Failed to sync contract")
           errors.push({ contractId: contract.id, error: message })
         }
       }
 
-      console.log(`[signing] Processed ${contracts.length} DocuSeal submission(s), ${errors.length} error(s)`)
+      logger.info(
+        { processed: contracts.length, errors: errors.length },
+        "[signing] Processed DocuSeal submissions",
+      )
 
       if (errors.length > 0) {
         // Throw to mark the job as failed so BullMQ retries it.
@@ -202,8 +207,8 @@ export function createSigningSyncWorker(connection: { url: string }) {
     { connection, defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 5000 } } },
   )
 
-  worker.on("completed", (job) => console.log(`[signing] Job ${job.id} completed`))
-  worker.on("failed", (job, err) => console.error(`[signing] Job ${job?.id} failed:`, err))
+  worker.on("completed", (job) => logger.info({ jobId: job.id }, "[signing] Job completed"))
+  worker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "[signing] Job failed"))
 
   return worker
 }

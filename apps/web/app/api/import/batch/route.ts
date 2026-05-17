@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/client"
 import { storage } from "@/lib/storage"
 import { isZipBuffer, sanitizeFilename } from "@/lib/types/import-helpers"
 import { enqueueImportProcess } from "@/lib/types/import-queue"
+import { logger } from "@/lib/logger"
 
 const MAX_ZIP_BYTES = 500 * 1024 * 1024 // 500 MB
 const MAX_FILE_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
       try {
         await storage.upload(storageKey, buffer, "application/zip")
       } catch (err) {
-        console.error("[import.batch] storage upload failed:", err)
+        logger.error({ err, storageKey }, "[import.batch] storage upload failed")
         return Response.json({ error: "storage_failed" }, { status: 502 })
       }
 
@@ -84,7 +85,7 @@ export async function POST(req: Request) {
           createdById: ctx.userId,
         })
       } catch (err) {
-        console.error("[import.batch] enqueue failed:", err)
+        logger.error({ err, importJobId: job.id }, "[import.batch] enqueue failed")
       }
 
       return Response.json({ jobId: job.id, totalRows: job.totalRows }, { status: 201 })
@@ -127,7 +128,7 @@ export async function POST(req: Request) {
       try {
         await storage.upload(key, buf, file.type || "application/octet-stream")
       } catch (err) {
-        console.error("[import.batch] file upload failed:", err)
+        logger.error({ err, storageKey: key, filename: file.name }, "[import.batch] file upload failed")
         return Response.json({ error: "storage_failed" }, { status: 502 })
       }
       manifest.push({ index: i, filename: file.name, storageKey: key, sizeBytes: file.size })
@@ -141,7 +142,7 @@ export async function POST(req: Request) {
         "application/json",
       )
     } catch (err) {
-      console.error("[import.batch] manifest upload failed:", err)
+      logger.error({ err, manifestKey }, "[import.batch] manifest upload failed")
       return Response.json({ error: "storage_failed" }, { status: 502 })
     }
 
@@ -165,7 +166,7 @@ export async function POST(req: Request) {
         createdById: ctx.userId,
       })
     } catch (err) {
-      console.error("[import.batch] enqueue failed:", err)
+      logger.error({ err, importJobId: job.id }, "[import.batch] enqueue failed")
     }
 
     return Response.json({ jobId: job.id, totalRows: job.totalRows }, { status: 201 })

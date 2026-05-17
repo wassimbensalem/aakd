@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/client"
 import { storage } from "@/lib/storage"
 import { isZipBuffer } from "@/lib/types/import-helpers"
 import { enqueueImportProcess } from "@/lib/types/import-queue"
+import { logger } from "@/lib/logger"
 
 const MAX_ZIP_BYTES = 500 * 1024 * 1024
 
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
     try {
       await storage.upload(storageKey, buffer, "application/zip")
     } catch (err) {
-      console.error("[import.pandadoc] storage upload failed:", err)
+      logger.error({ err, storageKey }, "[import.pandadoc] storage upload failed")
       return Response.json({ error: "storage_failed" }, { status: 502 })
     }
 
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
         createdById: ctx.userId,
       })
     } catch (err) {
-      console.error("[import.pandadoc] enqueue failed:", err)
+      logger.error({ err, importJobId: job.id }, "[import.pandadoc] enqueue failed")
     }
 
     return Response.json({ jobId: job.id, totalRows: job.totalRows }, { status: 201 })

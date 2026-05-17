@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
 import { getRequestContext } from "@/lib/context"
+import { logger } from "@/lib/logger"
 
 // Only models that have a direct organizationId column should be in this set.
 // ContractFile, ContractVersion, and Activity are org-scoped *indirectly*
@@ -47,9 +48,9 @@ function createPrismaClient() {
           const ctx = getRequestContext()
           if (!ctx?.organizationId) {
             if (ORG_SCOPED_MODELS.has(model ?? "")) {
-              console.warn(
-                `[org-scope] middleware fired but no org context — query model: ${model}, action: ${operation}. ` +
-                "Explicit organizationId filter in the route is the active guard.",
+              logger.warn(
+                { model, operation },
+                "[org-scope] middleware fired but no org context — explicit organizationId filter in the route is the active guard",
               )
             }
             return query(args)

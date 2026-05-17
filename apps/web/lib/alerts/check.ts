@@ -4,6 +4,7 @@ import { ContractAlertWithContract } from "@/lib/email"
 import { emailQueue } from "@/lib/jobs/queues"
 import { sendSlackAlert, sendTeamsAlert } from "@/lib/notifications/webhooks"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { logger } from "@/lib/logger"
 
 const FANOUT_EXPIRY_TYPES = new Set(["EXPIRY_7", "EXPIRY_30", "EXPIRY_90"])
 
@@ -58,7 +59,7 @@ export async function checkAndFireAlerts(): Promise<{ fired: number; errors: num
     try {
       // Hand off to the email worker — never block the alerts pipeline on SMTP.
       await emailQueue.add("send", { kind: "alert", alertId: alert.id }).catch((err) => {
-        console.error(`[alerts] enqueue email failed for alert ${alert.id}:`, err)
+        logger.error({ err, alertId: alert.id }, "[alerts] enqueue email failed")
         errors++
       })
 
@@ -111,7 +112,7 @@ export async function checkAndFireAlerts(): Promise<{ fired: number; errors: num
 
       firedIds.push(alert.id)
     } catch (err) {
-      console.error(`[alerts] failed to process alert ${alert.id}:`, err)
+      logger.error({ err, alertId: alert.id }, "[alerts] failed to process alert")
       errors++
     }
   }

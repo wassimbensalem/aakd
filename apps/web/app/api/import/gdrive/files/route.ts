@@ -1,6 +1,7 @@
 import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
+import { logger } from "@/lib/logger"
 
 export async function GET(req: Request) {
   if (!process.env.GOOGLE_CLIENT_ID) {
@@ -57,7 +58,7 @@ export async function GET(req: Request) {
         truncated: result.truncated,
       })
     } catch (err) {
-      console.error("[gdrive.files] list failed:", err)
+      logger.error({ err, folderId }, "[gdrive.files] list failed")
       return Response.json({ error: "drive_list_failed" }, { status: 502 })
     }
   })

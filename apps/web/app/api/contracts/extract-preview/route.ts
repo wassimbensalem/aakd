@@ -1,4 +1,5 @@
 import { resolveAuth } from "@/lib/auth/middleware"
+import { logger } from "@/lib/logger"
 import OpenAI from "openai"
 import pdfParse from "pdf-parse"
 import mammoth from "mammoth"
@@ -89,7 +90,7 @@ export async function POST(req: Request): Promise<Response> {
     const raw = await extractText(buffer, fileType)
     contractText = raw.slice(0, MAX_TEXT_CHARS)
   } catch (err) {
-    console.error("[extract-preview] text extraction failed:", err)
+    logger.error({ err }, "[extract-preview] text extraction failed")
     // Degrade gracefully: return partial with just the filename-derived title
     const partial: ExtractionResult = {
       title: fileNameWithoutExt,
@@ -135,7 +136,7 @@ export async function POST(req: Request): Promise<Response> {
 
     return Response.json(extracted)
   } catch (err) {
-    console.error("[extract-preview] AI extraction failed:", err)
+    logger.error({ err }, "[extract-preview] AI extraction failed")
     const partial: ExtractionResult = {
       title: fileNameWithoutExt,
       error: "ai_unavailable",

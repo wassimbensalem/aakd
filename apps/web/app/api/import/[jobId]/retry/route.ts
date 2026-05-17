@@ -2,6 +2,7 @@ import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { enqueueImportProcess } from "@/lib/types/import-queue"
+import { logger } from "@/lib/logger"
 
 export async function POST(req: Request, { params }: { params: { jobId: string } }) {
   const ctx = await resolveAuth(req)
@@ -47,7 +48,7 @@ export async function POST(req: Request, { params }: { params: { jobId: string }
         createdById: ctx.userId,
       })
     } catch (err) {
-      console.error("[import.retry] enqueue failed:", err)
+      logger.error({ err, importJobId: job.id }, "[import.retry] enqueue failed")
     }
 
     return Response.json({ jobId: job.id }, { status: 202 })

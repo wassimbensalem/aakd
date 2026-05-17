@@ -12,6 +12,7 @@
  * - Logs the error for operator visibility
  */
 import { HUMAN_EVENT_LABELS, type NotificationEventName } from "@/lib/notifications/fanout"
+import { logger } from "@/lib/logger"
 
 export interface AlertWebhookOpts {
   contractTitle: string
@@ -109,12 +110,12 @@ export async function sendSlackAlert(opts: AlertWebhookOpts): Promise<boolean> {
       body: JSON.stringify(payload),
     })
     if (!res.ok) {
-      console.error(`[webhooks] Slack returned ${res.status} for contract ${contractId}`)
+      logger.error({ status: res.status, contractId }, "[webhooks] Slack returned non-2xx")
       return false
     }
     return true
   } catch (err) {
-    console.error(`[webhooks] Slack fetch failed for contract ${contractId}:`, err)
+    logger.error({ err, contractId }, "[webhooks] Slack fetch failed")
     return false
   }
 }
@@ -177,12 +178,12 @@ export async function sendTeamsAlert(opts: AlertWebhookOpts): Promise<boolean> {
       body: JSON.stringify(payload),
     })
     if (!res.ok) {
-      console.error(`[webhooks] Teams returned ${res.status} for contract ${contractId}`)
+      logger.error({ status: res.status, contractId }, "[webhooks] Teams returned non-2xx")
       return false
     }
     return true
   } catch (err) {
-    console.error(`[webhooks] Teams fetch failed for contract ${contractId}:`, err)
+    logger.error({ err, contractId }, "[webhooks] Teams fetch failed")
     return false
   }
 }
@@ -242,12 +243,12 @@ export async function sendSlackEvent(opts: NotificationEventOpts): Promise<boole
       body: JSON.stringify(payload),
     })
     if (!res.ok) {
-      console.error(`[webhooks] Slack event returned ${res.status} for contract ${contractId}`)
+      logger.error({ status: res.status, contractId, eventName }, "[webhooks] Slack event returned non-2xx")
       return false
     }
     return true
   } catch (err) {
-    console.error(`[webhooks] Slack event fetch failed for contract ${contractId}:`, err)
+    logger.error({ err, contractId, eventName }, "[webhooks] Slack event fetch failed")
     return false
   }
 }
@@ -318,12 +319,12 @@ export async function sendTeamsEvent(opts: NotificationEventOpts): Promise<boole
       body: JSON.stringify(payload),
     })
     if (!res.ok) {
-      console.error(`[webhooks] Teams event returned ${res.status} for contract ${contractId}`)
+      logger.error({ status: res.status, contractId, eventName }, "[webhooks] Teams event returned non-2xx")
       return false
     }
     return true
   } catch (err) {
-    console.error(`[webhooks] Teams event fetch failed for contract ${contractId}:`, err)
+    logger.error({ err, contractId, eventName }, "[webhooks] Teams event fetch failed")
     return false
   }
 }

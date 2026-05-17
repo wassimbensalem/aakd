@@ -118,7 +118,13 @@ async function waitForMigrations(maxWaitMs = 60_000): Promise<void> {
   throw new Error("[worker] Database migrations did not complete within timeout")
 }
 
-await waitForMigrations()
+// Non-blocking migration check — workers start immediately; BullMQ's
+// exponential-backoff retry policy covers the window between container start
+// and migration completion. If the check itself times out we exit hard.
+waitForMigrations().catch((err: unknown) => {
+  logger.error({ err }, "[worker] Migration check failed — exiting")
+  process.exit(1)
+})
 
 // ─── Redis connection ─────────────────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ vi.mock("@/lib/auth/middleware", () => ({
     organizationId: "org-1",
     role: "admin",
     source: "session" as const,
+    requestId: "test-request-id",
   }),
   requireWriteScope: vi.fn(() => null),
 }))

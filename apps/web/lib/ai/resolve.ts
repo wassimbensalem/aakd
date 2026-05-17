@@ -60,8 +60,8 @@ async function resolveAiConfigUncached(
         apiKey = decrypt(orgConfig.encryptedKey)
       } catch (err) {
         logger.error(
-          `[resolveAiConfig] Failed to decrypt key for org ${organizationId}`,
-          err,
+          { err, organizationId },
+          "[resolveAiConfig] Failed to decrypt key for org",
         )
         // Fall through to env vars if decryption fails
       }
@@ -77,8 +77,8 @@ async function resolveAiConfigUncached(
     }
   } catch (err) {
     logger.error(
-      `[resolveAiConfig] DB lookup failed for org ${organizationId}`,
-      err,
+      { err, organizationId },
+      "[resolveAiConfig] DB lookup failed for org",
     )
     // Fall through to env vars
   }

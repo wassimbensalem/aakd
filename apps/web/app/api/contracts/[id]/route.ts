@@ -7,7 +7,7 @@ import { generateAlertsForContract } from "@/lib/alerts/generate"
 import { enqueueNotification } from "@/lib/notifications/fanout"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { SECURE_HEADERS } from "@/lib/api-headers"
-import { logger } from "@/lib/logger"
+import { requestLogger } from "@/lib/logger"
 import { z } from "zod"
 
 // Allowed status transitions — all forward and backward moves permitted so
@@ -120,6 +120,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+  const log = requestLogger(ctx.requestId)
+
   const roleError = requireRole(ctx.role, "legal")
   if (roleError) return roleError
   const scopeError = requireWriteScope(ctx)
@@ -145,7 +148,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         select: { id: true, status: true, endDate: true, renewalDate: true, noticePeriodDays: true },
       })
     } catch (err) {
-      logger.error({ err, contractId: params.id }, "[PATCH /contracts/:id] findUnique error")
+      log.error({ err, contractId: params.id }, "[PATCH /contracts/:id] findUnique error")
       return Response.json({ error: "Database error looking up contract" }, { status: 500 })
     }
     if (!existing) return new Response("Not Found", { status: 404 })
@@ -223,7 +226,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         },
       })
     } catch (err) {
-      logger.error({ err, contractId: params.id }, "[PATCH /contracts/:id] update error")
+      log.error({ err, contractId: params.id }, "[PATCH /contracts/:id] update error")
       return Response.json({ error: "Database error updating contract" }, { status: 500 })
     }
 

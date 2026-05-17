@@ -220,7 +220,7 @@ export async function POST(
         question,
       )
     } catch (err) {
-      logger.error(`[ask] Retrieval failed for contract ${id}`, err)
+      logger.error({ err, contractId: id }, "[ask] Retrieval failed for contract")
       return Response.json({ error: "Retrieval failed" }, { status: 503 })
     }
 
@@ -235,7 +235,7 @@ export async function POST(
     try {
       answer = await callQaLLM(contract.title, buildContext(citations), question, contract.organizationId)
     } catch (err) {
-      logger.error(`[ask] LLM call failed for contract ${id}`, err)
+      logger.error({ err, contractId: id }, "[ask] LLM call failed for contract")
       return Response.json({ error: "AI call failed" }, { status: 503 })
     }
 

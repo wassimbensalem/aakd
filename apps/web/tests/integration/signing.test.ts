@@ -27,6 +27,7 @@ const mockCtx = {
   organizationId: "org-1",
   role: "admin",
   source: "session" as const,
+  requestId: "test-request-id",
 }
 
 vi.mock("@/lib/auth/middleware", () => ({

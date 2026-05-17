@@ -35,6 +35,7 @@ const orgACtx = {
   organizationId: "org-a",
   role: "admin" as const,
   source: "session" as const,
+  requestId: "test-request-id",
 }
 
 const orgBCtx = {
@@ -42,6 +43,7 @@ const orgBCtx = {
   organizationId: "org-b",
   role: "admin" as const,
   source: "session" as const,
+  requestId: "test-request-id",
 }
 
 const orgAContract = {

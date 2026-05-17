@@ -1,3 +1,6 @@
+// Prevent MaxListeners warning from ioredis exit handlers in test environment
+process.setMaxListeners(50)
+
 import "@testing-library/jest-dom"
 import { vi } from "vitest"
 

@@ -109,7 +109,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     try {
       riskDetails = await callAiForRiskScore(contract.extractedText, contract.organizationId)
     } catch (err) {
-      logger.error("[risk-score] AI call failed", err)
+      logger.error({ err }, "[risk-score] AI call failed")
       return Response.json({ error: "AI provider error" }, { status: 502 })
     }
 

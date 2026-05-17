@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { randomUUID } from "crypto"
 import { LOCALES, DEFAULT_LOCALE } from "@/lib/i18n/config"
 
 // Routes that don't require authentication
@@ -29,6 +30,9 @@ function ensureLocaleCookie(req: NextRequest, res: NextResponse) {
 }
 
 export function middleware(req: NextRequest) {
+  // Propagate or generate a request ID for log correlation
+  const requestId = req.headers.get("x-request-id") ?? randomUUID()
+
   const { pathname } = req.nextUrl
 
   // Allow public paths and static assets
@@ -37,7 +41,11 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
 
-  if (isPublic) return ensureLocaleCookie(req, NextResponse.next())
+  if (isPublic) {
+    const res = ensureLocaleCookie(req, NextResponse.next())
+    res.headers.set("x-request-id", requestId)
+    return res
+  }
 
   // Allow API routes that carry a Bearer token — the route handler's
   // resolveAuth() will validate the key. Without this check, requests
@@ -45,7 +53,9 @@ export function middleware(req: NextRequest) {
   // /login before the route handler ever runs, making API key auth dead.
   const authHeader = req.headers.get("Authorization")
   if (pathname.startsWith("/api/") && authHeader?.startsWith("Bearer ")) {
-    return ensureLocaleCookie(req, NextResponse.next())
+    const res = ensureLocaleCookie(req, NextResponse.next())
+    res.headers.set("x-request-id", requestId)
+    return res
   }
 
   // Check for Better Auth session cookie
@@ -56,10 +66,14 @@ export function middleware(req: NextRequest) {
   if (!sessionToken) {
     const loginUrl = new URL("/login", req.url)
     loginUrl.searchParams.set("callbackUrl", pathname)
-    return ensureLocaleCookie(req, NextResponse.redirect(loginUrl))
+    const res = ensureLocaleCookie(req, NextResponse.redirect(loginUrl))
+    res.headers.set("x-request-id", requestId)
+    return res
   }
 
-  return ensureLocaleCookie(req, NextResponse.next())
+  const res = ensureLocaleCookie(req, NextResponse.next())
+  res.headers.set("x-request-id", requestId)
+  return res
 }
 
 export const config = {

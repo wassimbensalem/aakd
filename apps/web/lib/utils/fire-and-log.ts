@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger"
+import { requestLogger, logger } from "@/lib/logger"
 
 /**
  * fireAndLog — run a promise as a non-blocking side-effect.
@@ -13,12 +13,15 @@ import { logger } from "@/lib/logger"
  *   - Activity / audit-trail writes  → await those; they must be consistent
  *   - Core DB mutations that affect visible state
  *
- * @param promise  The promise to run in the background.
- * @param label    A short identifier included in the error log (e.g. "enqueueNotification:contractCreated").
+ * @param promise    The promise to run in the background.
+ * @param label      A short identifier included in the error log (e.g. "enqueueNotification:contractCreated").
+ * @param requestId  Optional request ID for log correlation. Pass ctx.requestId to tie the error back to the originating request.
  */
 
-export function fireAndLog(promise: Promise<unknown>, label: string): void {
+export function fireAndLog(promise: Promise<unknown>, label: string, requestId?: string): void {
+  const log = requestId ? requestLogger(requestId) : logger
   promise.catch((err: unknown) => {
-    logger.error({ err, label }, "[background] fire-and-forget task failed")
+    const message = err instanceof Error ? err.message : String(err)
+    log.error({ err: message }, `[background] ${label} failed`)
   })
 }

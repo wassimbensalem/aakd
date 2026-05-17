@@ -7,6 +7,7 @@ vi.mock("@/lib/auth/middleware", () => ({
     organizationId: "org-1",
     role: "admin",
     source: "session" as const,
+    requestId: "test-request-id",
   }),
   requireWriteScope: vi.fn(() => null),
 }))
@@ -344,6 +345,7 @@ describe("RBAC — role enforcement", () => {
       organizationId: "org-1",
       role: "viewer",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { GET } = await import("@/app/api/org/api-keys/route")
@@ -358,6 +360,7 @@ describe("RBAC — role enforcement", () => {
       organizationId: "org-1",
       role: "member",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { POST } = await import("@/app/api/org/api-keys/route")
@@ -372,6 +375,7 @@ describe("RBAC — role enforcement", () => {
       organizationId: "org-1",
       role: "viewer",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { POST } = await import("@/app/api/org/members/invite/route")
@@ -386,6 +390,7 @@ describe("RBAC — role enforcement", () => {
       organizationId: "org-1",
       role: "member",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { PATCH } = await import("@/app/api/org/route")
@@ -405,6 +410,7 @@ describe("Activity log completeness", () => {
       organizationId: "org-1",
       role: "admin",
       source: "session" as const,
+      requestId: "test-request-id",
     })
   })
 
@@ -544,6 +550,7 @@ describe("Org-level isolation for member/API key operations", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
 
     vi.mocked(prisma.apiKey.findUnique).mockResolvedValue({
@@ -567,6 +574,7 @@ describe("Org-level isolation for member/API key operations", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
 
     vi.mocked(prisma.member.findUnique).mockResolvedValue({

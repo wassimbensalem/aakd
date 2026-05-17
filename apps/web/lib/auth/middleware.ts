@@ -1,10 +1,13 @@
-import { createHash } from "crypto"
+import { createHash, randomUUID } from "crypto"
 import bcrypt from "bcryptjs"
 import { auth } from "@/lib/auth/config"
 import { prisma } from "@/lib/db/client"
 import type { RequestContext } from "@/lib/context"
 
 export async function resolveAuth(req: Request): Promise<RequestContext | null> {
+  // Read the request ID from the incoming request header (set by Next.js middleware)
+  const requestId = req.headers.get("x-request-id") ?? randomUUID()
+
   // Path 1: Better Auth session (browser)
   try {
     const session = await auth.api.getSession({ headers: req.headers })
@@ -33,6 +36,7 @@ export async function resolveAuth(req: Request): Promise<RequestContext | null> 
           organizationId: member.organizationId,
           role: member.role,
           source: "session",
+          requestId,
         }
       }
     }
@@ -73,6 +77,7 @@ export async function resolveAuth(req: Request): Promise<RequestContext | null> 
         role: creatorMember?.role ?? "member",
         scopes: apiKey.scopes,
         source: "api_key",
+        requestId,
       }
     }
   }

@@ -7,6 +7,7 @@ import { generateAlertsForContract } from "@/lib/alerts/generate"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { SECURE_HEADERS } from "@/lib/api-headers"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
+import { requestLogger } from "@/lib/logger"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -31,6 +32,8 @@ const CreateContractSchema = z.object({
 export async function GET(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+  const log = requestLogger(ctx.requestId)
 
   return requestContext.run(ctx, async () => {
     const url = new URL(req.url)
@@ -102,6 +105,7 @@ export async function GET(req: Request) {
       prisma.contract.count({ where }),
     ])
 
+    log.info({ total, page, limit }, "[GET /contracts] listed")
     return Response.json({ contracts, total, page, limit }, { headers: SECURE_HEADERS })
   })
 }
@@ -109,6 +113,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const ctx = await resolveAuth(req)
   if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+  const log = requestLogger(ctx.requestId)
+
   const roleError = requireRole(ctx.role, "member")
   if (roleError) return roleError
   const scopeError = requireWriteScope(ctx)
@@ -183,6 +190,7 @@ export async function POST(req: Request) {
     })
 
     await writeActivity(contract.id, ctx.userId, "CREATED")
+    log.info({ contractId: contract.id }, "[POST /contracts] created")
 
     // Generate renewal alerts if date fields were provided (non-critical side-effect)
     if (endDate || renewalDate || parsed.data.noticePeriodDays != null) {

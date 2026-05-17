@@ -6,6 +6,7 @@ export interface RequestContext {
   role: string
   scopes?: string[]
   source: "session" | "api_key"
+  requestId: string
 }
 
 export const requestContext = new AsyncLocalStorage<RequestContext>()

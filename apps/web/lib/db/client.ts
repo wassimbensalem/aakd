@@ -30,7 +30,7 @@ type ScopedQueryArgs = {
 function createPrismaClient() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL ?? "",
-    max: 20,
+    max: parseInt(process.env.DATABASE_POOL_SIZE ?? "20", 10),
   })
 
   const adapter = new PrismaPg(pool)

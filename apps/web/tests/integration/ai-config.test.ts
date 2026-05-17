@@ -14,6 +14,7 @@ const adminCtx = {
   organizationId: "org-1",
   role: "admin",
   source: "session" as const,
+  requestId: "test-request-id",
 }
 
 const viewerCtx = {
@@ -21,6 +22,7 @@ const viewerCtx = {
   organizationId: "org-1",
   role: "viewer",
   source: "session" as const,
+  requestId: "test-request-id",
 }
 
 let mockCtx: typeof adminCtx | null = adminCtx

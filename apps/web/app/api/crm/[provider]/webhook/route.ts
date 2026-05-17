@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto"
 import type { CrmIntegration } from "@prisma/client"
 import { prisma } from "@/lib/db/client"
 import { requestContext } from "@/lib/context"
@@ -69,6 +70,7 @@ export async function POST(req: Request, { params }: { params: { provider: strin
       role: "admin",
       scopes: ["read", "write"],
       source: "api_key",
+      requestId: req.headers.get("x-request-id") ?? randomUUID(),
     },
     async () => {
       const links = await prisma.crmLink.findMany({

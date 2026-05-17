@@ -31,6 +31,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     vi.mocked(prisma.contract.findUnique).mockResolvedValue(null)
 
@@ -48,6 +49,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     vi.mocked(prisma.contract.findUnique).mockResolvedValue(null)
 
@@ -69,6 +71,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     vi.mocked(prisma.contract.findUnique).mockResolvedValue(null)
 
@@ -86,6 +89,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     vi.mocked(prisma.contract.findUnique).mockResolvedValue(null)
 
@@ -111,6 +115,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     // Prisma middleware injects org-b scope — no org-a tags returned
     vi.mocked(prisma.tag.findMany).mockResolvedValue([])
@@ -131,6 +136,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     vi.mocked(prisma.apiKey.findMany).mockResolvedValue([])
 
@@ -150,6 +156,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     vi.mocked(prisma.contract.findUnique).mockResolvedValue(null)
 
@@ -167,6 +174,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     // Middleware injects org-b scope — tag from org-a returns null
     vi.mocked(prisma.tag.findUnique).mockResolvedValue(null)
@@ -185,6 +193,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-b",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     // Middleware injects org-b scope — folder from org-a returns null
     vi.mocked(prisma.folder.findUnique).mockResolvedValue(null)
@@ -214,6 +223,7 @@ describe("Org isolation — cross-org access must return 404", () => {
       organizationId: "org-a",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
     vi.mocked(prisma.contract.findUnique).mockResolvedValue({
       id: "org-a-contract-id",

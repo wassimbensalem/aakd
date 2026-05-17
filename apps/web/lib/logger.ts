@@ -66,3 +66,15 @@ export const logger = pino({
 export function createLogger(context: Record<string, unknown>) {
   return logger.child(context)
 }
+
+/**
+ * Request-scoped child logger — binds requestId to every log line.
+ * Use this inside API route handlers after resolveAuth() to correlate all
+ * logs for a single request in Datadog/CloudWatch.
+ *
+ *   const log = requestLogger(ctx.requestId)
+ *   log.error({ err, contractId }, "[PATCH /contracts/:id] update error")
+ */
+export function requestLogger(requestId: string) {
+  return logger.child({ requestId })
+}

@@ -205,6 +205,7 @@ describe("Auth guard — valid Bearer token is accepted", () => {
       role: "admin",
       scopes: ["read", "write"],
       source: "api_key",
+      requestId: "test-request-id",
     })
 
     vi.mocked(prisma.contract.findMany).mockResolvedValue([])
@@ -345,6 +346,7 @@ describe("RBAC — PATCH /api/contracts/[id] requires at least 'legal' role", ()
       organizationId: "org-1",
       role: "viewer",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { PATCH } = await import("@/app/api/contracts/[id]/route")
@@ -360,6 +362,7 @@ describe("RBAC — PATCH /api/contracts/[id] requires at least 'legal' role", ()
       organizationId: "org-1",
       role: "member",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { PATCH } = await import("@/app/api/contracts/[id]/route")
@@ -375,6 +378,7 @@ describe("RBAC — PATCH /api/contracts/[id] requires at least 'legal' role", ()
       organizationId: "org-1",
       role: "legal",
       source: "session",
+      requestId: "test-request-id",
     })
 
     vi.mocked(prisma.contract.findUnique).mockResolvedValue(baseContract as any)
@@ -393,6 +397,7 @@ describe("RBAC — PATCH /api/contracts/[id] requires at least 'legal' role", ()
       organizationId: "org-1",
       role: "admin",
       source: "session",
+      requestId: "test-request-id",
     })
 
     vi.mocked(prisma.contract.findUnique).mockResolvedValue(baseContract as any)
@@ -411,6 +416,7 @@ describe("RBAC — PATCH /api/contracts/[id] requires at least 'legal' role", ()
       organizationId: "org-1",
       role: "owner",
       source: "session",
+      requestId: "test-request-id",
     })
 
     vi.mocked(prisma.contract.findUnique).mockResolvedValue(baseContract as any)
@@ -438,6 +444,7 @@ describe("RBAC — DELETE /api/contracts/[id] requires at least 'legal' role", (
       organizationId: "org-1",
       role: "viewer",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { DELETE } = await import("@/app/api/contracts/[id]/route")
@@ -456,6 +463,7 @@ describe("RBAC — DELETE /api/contracts/[id] requires at least 'legal' role", (
       organizationId: "org-1",
       role: "member",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { DELETE } = await import("@/app/api/contracts/[id]/route")
@@ -474,6 +482,7 @@ describe("RBAC — DELETE /api/contracts/[id] requires at least 'legal' role", (
       organizationId: "org-1",
       role: "legal",
       source: "session",
+      requestId: "test-request-id",
     })
 
     vi.mocked(prisma.contract.findUnique).mockResolvedValue({
@@ -507,6 +516,7 @@ describe("RBAC — POST /api/contracts requires at least 'member' role", () => {
       organizationId: "org-1",
       role: "viewer",
       source: "session",
+      requestId: "test-request-id",
     })
 
     const { POST } = await import("@/app/api/contracts/route")
@@ -528,6 +538,7 @@ describe("RBAC — POST /api/contracts requires at least 'member' role", () => {
       organizationId: "org-1",
       role: "member",
       source: "session",
+      requestId: "test-request-id",
     })
 
     // No folderId in the body — skips the folder ownership check

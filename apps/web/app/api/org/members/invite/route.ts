@@ -107,25 +107,48 @@ export async function POST(req: Request) {
     },
   })
 
-  // Look up org + inviter name for the email
-  const [org, inviter] = await Promise.all([
+  // Look up org + inviter name for the email, and check if the invitee already
+  // has an account so we can send them an in-app notification.
+  const [org, inviter, existingUser] = await Promise.all([
     prisma.organization.findUnique({ where: { id: ctx.organizationId }, select: { name: true } }),
     prisma.user.findUnique({ where: { id: ctx.userId }, select: { name: true, email: true } }),
+    prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } }),
   ])
 
   const baseUrl = process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
   const acceptUrl = `${baseUrl}/accept-invitation?id=${id}`
 
+  const orgName = org?.name ?? "your organisation"
+  const inviterName = inviter?.name ?? inviter?.email ?? "A teammate"
+
   // Non-critical side-effect — email failure must not abort the invitation
   fireAndLog(
     sendInvitationEmail({
       to: parsed.data.email,
-      organizationName: org?.name ?? "your organization",
-      inviterName: inviter?.name ?? inviter?.email ?? "A teammate",
+      organizationName: orgName,
+      inviterName,
       acceptUrl,
     }),
     "sendInvitationEmail:invite",
   )
+
+  // If the invitee already has an account, also deliver an in-app notification.
+  // Stored under the inviting org's ID (valid FK); the notifications API widens
+  // the query to include org.invited events regardless of the user's active org.
+  if (existingUser) {
+    fireAndLog(
+      prisma.notification.create({
+        data: {
+          userId: existingUser.id,
+          organizationId: ctx.organizationId,
+          eventName: "org.invited",
+          title: "You've been invited",
+          body: `${inviterName} invited you to join ${orgName}. Check your email to accept.`,
+        },
+      }),
+      "notification.create:org.invited",
+    )
+  }
 
   return Response.json({ id: invitation.id, email: invitation.email, role: invitation.role }, { status: 201 })
 }

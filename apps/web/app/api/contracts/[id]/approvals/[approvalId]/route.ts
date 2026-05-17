@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { enqueueNotification } from "@/lib/notifications/fanout"
 import { emailQueue } from "@/lib/jobs/queues"
+import { writeInApp } from "@/lib/notifications/write-in-app"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { z } from "zod"
 
@@ -190,29 +191,50 @@ export async function PATCH(
       requesterName: updated.requestedBy.name ?? "Requester",
       ...(body.comment ? { comment: body.comment } : {}),
     }
+    // contractTitle for in-app body — already fetched below for email, so fetch once now
+    const contractForNotif = await prisma.contract.findUnique({
+      where: { id: params.id },
+      select: { title: true },
+    })
+    const contractTitle = contractForNotif?.title ?? "Contract"
+
     if (body.decision === "approved") {
       fireAndLog(
         enqueueNotification("approval.approved", params.id, ctx.userId, decisionMetadata),
         "enqueueNotification:approval.approved",
+      )
+      // Write in-app notification directly — does not depend on worker being up
+      await writeInApp(
+        updated.requestedBy.id,
+        ctx.organizationId,
+        params.id,
+        "approval.approved",
+        "Approval approved",
+        `${updated.assignedTo?.name ?? "Reviewer"} approved "${contractTitle}"`,
       )
     } else {
       fireAndLog(
         enqueueNotification("approval.rejected", params.id, ctx.userId, decisionMetadata),
         "enqueueNotification:approval.rejected",
       )
+      // Write in-app notification directly — does not depend on worker being up
+      await writeInApp(
+        updated.requestedBy.id,
+        ctx.organizationId,
+        params.id,
+        "approval.rejected",
+        "Approval rejected",
+        `${updated.assignedTo?.name ?? "Reviewer"} rejected "${contractTitle}"`,
+      )
 
-      // Email the requester with the rejection reason
-      const contractForEmail = await prisma.contract.findUnique({
-        where: { id: params.id },
-        select: { title: true },
-      })
+      // Email the requester with the rejection reason (reuse contractTitle fetched above)
       fireAndLog(
         emailQueue.add("send", {
           kind: "approval_rejected",
           to: updated.requestedBy.email,
           requesterName: updated.requestedBy.name,
           reviewerName: updated.assignedTo.name,
-          contractTitle: contractForEmail?.title ?? "Contract",
+          contractTitle,
           comment: body.comment,
         }),
         "emailQueue:approval_rejected",
@@ -235,10 +257,6 @@ export async function PATCH(
         select: { id: true, name: true, email: true },
       })
       if (nextAssignee) {
-        const contractForEmail = await prisma.contract.findUnique({
-          where: { id: params.id },
-          select: { title: true },
-        })
         const nextRequesterName = activatedNext.requestedBy?.name ?? "A team member"
         fireAndLog(
           emailQueue.add("send", {
@@ -246,7 +264,7 @@ export async function PATCH(
             to: nextAssignee.email,
             assigneeName: nextAssignee.name,
             requesterName: nextRequesterName,
-            contractTitle: contractForEmail?.title ?? "Contract",
+            contractTitle,
           }),
           "emailQueue:approval_request:nextInChain",
         )
@@ -259,6 +277,15 @@ export async function PATCH(
             requesterName: nextRequesterName,
           }),
           "enqueueNotification:approval.requested:nextInChain",
+        )
+        // Write in-app notification directly for next-in-chain approver
+        await writeInApp(
+          nextAssignee.id,
+          ctx.organizationId,
+          params.id,
+          "approval.requested",
+          "Approval requested",
+          `${nextRequesterName} asked you to approve "${contractTitle}"`,
         )
       }
     }

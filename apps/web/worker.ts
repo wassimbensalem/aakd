@@ -1285,17 +1285,28 @@ const fanoutWorker = new Worker<NotificationFanoutJobData>(
       }
     }
 
-    // 6. In-app notifications — create Notification rows for targeted users.
-    // Each write is wrapped in .catch() so a DB failure never breaks the fanout.
-    await createInAppNotifications(
-      db,
-      eventName as NotificationEventName,
-      contract.id,
-      contract.title,
-      contract.organizationId,
-      actor,
-      metadata,
-    )
+    // 6. In-app notifications — only for cron-triggered events (expiring_soon,
+    // expired, obligation.due_soon, obligation.overdue). Route-triggered events
+    // (approval.*, contract.uploaded, archived, sent_for_signing, signed,
+    // signing_declined) write in-app rows directly from the API route so they
+    // are guaranteed regardless of whether the worker is running.
+    const CRON_IN_APP_EVENTS = new Set<string>([
+      "contract.expiring_soon",
+      "contract.expired",
+      "obligation.due_soon",
+      "obligation.overdue",
+    ])
+    if (CRON_IN_APP_EVENTS.has(eventName)) {
+      await createInAppNotifications(
+        db,
+        eventName as NotificationEventName,
+        contract.id,
+        contract.title,
+        contract.organizationId,
+        actor,
+        metadata,
+      )
+    }
   },
   // attempts: 1 — fanout enqueues per-channel deliver jobs that have their own
   // retry logic. Retrying the fanout itself would re-deliver to channels that

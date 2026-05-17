@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { emailQueue } from "@/lib/jobs/queues"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { writeInApp } from "@/lib/notifications/write-in-app"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { z } from "zod"
 
@@ -227,6 +228,15 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           ...(body.message ? { message: body.message } : {}),
         }),
         "enqueueNotification:approval.requested",
+      )
+      // Write in-app notification directly — does not depend on worker being up
+      await writeInApp(
+        assigneeMember.user.id,
+        ctx.organizationId,
+        params.id,
+        "approval.requested",
+        "Approval requested",
+        `${requesterUser?.name ?? "A team member"} asked you to approve "${contract.title}"`,
       )
     }
 

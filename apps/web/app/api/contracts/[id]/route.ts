@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { generateAlertsForContract } from "@/lib/alerts/generate"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { writeInAppToOrgMembers } from "@/lib/notifications/write-in-app"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { SECURE_HEADERS } from "@/lib/api-headers"
 import { requestLogger } from "@/lib/logger"
@@ -141,11 +142,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return Response.json({ error: parsed.error.flatten() }, { status: 422 })
     }
 
-    let existing: { id: string; status: string; endDate: Date | null; renewalDate: Date | null; noticePeriodDays: number | null } | null
+    let existing: { id: string; title: string; status: string; endDate: Date | null; renewalDate: Date | null; noticePeriodDays: number | null } | null
     try {
       existing = await prisma.contract.findUnique({
         where: { id: params.id },
-        select: { id: true, status: true, endDate: true, renewalDate: true, noticePeriodDays: true },
+        select: { id: true, title: true, status: true, endDate: true, renewalDate: true, noticePeriodDays: true },
       })
     } catch (err) {
       log.error({ err, contractId: params.id }, "[PATCH /contracts/:id] findUnique error")
@@ -242,11 +243,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           enqueueNotification("contract.sent_for_signing", params.id, ctx.userId, {}),
           "enqueueNotification:contract.sent_for_signing",
         )
+        await writeInAppToOrgMembers(ctx.organizationId, params.id, "contract.sent_for_signing", "Ready for signing", `"${existing.title}" is ready for signing`)
       } else if (status === "ARCHIVED") {
         fireAndLog(
           enqueueNotification("contract.archived", params.id, ctx.userId, {}),
           "enqueueNotification:contract.archived",
         )
+        await writeInAppToOrgMembers(ctx.organizationId, params.id, "contract.archived", "Contract archived", `A contract was archived`, ctx.userId)
       }
     }
 
@@ -295,7 +298,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   return requestContext.run(ctx, async () => {
     const existing = await prisma.contract.findUnique({
       where: { id: params.id },
-      select: { id: true, status: true },
+      select: { id: true, title: true, status: true },
     })
     if (!existing) return new Response("Not Found", { status: 404 })
     if (existing.status === "ARCHIVED") {
@@ -314,6 +317,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       enqueueNotification("contract.archived", params.id, ctx.userId, {}),
       "enqueueNotification:contract.archived",
     )
+    await writeInAppToOrgMembers(ctx.organizationId, params.id, "contract.archived", "Contract archived", `"${existing.title}" was archived`, ctx.userId)
 
     return new Response(null, { status: 204 })
   })

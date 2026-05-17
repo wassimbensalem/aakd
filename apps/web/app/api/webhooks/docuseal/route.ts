@@ -4,6 +4,7 @@ import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
 import { isAllowedDocuSealUrl } from "@/lib/docuseal"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { writeInAppToOrgMembers } from "@/lib/notifications/write-in-app"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { logger } from "@/lib/logger"
 
@@ -151,6 +152,7 @@ export async function POST(req: Request) {
     where: { docusealSubmissionId: String(data.id) },
     select: {
       id: true,
+      title: true,
       organizationId: true,
       ownerId: true,
     },
@@ -178,6 +180,13 @@ export async function POST(req: Request) {
       await enqueueNotification("contract.signing_declined", contract.id, null, {
         signingStatus,
       })
+      await writeInAppToOrgMembers(
+        contract.organizationId,
+        contract.id,
+        "contract.signing_declined",
+        `Signing ${signingStatus}`,
+        `"${contract.title}" signing was ${signingStatus} by the counterparty`,
+      )
     }
 
     return Response.json({ ok: true })
@@ -269,6 +278,13 @@ export async function POST(req: Request) {
   )
 
   await enqueueNotification("contract.signed", contract.id, null, {})
+  await writeInAppToOrgMembers(
+    contract.organizationId,
+    contract.id,
+    "contract.signed",
+    "Contract signed",
+    `"${contract.title}" has been fully signed`,
+  )
 
   return Response.json({ ok: true })
 }

@@ -5,6 +5,7 @@ import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
 import { contractExtractQueue, documentConvertQueue } from "@/lib/jobs/queues"
 import { enqueueNotification } from "@/lib/notifications/fanout"
+import { writeInAppToOrgMembers } from "@/lib/notifications/write-in-app"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { logger } from "@/lib/logger"
 
@@ -70,7 +71,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   return requestContext.run(ctx, async () => {
     const existing = await prisma.contract.findUnique({
       where: { id: params.id },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true, title: true },
     })
     // Middleware injects org scope; explicit check for defense-in-depth.
     if (!existing || existing.organizationId !== ctx.organizationId)
@@ -155,6 +156,15 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await writeActivity(params.id, ctx.userId, "UPLOADED", filename)
 
     await enqueueNotification("contract.uploaded", params.id, ctx.userId, {})
+    // Write in-app notification directly — does not depend on worker being up
+    await writeInAppToOrgMembers(
+      ctx.organizationId,
+      params.id,
+      "contract.uploaded",
+      "Contract file uploaded",
+      `A file was uploaded to "${existing.title}"`,
+      ctx.userId, // exclude the uploader
+    )
 
     // Enqueue text extraction job — heavy work must not block the API route
     try {

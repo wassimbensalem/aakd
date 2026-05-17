@@ -1,3 +1,8 @@
+# WARNING: DEVELOPMENT ONLY — Do NOT use this file in production.
+# For production deployment, use docker-compose.prod.yml with .env.prod.example.
+# This file exposes Mailpit (email trap) and MinIO with default credentials
+# that are NOT secure for public-facing deployments.
+#
 # NOTE: BETTER_AUTH_SECRET, POSTGRES_PASSWORD, and REDIS_PASSWORD must be set
 # in your .env file (or shell) before running `docker compose up`. There are
 # no defaults — leaving any of them empty is intentionally a hard failure on
@@ -27,6 +32,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     restart: unless-stopped
 
+  # DEV ONLY: Default credentials (minioadmin/minioadmin) — change before any public deployment.
+  # In production use docker-compose.prod.yml and supply real credentials via .env.
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
@@ -55,6 +62,8 @@ services:
       "
     restart: "no"
 
+  # DEV ONLY: Mailpit catches all outgoing emails (visible at http://localhost:8025).
+  # Never expose port 8025 publicly — it shows all email content in plaintext.
   mailpit:
     image: axllent/mailpit:latest
     ports:

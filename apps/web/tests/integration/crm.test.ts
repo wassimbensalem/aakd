@@ -245,7 +245,7 @@ describe("DELETE /api/crm/[provider]/connect", () => {
       id: "integration-1",
     } as any)
     vi.mocked(prisma.crmLink.deleteMany).mockResolvedValueOnce({ count: 2 })
-    vi.mocked(prisma.crmIntegration.delete).mockResolvedValueOnce(mockIntegration)
+    vi.mocked(prisma.crmIntegration.delete).mockResolvedValueOnce(mockIntegration as any)
     const { DELETE } = await import("@/app/api/crm/[provider]/connect/route")
     const res = await DELETE(new Request("http://localhost/api/crm/hubspot/connect", { method: "DELETE" }), {
       params: { provider: "hubspot" },

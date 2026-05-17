@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { toast } from "sonner"
 import { organization } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
@@ -76,6 +77,12 @@ export default function CreateOrgPage() {
           {loading ? t("creating") : t("createOrg")}
         </Button>
       </form>
+      <p className="mt-4 text-center text-sm text-zinc-500">
+        Joining an existing team?{" "}
+        <Link href="/dashboard" className="text-indigo-600 hover:underline">
+          Skip — accept an invitation instead
+        </Link>
+      </p>
     </>
   )
 }

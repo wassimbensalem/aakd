@@ -267,12 +267,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isPending, session, router])
 
-  useEffect(() => {
-    if (!isPending && !orgPending && session?.user && !activeOrg) {
-      router.replace("/create-org")
-    }
-  }, [isPending, orgPending, session, activeOrg, router])
-
   if (isPending || orgPending) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -286,6 +280,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!session?.user) return null
+
+  // User is authenticated but has no active org yet — they registered without
+  // creating one (e.g. planning to join via invitation). Show a holding screen
+  // instead of redirecting so accept-invitation can resolve naturally.
+  if (!activeOrg) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 gap-6">
+        <AakdLogoMark size={36} />
+        <div className="text-center space-y-1.5">
+          <h1 className="text-lg font-semibold text-foreground">No organization yet</h1>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            Create a new organization or accept an email invitation from your team.
+          </p>
+        </div>
+        <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+          <Button className="w-full" onClick={() => router.push("/create-org")}>
+            Create organization
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            Waiting for an invite? Check your email and click the invitation link.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const userName = session.user.name ?? ""
   const userEmail = session.user.email ?? ""

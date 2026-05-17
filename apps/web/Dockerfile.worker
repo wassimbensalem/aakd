@@ -26,6 +26,7 @@ COPY apps/web/lib ./apps/web/lib
 COPY apps/web/tsconfig.json ./apps/web/
 COPY apps/web/tsconfig.worker.json ./apps/web/
 COPY apps/web/.npmrc ./apps/web/
+COPY worker/ ./worker/
 
 # Switch to the web package directory so relative paths + binaries align
 WORKDIR /app/apps/web

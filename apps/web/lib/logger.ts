@@ -13,6 +13,7 @@
  */
 
 import pino from "pino"
+import { trace } from "@opentelemetry/api"
 
 const isDev = process.env.NODE_ENV !== "production"
 
@@ -68,13 +69,25 @@ export function createLogger(context: Record<string, unknown>) {
 }
 
 /**
+ * Returns the current OTel trace ID and span ID if a trace is active.
+ * Returns empty strings when OTel is disabled or no trace is active.
+ */
+export function getTraceContext(): { traceId: string; spanId: string } {
+  const span = trace.getActiveSpan()
+  if (!span) return { traceId: "", spanId: "" }
+  const ctx = span.spanContext()
+  return { traceId: ctx.traceId, spanId: ctx.spanId }
+}
+
+/**
  * Request-scoped child logger — binds requestId to every log line.
- * Use this inside API route handlers after resolveAuth() to correlate all
- * logs for a single request in Datadog/CloudWatch.
+ * When OTel is active, automatically includes traceId and spanId so logs can
+ * be correlated with traces in Jaeger/Datadog/Tempo.
  *
  *   const log = requestLogger(ctx.requestId)
  *   log.error({ err, contractId }, "[PATCH /contracts/:id] update error")
  */
 export function requestLogger(requestId: string) {
-  return logger.child({ requestId })
+  const { traceId, spanId } = getTraceContext()
+  return logger.child({ requestId, ...(traceId ? { traceId, spanId } : {}) })
 }

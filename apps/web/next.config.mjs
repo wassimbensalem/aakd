@@ -18,6 +18,8 @@ const nextConfig = {
   // Setting this tells Next.js to trace dependencies from the monorepo
   // root so the standalone bundle includes packages like 'next' itself.
   experimental: {
+    // Required for the instrumentation.ts hook (OpenTelemetry bootstrap)
+    instrumentationHook: true,
     outputFileTracingRoot: path.join(__dirname, "../../"),
     // pdf-parse v1 runs a test file on import — keep it out of the Next.js
     // bundle so it loads at runtime via Node.js require, not at build time.

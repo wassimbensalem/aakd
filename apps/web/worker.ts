@@ -12,6 +12,11 @@ import path from "path"
 // Load env before any other imports that read process.env
 dotenv.config({ path: path.resolve(__dirname, ".env.local") })
 
+// Initialise OTel after dotenv so env vars are available, before any
+// instrumented libraries (ioredis, Prisma) are used.
+import { initOtel } from "./lib/otel"
+initOtel("clauseflow-worker")
+
 import crypto from "node:crypto"
 import { promisify } from "node:util"
 import { exec } from "node:child_process"

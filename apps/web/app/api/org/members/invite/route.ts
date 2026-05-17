@@ -2,6 +2,7 @@ import { resolveAuth, requireWriteScope } from "@/lib/auth/middleware"
 import { hasRole, type Role } from "@/lib/auth/roles"
 import { prisma } from "@/lib/db/client"
 import { sendInvitationEmail } from "@/lib/email/invitation"
+import { logger } from "@/lib/logger"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { randomBytes } from "crypto"
 import { z } from "zod"
@@ -135,9 +136,10 @@ export async function POST(req: Request) {
   // If the invitee already has an account, also deliver an in-app notification.
   // Stored under the inviting org's ID (valid FK); the notifications API widens
   // the query to include org.invited events regardless of the user's active org.
+  // Awaited (not fireAndLog) so failures are visible in logs and not silently swallowed.
   if (existingUser) {
-    fireAndLog(
-      prisma.notification.create({
+    try {
+      await prisma.notification.create({
         data: {
           userId: existingUser.id,
           organizationId: ctx.organizationId,
@@ -145,9 +147,10 @@ export async function POST(req: Request) {
           title: "You've been invited",
           body: `${inviterName} invited you to join ${orgName}. Check your email to accept.`,
         },
-      }),
-      "notification.create:org.invited",
-    )
+      })
+    } catch (err) {
+      logger.error({ err }, "[invite] notification.create:org.invited failed")
+    }
   }
 
   return Response.json({ id: invitation.id, email: invitation.email, role: invitation.role }, { status: 201 })

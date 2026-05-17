@@ -65,9 +65,14 @@ function createPrismaClient() {
             args = scopedArgs as typeof args
           } else if (operation === "create") {
             const scopedArgs = { ...args } as ScopedQueryArgs
+            // Use the scalar organizationId rather than the relation connect object.
+            // Using { organization: { connect } } alongside an explicit organizationId
+            // scalar in the route data causes PrismaClientValidationError — Prisma 7
+            // rejects both at the same time. Scalar injection is safe because every
+            // model in ORG_SCOPED_MODELS has a direct organizationId column.
             scopedArgs.data = {
-              ...scopedArgs.data,
-              organization: { connect: { id: ctx.organizationId } },
+              organizationId: ctx.organizationId,
+              ...scopedArgs.data, // explicit route data wins (already org-scoped by resolveAuth)
             }
             args = scopedArgs as typeof args
           } else if (operation === "upsert") {

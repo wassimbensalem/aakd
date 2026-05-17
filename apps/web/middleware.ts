@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { randomUUID } from "crypto"
 import { LOCALES, DEFAULT_LOCALE } from "@/lib/i18n/config"
 
 // Routes that don't require authentication
@@ -31,7 +30,7 @@ function ensureLocaleCookie(req: NextRequest, res: NextResponse) {
 
 export function middleware(req: NextRequest) {
   // Propagate or generate a request ID for log correlation
-  const requestId = req.headers.get("x-request-id") ?? randomUUID()
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID()
 
   const { pathname } = req.nextUrl
 

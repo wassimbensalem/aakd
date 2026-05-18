@@ -24,7 +24,7 @@ function getS3(): S3Client {
 }
 
 function getBucket(): string {
-  return process.env.STORAGE_BUCKET ?? "clauseflow"
+  return process.env.STORAGE_BUCKET ?? "aakd"
 }
 
 export const storage = {

@@ -161,12 +161,12 @@ export default function BillingPage() {
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Aakd is open-source and self-hosted. Billing management is available
-              in the hosted cloud version at clauseflow.io.
+              in the hosted cloud version at aakd.io.
             </p>
           </div>
           <div className="shrink-0 flex gap-2">
             <Link
-              href="https://clauseflow.io"
+              href="https://aakd.io"
               target="_blank"
               className="inline-flex items-center h-8 px-3 text-xs font-medium rounded-[var(--radius)] bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
             >

@@ -148,7 +148,7 @@ export async function sendEventNotificationEmail(
 
   const transporter = getTransporter()
   await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "noreply@clauseflow.io",
+    from: process.env.SMTP_FROM ?? "noreply@aakd.io",
     to: params.to,
     subject,
     html: buildEventHtml(params, appUrl),

@@ -122,7 +122,7 @@ export async function sendAlertEmail(alert: ContractAlertWithContract): Promise<
 
   const transporter = getTransporter()
   await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "noreply@clauseflow.io",
+    from: process.env.SMTP_FROM ?? "noreply@aakd.io",
     to,
     subject,
     html: buildAlertHtml(alert),

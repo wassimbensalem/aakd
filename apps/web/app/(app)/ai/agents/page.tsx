@@ -160,7 +160,7 @@ export default function AIAgentsPage() {
             </p>
           </div>
           <Link
-            href="mailto:hello@clauseflow.io"
+            href="mailto:hello@aakd.io"
             target="_blank"
             className="shrink-0 inline-flex items-center h-8 px-3 text-xs font-medium rounded-[var(--radius)] bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
           >

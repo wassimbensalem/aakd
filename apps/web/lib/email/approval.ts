@@ -63,7 +63,7 @@ export async function sendApprovalRequestEmail(params: ApprovalRequestEmailParam
 
   const transporter = getTransporter()
   await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "noreply@clauseflow.io",
+    from: process.env.SMTP_FROM ?? "noreply@aakd.io",
     to: params.to,
     subject: `[Aakd] Approval requested — ${params.contractTitle}`,
     html: buildApprovalRequestHtml(params),
@@ -115,7 +115,7 @@ export async function sendApprovalRejectionEmail(params: ApprovalRejectionEmailP
 
   const transporter = getTransporter()
   await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "noreply@clauseflow.io",
+    from: process.env.SMTP_FROM ?? "noreply@aakd.io",
     to: params.to,
     subject: `[Aakd] Approval rejected — ${params.contractTitle}`,
     html: buildApprovalRejectionHtml(params),

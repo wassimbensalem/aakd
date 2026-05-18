@@ -149,7 +149,7 @@ export default function AICreatePage() {
               Guided AI contracting is available in the Aakd Cloud plan.
             </p>
             <Link
-              href="mailto:hello@clauseflow.io"
+              href="mailto:hello@aakd.io"
               target="_blank"
               className="inline-flex items-center h-9 px-4 text-sm font-medium rounded-[var(--radius)] bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
             >

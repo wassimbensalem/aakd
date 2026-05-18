@@ -28,7 +28,7 @@ export const auth = betterAuth({
           : undefined,
       })
       await transporter.sendMail({
-        from: process.env.SMTP_FROM ?? "noreply@clauseflow.io",
+        from: process.env.SMTP_FROM ?? "noreply@aakd.io",
         to: user.email,
         subject: "[Aakd] Reset your password",
         html: `

@@ -52,7 +52,7 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
 
   const transporter = getTransporter()
   await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "noreply@clauseflow.io",
+    from: process.env.SMTP_FROM ?? "noreply@aakd.io",
     to: params.to,
     subject: `You've been invited to ${params.organizationName} on Aakd`,
     html: buildInvitationHtml(params),

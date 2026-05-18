@@ -1172,7 +1172,7 @@ export async function GET(req: Request) {
   if (!ctx) return new Response("Unauthorized", { status: 401 })
 
   return Response.json({
-    name: "ClauseFlow MCP",
+    name: "Aakd MCP",
     protocol: "json-rpc-2.0",
     endpoint: "/api/mcp",
     organizationId: ctx.organizationId,

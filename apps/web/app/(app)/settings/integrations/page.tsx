@@ -213,7 +213,21 @@ function CloudStorageSection() {
 
 // ─── Communication Section ────────────────────────────────────────────────
 
-function CommunicationSection() {
+function CommunicationSection({
+  slackCount,
+  teamsCount,
+}: {
+  slackCount: number
+  teamsCount: number
+}) {
+  function channelBadge(count: number) {
+    if (count > 0) {
+      const label = `${count} channel${count === 1 ? "" : "s"}`
+      return <StatusBadge label={label} variant="success" />
+    }
+    return <StatusBadge label="Not configured" variant="muted" />
+  }
+
   return (
     <div className="space-y-3">
       <div className="rounded-[var(--radius)] border border-border bg-card p-4 flex items-start gap-3">
@@ -223,7 +237,7 @@ function CommunicationSection() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <h3 className="text-sm font-semibold">Slack</h3>
-            <StatusBadge label="Configured via Notifications" variant="success" />
+            {channelBadge(slackCount)}
           </div>
           <p className="text-xs text-muted-foreground mb-2">
             Receive contract event notifications in your Slack channels.
@@ -244,7 +258,7 @@ function CommunicationSection() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <h3 className="text-sm font-semibold">Microsoft Teams</h3>
-            <StatusBadge label="Configured via Notifications" variant="success" />
+            {channelBadge(teamsCount)}
           </div>
           <p className="text-xs text-muted-foreground mb-2">
             Receive contract event notifications in Microsoft Teams channels.
@@ -543,6 +557,8 @@ export default function IntegrationsPage() {
   const [role, setRole] = useState<string | null>(null)
   const [roleLoaded, setRoleLoaded] = useState(false) // kept to gate canManage after fetch
   const [activeCategory, setActiveCategory] = useState<Category>("CRM")
+  const [slackCount, setSlackCount] = useState(0)
+  const [teamsCount, setTeamsCount] = useState(0)
 
   async function fetchStatus(signal?: AbortSignal) {
     try {
@@ -570,6 +586,20 @@ export default function IntegrationsPage() {
   useEffect(() => {
     const controller = new AbortController()
     fetchStatus(controller.signal)
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch("/api/org/notification-channels", { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return
+        const channels: { channelType: string }[] = data.channels ?? []
+        setSlackCount(channels.filter((c) => c.channelType === "slack").length)
+        setTeamsCount(channels.filter((c) => c.channelType === "teams").length)
+      })
+      .catch(() => {})
     return () => controller.abort()
   }, [])
 
@@ -685,7 +715,9 @@ export default function IntegrationsPage() {
         )}
         {activeCategory === "E-Signature" && <ESignatureSection />}
         {activeCategory === "Cloud Storage" && <CloudStorageSection />}
-        {activeCategory === "Communication" && <CommunicationSection />}
+        {activeCategory === "Communication" && (
+          <CommunicationSection slackCount={slackCount} teamsCount={teamsCount} />
+        )}
         {activeCategory === "Accounting" && <AccountingSection />}
         {activeCategory === "Developer" && <DeveloperSection />}
       </div>

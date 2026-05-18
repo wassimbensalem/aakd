@@ -1,0 +1,16 @@
+app = "aakd-worker"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "apps/web/Dockerfile.worker"
+
+[env]
+  NODE_ENV = "production"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+[restart]
+  policy = "always"
+  max_retries = 5

@@ -1,7 +1,10 @@
 import { Queue } from "bullmq"
 
+const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379"
 const connection = {
-  url: process.env.REDIS_URL ?? "redis://localhost:6379",
+  url: REDIS_URL,
+  maxRetriesPerRequest: null,
+  ...(REDIS_URL.startsWith("rediss://") ? { tls: {} } : {}),
 }
 
 // ─── Job data types ────────────────────────────────────────────────────────────

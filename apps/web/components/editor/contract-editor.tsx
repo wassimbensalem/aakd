@@ -809,7 +809,7 @@ export function ContractEditor({
 
   // ─── Comment button visibility ─────────────────────────────────────────────
 
-  const hasSelection = editor ? !editor.state.selection.empty : false
+  const _hasSelection = editor ? !editor.state.selection.empty : false
 
   // ─── Selection preservation for toolbar dropdowns ─────────────────────────
   // Radix Select steals editor focus on open. Save selection before open,

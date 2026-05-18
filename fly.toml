@@ -11,6 +11,6 @@ primary_region = "cdg"
   size = "shared-cpu-1x"
   memory = "256mb"
 
-[restart]
+[[restart]]
   policy = "always"
   max_retries = 5

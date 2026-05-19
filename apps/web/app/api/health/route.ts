@@ -25,6 +25,26 @@ async function probeDb(): Promise<"ok" | "error"> {
 async function probeRedis(): Promise<"ok" | "error"> {
   const url = process.env.REDIS_URL
   if (!url) return "error"
+
+  // Upstash exposes an HTTP REST API — prefer it over raw TCP/TLS in
+  // serverless environments where ioredis socket connections are unreliable.
+  if (url.includes(".upstash.io")) {
+    try {
+      const parsed = new URL(url)
+      const restUrl = `https://${parsed.hostname}/ping`
+      const token = parsed.password
+      const res = await withTimeout(
+        fetch(restUrl, { headers: { Authorization: `Bearer ${token}` } }),
+        PROBE_TIMEOUT_MS,
+      )
+      const body = (await res.json()) as { result?: string }
+      return res.ok && body.result === "PONG" ? "ok" : "error"
+    } catch {
+      return "error"
+    }
+  }
+
+  // Self-hosted Redis — fall back to ioredis TCP probe.
   let client: IORedis | null = null
   try {
     client = new IORedis(url, {

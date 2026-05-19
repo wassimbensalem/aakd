@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Copy, Eye, LayoutTemplate, Loader2, MoreHorizontal, Plus, Trash2 } from "lucide-react"
+import { Copy, Eye, FileText, LayoutTemplate, Loader2, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -52,7 +52,7 @@ interface TemplateSummary {
 
 const CONTRACT_TYPES = ["NDA", "MSA", "SOW", "EMPLOYMENT", "VENDOR", "CUSTOMER", "OTHER"] as const
 
-type SortOption = "recent" | "az"
+type SortOption = "recent" | "oldest" | "az" | "za"
 
 export default function TemplatesPage() {
   const router = useRouter()
@@ -247,6 +247,8 @@ export default function TemplatesPage() {
     })
     .sort((a, b) => {
       if (sort === "az") return a.name.localeCompare(b.name)
+      if (sort === "za") return b.name.localeCompare(a.name)
+      if (sort === "oldest") return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
       // "recent" = by updatedAt desc (default)
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     })
@@ -310,8 +312,10 @@ export default function TemplatesPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="recent">Recently updated</SelectItem>
-            <SelectItem value="az">A–Z</SelectItem>
+            <SelectItem value="recent">Newest</SelectItem>
+            <SelectItem value="oldest">Oldest</SelectItem>
+            <SelectItem value="az">Name A–Z</SelectItem>
+            <SelectItem value="za">Name Z–A</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -349,37 +353,52 @@ export default function TemplatesPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {displayed.map((t) => (
-              <div key={t.id} className="rounded-[var(--radius)] border border-border bg-card p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-foreground truncate">{t.name}</p>
-                    {t.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{t.description}</p>
+              <div
+                key={t.id}
+                className="group rounded-[var(--radius)] border border-border bg-card flex flex-col overflow-hidden hover:border-border/80 hover:shadow-sm transition-all"
+              >
+                {/* Card top: category badge + menu */}
+                <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                  <div className="min-h-[20px]">
+                    {t.contractType ? (
+                      <TypeBadge type={t.contractType as never} />
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        General
+                      </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {t.contractType && (
-                      <TypeBadge type={t.contractType as never} />
-                    )}
-                    {canManage && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus:outline-none disabled:pointer-events-none disabled:opacity-50">
-                            <MoreHorizontal className="size-4" />
-                            <span className="sr-only">More options</span>
-                          </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" side="bottom">
-                          <DropdownMenuItem
-                            onSelect={() => router.push(`/templates/${t.id}/edit`)}
-                          >
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => duplicate(t)}
-                            disabled={duplicatingId === t.id}
-                          >
-                            <Copy className="size-3.5" />
-                            {duplicatingId === t.id ? "Duplicating…" : "Duplicate"}
-                          </DropdownMenuItem>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-foreground transition-all focus:opacity-100 focus:outline-none disabled:pointer-events-none disabled:opacity-50">
+                      <MoreHorizontal className="size-4" />
+                      <span className="sr-only">More options</span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" side="bottom">
+                      {canManage && (
+                        <DropdownMenuItem
+                          onSelect={() => router.push(`/templates/${t.id}/edit`)}
+                        >
+                          <Pencil className="size-3.5" />
+                          Edit
+                        </DropdownMenuItem>
+                      )}
+                      {canManage && (
+                        <DropdownMenuItem
+                          onSelect={() => duplicate(t)}
+                          disabled={duplicatingId === t.id}
+                        >
+                          <Copy className="size-3.5" />
+                          {duplicatingId === t.id ? "Duplicating…" : "Duplicate"}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onSelect={() => setPreviewTemplate(t)}
+                      >
+                        <Eye className="size-3.5" />
+                        Preview
+                      </DropdownMenuItem>
+                      {canManage && (
+                        <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             variant="destructive"
@@ -388,36 +407,59 @@ export default function TemplatesPage() {
                             <Trash2 className="size-3.5" />
                             Archive
                           </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {/* Card body: icon + title + description */}
+                <div className="flex-1 px-4 pb-3 space-y-1">
+                  <div className="flex items-start gap-2.5">
+                    <div className="mt-0.5 shrink-0 rounded-md bg-muted p-1.5">
+                      <FileText className="size-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground leading-tight truncate">{t.name}</p>
+                      {t.description ? (
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5 leading-relaxed">
+                          {t.description}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground/50 mt-0.5 italic">No description</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Stats row */}
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-3 px-4 py-2.5 border-t border-border/50 text-xs text-muted-foreground">
                   {typeof t.variableCount === "number" && (
-                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium">
-                      {t.variableCount} variable{t.variableCount !== 1 ? "s" : ""}
+                    <span className="inline-flex items-center gap-1">
+                      <span className="size-1.5 rounded-full bg-amber-400 shrink-0" />
+                      {t.variableCount} var{t.variableCount !== 1 ? "s" : ""}
                     </span>
                   )}
-                  {typeof t.usageCount === "number" && t.usageCount > 0 && (
-                    <span>Used {t.usageCount.toLocaleString()}×</span>
-                  )}
-                  {t.lastUsedAt ? (
-                    <span>Last used <RelativeTime date={t.lastUsedAt} /></span>
-                  ) : (
-                    <span>Updated <RelativeTime date={t.updatedAt} /></span>
-                  )}
-                  <span className="text-muted-foreground/60">by {t.createdBy.name}</span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="size-1.5 rounded-full bg-muted-foreground/30 shrink-0" />
+                    {t.lastUsedAt ? (
+                      <>Last used <RelativeTime date={t.lastUsedAt} /></>
+                    ) : (
+                      <>Updated <RelativeTime date={t.updatedAt} /></>
+                    )}
+                  </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => setUsingTemplateId(t.id)}>Use template</Button>
+                {/* Action buttons */}
+                <div className="flex items-center gap-2 px-4 pb-4 pt-1">
+                  <Button size="sm" className="flex-1" onClick={() => setUsingTemplateId(t.id)}>
+                    Use Template
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setPreviewTemplate(t)}
+                    title="Preview template"
                   >
                     <Eye className="size-3.5" />
                     Preview

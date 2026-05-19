@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { ChevronRight, Plus, ScanText, Trash2 } from "lucide-react"
+import { ChevronRight, Plus, ScanText, Settings2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -51,6 +51,9 @@ export function TemplateEditorPage({ templateId }: { templateId?: string }) {
   const [variables, setVariables] = useState<Variable[]>([])
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
+
+  // Variables Sheet state
+  const [showVariablesSheet, setShowVariablesSheet] = useState(false)
 
   // Sheet for adding a new variable
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -215,7 +218,7 @@ export function TemplateEditorPage({ templateId }: { templateId?: string }) {
       </nav>
 
       <div className="grid grid-cols-12 gap-4">
-        {/* Sidebar */}
+        {/* Sidebar — metadata only */}
         <div className="col-span-12 md:col-span-3 space-y-4">
           <div className="rounded-lg border border-border bg-card p-4 space-y-3">
             <div className="space-y-1.5">
@@ -253,41 +256,108 @@ export function TemplateEditorPage({ templateId }: { templateId?: string }) {
             </div>
           </div>
 
-          {/* Variables panel */}
-          <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+          {/* Variables summary card */}
+          <div className="rounded-lg border border-border bg-card p-4 space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Variables</p>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs gap-1 text-muted-foreground"
-                  onClick={handleScan}
-                  title="Scan document for undeclared variable placeholders"
-                >
-                  <ScanText className="size-3.5" />
-                  Scan
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7"
-                  onClick={() => {
-                    setNewVar({ name: "", label: "", type: "text", required: true, defaultValue: "" })
-                    setShowAddSheet(true)
-                  }}
-                  disabled={variables.length >= 50}
-                >
-                  <Plus className="size-3.5" /> Add
-                </Button>
+              <span className="text-xs text-muted-foreground tabular-nums">{variables.length}/50</span>
+            </div>
+            {variables.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No variables declared yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {variables.slice(0, 6).map((v) => (
+                  <span
+                    key={v.name}
+                    className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-700 font-medium"
+                  >
+                    {v.label}
+                  </span>
+                ))}
+                {variables.length > 6 && (
+                  <span className="text-[11px] text-muted-foreground">+{variables.length - 6} more</span>
+                )}
               </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-8 text-xs gap-1.5 mt-1"
+              onClick={() => setShowVariablesSheet(true)}
+            >
+              <Settings2 className="size-3.5" />
+              Manage Variables
+            </Button>
+          </div>
+        </div>
+
+        {/* Editor area */}
+        <div className="col-span-12 md:col-span-9 space-y-3">
+          <div className="flex items-center justify-end gap-2">
+            <Link href="/templates">
+              <Button variant="outline">Cancel</Button>
+            </Link>
+            <Button onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save Template"}
+            </Button>
+          </div>
+          <ContractEditor
+            initialContent={content}
+            initialVersion={0}
+            onChange={handleEditorChange}
+            showVariablesPanel={false}
+            variables={variables.map((v) => ({ name: v.name, label: v.label, required: v.required }))}
+            enableAutoSave={false}
+          />
+        </div>
+      </div>
+
+      {/* Variables Sheet */}
+      <Sheet open={showVariablesSheet} onOpenChange={(open) => { if (!open) setShowVariablesSheet(false) }}>
+        <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 overflow-hidden">
+          <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+            <SheetTitle>Variables</SheetTitle>
+            <p className="text-xs text-muted-foreground">
+              Variables let users fill in contract-specific values when they use this template.
+              Use <code className="bg-muted px-1 rounded text-[11px]">&#123;&#123;variable_name&#125;&#125;</code> in the editor to insert them.
+            </p>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            {/* Scan button */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => {
+                  handleScan()
+                  setShowVariablesSheet(true)
+                }}
+                title="Scan document for undeclared variable placeholders"
+              >
+                <ScanText className="size-3.5" />
+                Scan document
+              </Button>
+              <Button
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => {
+                  setNewVar({ name: "", label: "", type: "text", required: true, defaultValue: "" })
+                  setShowAddSheet(true)
+                }}
+                disabled={variables.length >= 50}
+              >
+                <Plus className="size-3.5" />
+                Add variable
+              </Button>
             </div>
 
             {/* Scan results banner */}
             {scanResults !== null && scanResults.length > 0 && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 space-y-2">
-                <p className="font-medium">Found undeclared:</p>
-                <p className="font-mono">{scanResults.map((n) => `{{${n}}}`).join(", ")}</p>
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-2">
+                <p className="font-medium">Found undeclared variables:</p>
+                <p className="font-mono break-all">{scanResults.map((n) => `{{${n}}}`).join(", ")}</p>
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -308,50 +378,48 @@ export function TemplateEditorPage({ templateId }: { templateId?: string }) {
               </div>
             )}
 
-            <div className="space-y-1.5">
+            {/* Variable list */}
+            <div className="space-y-2">
               {variables.length === 0 && (
-                <p className="text-xs text-muted-foreground">No variables declared yet.</p>
+                <p className="text-xs text-muted-foreground py-2">
+                  No variables declared yet. Use &ldquo;Scan document&rdquo; to detect placeholders, or add variables manually.
+                </p>
               )}
               {variables.map((v) => (
-                <div key={v.name} className="rounded border border-border px-2 py-1.5 text-xs flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground truncate">{v.label}</p>
-                    <p className="text-muted-foreground truncate">{v.name} · {v.type}{v.required ? " · req" : ""}</p>
+                <div
+                  key={v.name}
+                  className="rounded-lg border border-border bg-card px-3 py-2.5 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground leading-tight">{v.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <span className="font-mono">{v.name}</span>
+                      <span className="mx-1">·</span>
+                      {v.type}
+                      {v.required && <span className="mx-1 text-red-500">· required</span>}
+                      {v.defaultValue && <span className="mx-1">· default: {v.defaultValue}</span>}
+                    </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeVariable(v.name)}
-                    className="text-destructive hover:text-destructive/80 transition-colors"
+                    className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
                     title="Remove variable"
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2 className="size-4" />
                   </button>
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-        {/* Editor area */}
-        <div className="col-span-12 md:col-span-9 space-y-3">
-          <div className="flex items-center justify-end gap-2">
-            <Link href="/templates">
-              <Button variant="outline">Cancel</Button>
-            </Link>
-            <Button onClick={save} disabled={saving}>
-              {saving ? "Saving…" : "Save Template"}
+          <div className="px-6 py-4 border-t border-border shrink-0">
+            <Button className="w-full" onClick={() => setShowVariablesSheet(false)}>
+              Done
             </Button>
           </div>
-          <ContractEditor
-            initialContent={content}
-            initialVersion={0}
-            onChange={handleEditorChange}
-            showVariablesPanel
-            variables={variables.map((v) => ({ name: v.name, label: v.label, required: v.required }))}
-            enableAutoSave={false}
-          />
-        </div>
-      </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Add Variable Sheet */}
       <Sheet open={showAddSheet} onOpenChange={(open) => !open && setShowAddSheet(false)}>

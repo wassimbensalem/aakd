@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { CircleHelp } from "lucide-react"
+import { ChevronLeft, ChevronRight, CircleHelp, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -23,6 +23,72 @@ interface FullTemplate {
   name: string
   variables: TemplateVariable[]
   content?: unknown
+}
+
+// ---------------------------------------------------------------------------
+// Variable grouping — splits >5 variables into logical steps
+// ---------------------------------------------------------------------------
+type VariableGroup = { label: string; vars: TemplateVariable[] }
+
+function groupVariables(vars: TemplateVariable[]): VariableGroup[] {
+  if (vars.length <= 5) {
+    return [{ label: "Variables", vars }]
+  }
+
+  const parties: TemplateVariable[] = []
+  const dates: TemplateVariable[] = []
+  const financial: TemplateVariable[] = []
+  const other: TemplateVariable[] = []
+
+  for (const v of vars) {
+    const lower = v.name.toLowerCase()
+    if (
+      lower.includes("party") ||
+      lower.includes("counterparty") ||
+      lower.includes("company") ||
+      lower.includes("name") ||
+      lower.includes("address") ||
+      lower.includes("email") ||
+      lower.includes("signatory")
+    ) {
+      parties.push(v)
+    } else if (
+      lower.includes("date") ||
+      lower.includes("term") ||
+      lower.includes("duration") ||
+      lower.includes("period") ||
+      lower.includes("expir") ||
+      lower.includes("renew")
+    ) {
+      dates.push(v)
+    } else if (
+      lower.includes("value") ||
+      lower.includes("amount") ||
+      lower.includes("price") ||
+      lower.includes("fee") ||
+      lower.includes("cost") ||
+      lower.includes("payment") ||
+      lower.includes("salary") ||
+      lower.includes("rate")
+    ) {
+      financial.push(v)
+    } else {
+      other.push(v)
+    }
+  }
+
+  const groups: VariableGroup[] = []
+  if (parties.length > 0) groups.push({ label: "Parties", vars: parties })
+  if (dates.length > 0) groups.push({ label: "Dates", vars: dates })
+  if (financial.length > 0) groups.push({ label: "Financial", vars: financial })
+  if (other.length > 0) groups.push({ label: "Other", vars: other })
+
+  // Fallback — if all went to one bucket, don't show steps
+  if (groups.length === 1) {
+    return [{ label: "Variables", vars }]
+  }
+
+  return groups
 }
 
 // ---------------------------------------------------------------------------
@@ -133,10 +199,13 @@ export function FillVariablesDialog({
   const [template, setTemplate] = useState<FullTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [autoFilling, setAutoFilling] = useState(false)
   const [title, setTitle] = useState("")
   const [values, setValues] = useState<Record<string, string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [previewHtml, setPreviewHtml] = useState("")
+  const [stepIndex, setStepIndex] = useState(0)
+  const [groups, setGroups] = useState<VariableGroup[]>([])
   const orgFetchedRef = useRef(false)
 
   useEffect(() => {
@@ -148,6 +217,7 @@ export function FillVariablesDialog({
         const declared: TemplateVariable[] = Array.isArray(tpl.variables) ? tpl.variables : []
         setTemplate({ id: tpl.id, name: tpl.name, variables: declared, content: tpl.content })
         setTitle(tpl.name)
+        setGroups(groupVariables(declared))
 
         // Smart auto-populate defaults
         const initial: Record<string, string> = {}
@@ -209,6 +279,76 @@ export function FillVariablesDialog({
   const titleFilled = title.trim().length > 0
   const totalRequired = requiredVars.length + 1 // +1 for title
   const totalFilled = filledRequired + (titleFilled ? 1 : 0)
+
+  const isMultiStep = groups.length > 1
+  const currentGroup = groups[stepIndex] ?? null
+  const isFirstStep = stepIndex === 0
+  const isLastStep = stepIndex === groups.length - 1
+
+  async function handleAutoFill() {
+    setAutoFilling(true)
+    try {
+      // Attempt to pull org details for auto-fill hints
+      const orgRes = await fetch("/api/org")
+      if (!orgRes.ok) {
+        toast.info("Auto-fill requires connected contracts — coming soon.")
+        return
+      }
+      const org = await orgRes.json()
+      const newValues: Record<string, string> = { ...values }
+      let filled = 0
+      for (const v of template?.variables ?? []) {
+        if (newValues[v.name]) continue // skip already-filled
+        const lower = v.name.toLowerCase()
+        if ((lower === "company_name" || lower === "your_company" || lower === "our_company") && org?.name) {
+          newValues[v.name] = org.name
+          filled++
+        }
+        if ((lower === "effective_date" || lower === "date") && !newValues[v.name]) {
+          newValues[v.name] = new Date().toISOString().split("T")[0]
+          filled++
+        }
+        if ((lower === "governing_law" || lower === "jurisdiction") && !newValues[v.name]) {
+          newValues[v.name] = org?.country ?? ""
+          if (newValues[v.name]) filled++
+        }
+      }
+      setValues(newValues)
+      if (filled > 0) {
+        toast.success(`Auto-filled ${filled} field${filled > 1 ? "s" : ""} from your org profile`)
+      } else {
+        toast.info("AI auto-fill requires connected contracts — coming soon.")
+      }
+    } catch {
+      toast.info("AI auto-fill requires connected contracts — coming soon.")
+    } finally {
+      setAutoFilling(false)
+    }
+  }
+
+  function validateCurrentStep(): boolean {
+    const newErrors: Record<string, string> = {}
+    // Always validate title on first interaction
+    if (!title.trim()) newErrors.title = "Title is required"
+
+    const varsToValidate = isMultiStep ? (currentGroup?.vars ?? []) : (template?.variables ?? [])
+    for (const v of varsToValidate) {
+      if (v.required && !values[v.name]) {
+        newErrors[v.name] = "This field is required"
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...newErrors }))
+      return false
+    }
+    return true
+  }
+
+  function handleNext() {
+    if (!validateCurrentStep()) return
+    setStepIndex((i) => Math.min(i + 1, groups.length - 1))
+  }
 
   async function handleCreate() {
     if (!template) return
@@ -282,6 +422,28 @@ export function FillVariablesDialog({
                     Create from &ldquo;{template.name}&rdquo;
                   </DialogTitle>
                 </DialogHeader>
+                {isMultiStep && (
+                  <div className="flex items-center gap-1.5 mt-2">
+                    {groups.map((g, i) => (
+                      <button
+                        key={g.label}
+                        type="button"
+                        onClick={() => i < stepIndex && setStepIndex(i)}
+                        className={`h-1.5 rounded-full transition-all ${
+                          i === stepIndex
+                            ? "bg-primary w-6"
+                            : i < stepIndex
+                            ? "bg-primary/40 w-3 cursor-pointer"
+                            : "bg-muted w-3 cursor-not-allowed"
+                        }`}
+                        title={g.label}
+                      />
+                    ))}
+                    <span className="text-xs text-muted-foreground ml-1">
+                      Step {stepIndex + 1} of {groups.length}: {currentGroup?.label}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
@@ -294,31 +456,64 @@ export function FillVariablesDialog({
                   <Progress value={progressPct} />
                 </div>
 
-                {/* Contract title */}
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contract details</p>
-                  <div className="space-y-1">
-                    <Label htmlFor="fill-title">
-                      Title <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="fill-title"
-                      value={title}
-                      onChange={(e) => {
-                        setTitle(e.target.value)
-                        setErrors((prev) => ({ ...prev, title: "" }))
-                      }}
-                      placeholder="e.g. NDA with Acme Corp"
-                    />
-                    {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+                {/* Contract title (always visible) */}
+                {(!isMultiStep || stepIndex === 0) && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contract details</p>
+                    <div className="space-y-1">
+                      <Label htmlFor="fill-title">
+                        Title <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="fill-title"
+                        value={title}
+                        onChange={(e) => {
+                          setTitle(e.target.value)
+                          setErrors((prev) => ({ ...prev, title: "" }))
+                        }}
+                        placeholder="e.g. NDA with Acme Corp"
+                      />
+                      {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Variables */}
-                {template.variables.length > 0 && (
+                {/* Variables for current step */}
+                {(isMultiStep ? currentGroup?.vars ?? [] : template.variables).length > 0 && (
                   <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Variables</p>
-                    {template.variables.map((v) => (
+                    {isMultiStep && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {currentGroup?.label}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={handleAutoFill}
+                          disabled={autoFilling}
+                        >
+                          <Sparkles className="size-3.5" />
+                          {autoFilling ? "Filling…" : "Auto-fill from AI"}
+                        </Button>
+                      </div>
+                    )}
+                    {!isMultiStep && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Variables</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={handleAutoFill}
+                          disabled={autoFilling}
+                        >
+                          <Sparkles className="size-3.5" />
+                          {autoFilling ? "Filling…" : "Auto-fill from AI"}
+                        </Button>
+                      </div>
+                    )}
+                    {(isMultiStep ? currentGroup?.vars ?? [] : template.variables).map((v) => (
                       <div key={v.name} className="space-y-1">
                         <div className="flex items-center gap-1.5">
                           <Label htmlFor={`var-${v.name}`}>
@@ -355,12 +550,42 @@ export function FillVariablesDialog({
 
               {/* Bottom action */}
               <div className="px-5 py-4 border-t border-border shrink-0 flex gap-2">
-                <Button variant="outline" onClick={onClose} disabled={submitting} className="flex-1">
-                  Cancel
-                </Button>
-                <Button onClick={handleCreate} disabled={submitting} className="flex-1">
-                  {submitting ? "Creating…" : "Create Contract"}
-                </Button>
+                {isMultiStep ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => isFirstStep ? onClose() : setStepIndex((i) => i - 1)}
+                      disabled={submitting}
+                      className="flex-1"
+                    >
+                      {isFirstStep ? "Cancel" : (
+                        <>
+                          <ChevronLeft className="size-3.5" />
+                          Back
+                        </>
+                      )}
+                    </Button>
+                    {isLastStep ? (
+                      <Button onClick={handleCreate} disabled={submitting} className="flex-1">
+                        {submitting ? "Creating…" : "Create Contract"}
+                      </Button>
+                    ) : (
+                      <Button onClick={handleNext} className="flex-1">
+                        Next
+                        <ChevronRight className="size-3.5" />
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Button variant="outline" onClick={onClose} disabled={submitting} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreate} disabled={submitting} className="flex-1">
+                      {submitting ? "Creating…" : "Create Contract"}
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 

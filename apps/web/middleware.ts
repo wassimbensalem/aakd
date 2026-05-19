@@ -37,6 +37,7 @@ export function middleware(req: NextRequest) {
 
   // Allow public paths and static assets
   const isPublic =
+    pathname === "/" ||
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")

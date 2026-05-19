@@ -49,7 +49,7 @@ describe("GET /api/mcp — discovery", () => {
 
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.name).toBe("ClauseFlow MCP")
+    expect(body.name).toBe("Aakd MCP")
     expect(body.protocol).toBe("json-rpc-2.0")
     expect(body.endpoint).toBe("/api/mcp")
     expect(body.organizationId).toBe("org-1")

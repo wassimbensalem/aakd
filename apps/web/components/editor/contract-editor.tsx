@@ -43,8 +43,8 @@ import {
   Heading1, Heading2, Heading3,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Indent, Outdent, LayoutTemplate, Image as ImageIcon,
-  Undo, Redo, Link as LinkIcon, Highlighter,
-  MessageSquare, GitBranch, ChevronDown, Plus, Check, BookOpen, Search,
+  Undo, Redo, Link as LinkIcon,
+  GitBranch, ChevronDown, Plus, Check, BookOpen, Search,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -76,6 +76,7 @@ import type { TipTapDoc } from "@/lib/editor/tiptap-types"
 import { SearchAndReplace } from "@/lib/editor/search-and-replace"
 import { ClauseSnippetsPanel } from "./clause-snippets-panel"
 import { FindReplacePanel } from "./find-replace-panel"
+import { FloatingSelectionToolbar } from "./floating-selection-toolbar"
 
 // ─── Custom TemplateVariable extension ───────────────────────────────────────
 
@@ -394,35 +395,6 @@ function normalizeContent(raw: unknown): TipTapDoc {
 
 const FONT_SIZES = ["12px", "14px", "16px", "18px", "20px", "24px", "32px"] as const
 
-// Sentinel used instead of "" so Radix Select can distinguish
-// "Default / None" from "nothing selected" (empty string breaks Radix).
-const COLOR_NONE = "__none__"
-
-// ─── Text colors ───────────────────────────────────────────────────────────────
-
-const TEXT_COLORS = [
-  { label: "Default", value: COLOR_NONE },
-  { label: "Red", value: "#ef4444" },
-  { label: "Orange", value: "#f97316" },
-  { label: "Amber", value: "#f59e0b" },
-  { label: "Green", value: "#22c55e" },
-  { label: "Blue", value: "#3b82f6" },
-  { label: "Indigo", value: "#6366f1" },
-  { label: "Purple", value: "#a855f7" },
-  { label: "Gray", value: "#6b7280" },
-] as const
-
-// ─── Highlight colors ──────────────────────────────────────────────────────────
-
-const HIGHLIGHT_COLORS = [
-  { label: "None", value: COLOR_NONE },
-  { label: "Yellow", value: "#fef08a" },
-  { label: "Green", value: "#bbf7d0" },
-  { label: "Blue", value: "#bfdbfe" },
-  { label: "Pink", value: "#fbcfe8" },
-  { label: "Orange", value: "#fed7aa" },
-] as const
-
 // ─── Props interface ──────────────────────────────────────────────────────────
 
 export interface ContractEditorProps {
@@ -482,17 +454,9 @@ export function ContractEditor({
   const [snippetsPanelOpen, setSnippetsPanelOpen] = useState(false)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
 
-  // ─── Link popover state ────────────────────────────────────────────────────
+  // ─── Link popover state (main toolbar) ────────────────────────────────────
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false)
   const [linkUrl, setLinkUrl] = useState("")
-
-  // ─── Floating toolbar state ────────────────────────────────────────────────
-  const [floatingPos, setFloatingPos] = useState<{ top: number; left: number } | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  // ─── Floating link popover (inside floating toolbar) ──────────────────────
-  const [floatingLinkPopoverOpen, setFloatingLinkPopoverOpen] = useState(false)
-  const [floatingLinkUrl, setFloatingLinkUrl] = useState("")
 
   // These refs are captured by the ProseMirror plugin closure at editor creation.
   // Mutating .current is synchronous and is always visible to the closure on the
@@ -612,23 +576,6 @@ export function ContractEditor({
     // The parent calls this prop function; we replace it by calling our internal function
     // We expose the editor to the parent via a ref-like pattern via the effect
   }, [editor, onAcceptAllChanges])
-
-  // ─── Floating toolbar position ─────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!editor || isReadOnly) return
-    const { from, to, empty } = editor.state.selection
-    if (empty) { setFloatingPos(null); return }
-
-    const start = editor.view.coordsAtPos(from)
-    const end = editor.view.coordsAtPos(to)
-    const containerRect = containerRef.current?.getBoundingClientRect()
-    if (!containerRect) return
-
-    const midX = (start.left + end.left) / 2 - containerRect.left
-    const topY = start.top - containerRect.top - 44 // 44px above
-    setFloatingPos({ top: Math.max(0, topY), left: Math.max(0, midX - 120) })
-  }, [editor?.state.selection, editor, isReadOnly])
 
   // ─── Word count ────────────────────────────────────────────────────────────
 
@@ -782,17 +729,6 @@ export function ContractEditor({
     return (editor.getAttributes("textStyle").fontSize as string | undefined) ?? "14px"
   })()
 
-  const currentColor = (() => {
-    if (!editor) return COLOR_NONE
-    return (editor.getAttributes("textStyle").color as string | undefined) || COLOR_NONE
-  })()
-
-  const currentHighlight = (() => {
-    if (!editor) return COLOR_NONE
-    const attrs = editor.getAttributes("highlight")
-    return (attrs.color as string | undefined) || COLOR_NONE
-  })()
-
   // ─── Active alignment icon helper ─────────────────────────────────────────
 
   const activeAlignIcon = (() => {
@@ -806,10 +742,6 @@ export function ContractEditor({
   // ─── Table helpers ─────────────────────────────────────────────────────────
 
   const isInTable = editor?.isActive("table") ?? false
-
-  // ─── Comment button visibility ─────────────────────────────────────────────
-
-  const _hasSelection = editor ? !editor.state.selection.empty : false
 
   // ─── Selection preservation for toolbar dropdowns ─────────────────────────
   // Radix Select steals editor focus on open. Save selection before open,
@@ -930,13 +862,45 @@ export function ContractEditor({
 
             <ToolbarDivider />
 
-            {/* Group 2: Heading + Font size */}
+            {/* Group 2: Text style — B I U S */}
+            <ToolbarButton
+              active={editor.isActive("bold")}
+              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run() }}
+              title="Bold (Cmd+B)"
+            >
+              <Bold className="size-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("italic")}
+              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run() }}
+              title="Italic (Cmd+I)"
+            >
+              <Italic className="size-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("underline")}
+              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleUnderline().run() }}
+              title="Underline (Cmd+U)"
+            >
+              <UnderlineIcon className="size-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("strike")}
+              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleStrike().run() }}
+              title="Strikethrough (Cmd+Shift+S)"
+            >
+              <Strikethrough className="size-4" />
+            </ToolbarButton>
+
+            <ToolbarDivider />
+
+            {/* Group 3: Paragraph — Heading dropdown + Font size + Align dropdown */}
             <Select
               value={headingValue}
               onOpenChange={(open) => { if (open) saveEditorSelection() }}
               onValueChange={(v) => { restoreEditorSelection(); setHeading(v ?? "p") }}
             >
-              <SelectTrigger className="h-8 w-32 text-sm">
+              <SelectTrigger className="h-8 w-28 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -971,180 +935,7 @@ export function ContractEditor({
               </SelectContent>
             </Select>
 
-            <ToolbarDivider />
-
-            {/* Group 3: Marks — B I U S */}
-            <ToolbarButton
-              active={editor.isActive("bold")}
-              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run() }}
-              title="Bold (Cmd+B)"
-            >
-              <Bold className="size-4" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={editor.isActive("italic")}
-              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run() }}
-              title="Italic (Cmd+I)"
-            >
-              <Italic className="size-4" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={editor.isActive("underline")}
-              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleUnderline().run() }}
-              title="Underline (Cmd+U)"
-            >
-              <UnderlineIcon className="size-4" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={editor.isActive("strike")}
-              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleStrike().run() }}
-              title="Strikethrough (Cmd+Shift+S)"
-            >
-              <Strikethrough className="size-4" />
-            </ToolbarButton>
-
-            <ToolbarDivider />
-
-            {/* Group 4: Link (Popover) */}
-            <Popover
-              open={linkPopoverOpen}
-              onOpenChange={(open) => {
-                setLinkPopoverOpen(open)
-                if (open) {
-                  setLinkUrl(editor.getAttributes("link").href ?? "")
-                } else {
-                  setLinkUrl("")
-                }
-              }}
-            >
-              <PopoverTrigger
-                title="Insert link (Cmd+K)"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  if (editor.isActive("link")) {
-                    editor.chain().focus().unsetLink().run()
-                    return
-                  }
-                  setLinkUrl(editor.getAttributes("link").href ?? "")
-                  setLinkPopoverOpen(true)
-                }}
-                className={cn(
-                  "h-8 w-8 inline-flex items-center justify-center rounded text-zinc-700 hover:bg-zinc-100",
-                  editor.isActive("link") && "bg-zinc-100 text-indigo-600",
-                )}
-              >
-                <LinkIcon className="size-4" />
-              </PopoverTrigger>
-              <PopoverContent className="w-72 p-3">
-                <p className="text-xs font-medium text-zinc-700 mb-2">Insert link</p>
-                <div className="flex gap-2">
-                  <Input
-                    value={linkUrl}
-                    onChange={(e) => setLinkUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="h-8 text-sm flex-1"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        if (linkUrl) {
-                          editor.chain().focus().setLink({ href: linkUrl }).run()
-                        }
-                        setLinkPopoverOpen(false)
-                        setLinkUrl("")
-                      }
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    className="h-8 px-3 text-xs"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      if (linkUrl) {
-                        editor.chain().focus().setLink({ href: linkUrl }).run()
-                      }
-                      setLinkPopoverOpen(false)
-                      setLinkUrl("")
-                    }}
-                  >
-                    Set link
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Text color */}
-            <Select
-              value={currentColor}
-              onOpenChange={(open) => { if (open) saveEditorSelection() }}
-              onValueChange={(v) => {
-                restoreEditorSelection()
-                if (!v || v === COLOR_NONE) {
-                  editor.chain().focus().unsetColor().run()
-                } else {
-                  editor.chain().focus().setColor(v).run()
-                }
-              }}
-            >
-              <SelectTrigger className="h-8 w-8 p-0 flex items-center justify-center border-zinc-200">
-                <div
-                  className="size-4 rounded-sm border border-zinc-300"
-                  style={{ backgroundColor: currentColor === COLOR_NONE ? "#000000" : currentColor }}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {TEXT_COLORS.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className="size-3 rounded-sm border border-zinc-200 inline-block"
-                        style={{ backgroundColor: c.value === COLOR_NONE ? "#000000" : c.value }}
-                      />
-                      {c.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Highlight color */}
-            <Select
-              value={currentHighlight}
-              onOpenChange={(open) => { if (open) saveEditorSelection() }}
-              onValueChange={(v) => {
-                restoreEditorSelection()
-                if (!v || v === COLOR_NONE) {
-                  editor.chain().focus().unsetHighlight().run()
-                } else {
-                  editor.chain().focus().setHighlight({ color: v }).run()
-                }
-              }}
-            >
-              <SelectTrigger className="h-8 w-8 p-0 flex items-center justify-center border-zinc-200">
-                <div
-                  className="size-4 rounded-sm border border-zinc-300 flex items-center justify-center"
-                  style={{ backgroundColor: currentHighlight === COLOR_NONE ? "transparent" : currentHighlight }}
-                >
-                  <Highlighter className="size-2.5 text-zinc-600" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {HIGHLIGHT_COLORS.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className="size-3 rounded-sm border border-zinc-200 inline-block"
-                        style={{ backgroundColor: c.value === COLOR_NONE ? "transparent" : c.value }}
-                      />
-                      {c.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <ToolbarDivider />
-
-            {/* Group 5: Align dropdown */}
+            {/* Align dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger
                 title="Text alignment"
@@ -1182,7 +973,9 @@ export function ContractEditor({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Group 6: Lists dropdown */}
+            <ToolbarDivider />
+
+            {/* Group 4: Lists dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger
                 title="Lists"
@@ -1211,7 +1004,9 @@ export function ContractEditor({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Group 7: Insert dropdown */}
+            <ToolbarDivider />
+
+            {/* Group 5: Insert dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger
                 title="Insert"
@@ -1230,6 +1025,17 @@ export function ContractEditor({
                   <BookOpen className="size-4" /> Clause Snippets
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                {/* Link */}
+                <DropdownMenuItem
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    setLinkUrl(editor.getAttributes("link").href ?? "")
+                    setLinkPopoverOpen(true)
+                  }}
+                  className="gap-2"
+                >
+                  <LinkIcon className="size-4" /> Link
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onMouseDown={(e) => {
                     e.preventDefault()
@@ -1279,7 +1085,7 @@ export function ContractEditor({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Group 8: Track dropdown */}
+            {/* Group 6: Track dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger
                 title="Track changes"
@@ -1320,6 +1126,57 @@ export function ContractEditor({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Link popover (opened from Insert dropdown or Cmd+K) */}
+            <Popover
+              open={linkPopoverOpen}
+              onOpenChange={(open) => {
+                setLinkPopoverOpen(open)
+                if (!open) setLinkUrl("")
+              }}
+            >
+              {/* Hidden trigger — popover is opened programmatically via state */}
+              <PopoverTrigger
+                style={{ display: "none" }}
+                tabIndex={-1}
+                aria-hidden
+              >
+                link
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-3">
+                <p className="text-xs font-medium text-zinc-700 mb-2">Insert link</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="h-8 text-sm flex-1"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        if (linkUrl) editor.chain().focus().setLink({ href: linkUrl }).run()
+                        setLinkPopoverOpen(false)
+                        setLinkUrl("")
+                      }
+                      if (e.key === "Escape") { setLinkPopoverOpen(false); setLinkUrl("") }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      if (linkUrl) editor.chain().focus().setLink({ href: linkUrl }).run()
+                      setLinkPopoverOpen(false)
+                      setLinkUrl("")
+                    }}
+                  >
+                    Set link
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </>
         )}
 
@@ -1402,10 +1259,7 @@ export function ContractEditor({
           showVariablesPanel ? "col-span-9" : "col-span-12",
           pageLayout && "flex justify-center bg-zinc-100 rounded-md p-6 min-h-[600px]"
         )}>
-          {/* Wrapper with position:relative for the floating toolbar */}
           <div
-            ref={containerRef}
-            style={{ position: "relative" }}
             className={cn(
               "bg-white",
               pageLayout
@@ -1469,137 +1323,6 @@ export function ContractEditor({
                 }}
               />
             )}
-
-            {/* ── Floating selection toolbar ─────────────────────────────── */}
-            {floatingPos && !isReadOnly && editor && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: floatingPos.top,
-                  left: floatingPos.left,
-                  zIndex: 50,
-                }}
-                className="flex items-center gap-0.5 bg-popover border border-border rounded-md shadow-md p-1"
-              >
-                {/* Bold */}
-                <button
-                  type="button"
-                  title="Bold"
-                  onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run() }}
-                  className={cn(
-                    "h-7 w-7 inline-flex items-center justify-center rounded text-zinc-700 hover:bg-zinc-100 text-sm font-bold",
-                    editor.isActive("bold") && "bg-zinc-100 text-indigo-600"
-                  )}
-                >
-                  B
-                </button>
-                {/* Italic */}
-                <button
-                  type="button"
-                  title="Italic"
-                  onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run() }}
-                  className={cn(
-                    "h-7 w-7 inline-flex items-center justify-center rounded text-zinc-700 hover:bg-zinc-100 text-sm italic font-serif",
-                    editor.isActive("italic") && "bg-zinc-100 text-indigo-600"
-                  )}
-                >
-                  I
-                </button>
-                {/* Underline */}
-                <button
-                  type="button"
-                  title="Underline"
-                  onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleUnderline().run() }}
-                  className={cn(
-                    "h-7 w-7 inline-flex items-center justify-center rounded text-zinc-700 hover:bg-zinc-100 text-sm underline",
-                    editor.isActive("underline") && "bg-zinc-100 text-indigo-600"
-                  )}
-                >
-                  U
-                </button>
-
-                <span className="w-px h-4 bg-zinc-200 mx-0.5" />
-
-                {/* Link — floating popover */}
-                <Popover
-                  open={floatingLinkPopoverOpen}
-                  onOpenChange={(open) => {
-                    setFloatingLinkPopoverOpen(open)
-                    if (open) {
-                      setFloatingLinkUrl(editor.getAttributes("link").href ?? "")
-                    } else {
-                      setFloatingLinkUrl("")
-                    }
-                  }}
-                >
-                  <PopoverTrigger
-                    title="Insert link"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      if (editor.isActive("link")) {
-                        editor.chain().focus().unsetLink().run()
-                        return
-                      }
-                      setFloatingLinkUrl(editor.getAttributes("link").href ?? "")
-                      setFloatingLinkPopoverOpen(true)
-                    }}
-                    className={cn(
-                      "h-7 w-7 inline-flex items-center justify-center rounded text-zinc-700 hover:bg-zinc-100",
-                      editor.isActive("link") && "bg-zinc-100 text-indigo-600"
-                    )}
-                  >
-                    <LinkIcon className="size-3.5" />
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-3">
-                    <p className="text-xs font-medium text-zinc-700 mb-2">Insert link</p>
-                    <div className="flex gap-2">
-                      <Input
-                        value={floatingLinkUrl}
-                        onChange={(e) => setFloatingLinkUrl(e.target.value)}
-                        placeholder="https://..."
-                        className="h-7 text-xs flex-1"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            if (floatingLinkUrl) {
-                              editor.chain().focus().setLink({ href: floatingLinkUrl }).run()
-                            }
-                            setFloatingLinkPopoverOpen(false)
-                            setFloatingLinkUrl("")
-                          }
-                        }}
-                      />
-                      <Button
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        onMouseDown={(e) => {
-                          e.preventDefault()
-                          if (floatingLinkUrl) {
-                            editor.chain().focus().setLink({ href: floatingLinkUrl }).run()
-                          }
-                          setFloatingLinkPopoverOpen(false)
-                          setFloatingLinkUrl("")
-                        }}
-                      >
-                        Set
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Comment */}
-                {onAddComment && (
-                  <button
-                    type="button"
-                    title="Add comment"
-                    onMouseDown={(e) => { e.preventDefault(); onAddComment?.() }}
-                    className="h-7 w-7 inline-flex items-center justify-center rounded text-zinc-700 hover:bg-zinc-100"
-                  >
-                    <MessageSquare className="size-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -1632,6 +1355,11 @@ export function ContractEditor({
           </div>
         )}
       </div>
+
+      {/* ── Floating selection toolbar (fixed position, viewport-relative) ─── */}
+      {!isReadOnly && editor && (
+        <FloatingSelectionToolbar editor={editor} onAddComment={onAddComment} />
+      )}
 
       {/* ── Clause Snippets Sheet ────────────────────────────────────────────── */}
       {editor && (

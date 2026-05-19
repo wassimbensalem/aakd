@@ -477,5 +477,109 @@
     "validation": "Bitte prüfen Sie das Formular auf Fehler",
     "fileTooLarge": "Datei ist zu groß (max. 50 MB)",
     "invalidFileType": "Nur PDF- und DOCX-Dateien werden akzeptiert"
+  },
+  "landing": {
+    "nav": {
+      "features": "Funktionen",
+      "openSource": "Open Source",
+      "integrations": "Integrationen",
+      "faq": "FAQ",
+      "getEarlyAccess": "Frühen Zugang erhalten",
+      "viewOnGitHub": "Auf GitHub ansehen",
+      "starOnGitHub": "Auf GitHub markieren"
+    },
+    "hero": {
+      "eyebrow": "Open Source · Kostenlos · Selbst-hostbar",
+      "headline1": "Die Vertrags-",
+      "headline2": "plattform.",
+      "subtitle": "Entwerfen, verhandeln, unterzeichnen und verwalten Sie Verträge mit KI nach Ihren Bedingungen. Selbst-hosten für vollständige Datensouveränität oder überlassen Sie uns die Verwaltung."
+    },
+    "features": {
+      "eyebrow": "Funktionen",
+      "heading": "Alles, was Sie zur Vertragsverwaltung benötigen",
+      "subtitle": "Vom ersten Entwurf bis zur endgültigen Unterschrift — und jede folgende Verpflichtung.",
+      "i0title": "KI-gestütztes Verfassen",
+      "i0desc": "Generieren Sie Verträge in Sekunden. Nutzen Sie lokale Modelle, eigene API-Schlüssel oder unsere gehostete KI — Ihre Daten, Ihre Wahl.",
+      "i1title": "Vorlagenbibliothek",
+      "i1desc": "Vorgefertigte Vorlagen für NDAs, SaaS-Vereinbarungen, Arbeitsverträge und mehr. Mit intelligenten Variablen anpassen.",
+      "i2title": "Integrierte E-Signaturen",
+      "i2desc": "Zum Unterzeichnen senden, Status verfolgen, ausgeführte Kopien sammeln. Ein vollständiger Signatur-Workflow ohne Drittanbieterkosten.",
+      "i3title": "Verpflichtungsverfolgung",
+      "i3desc": "Verpassen Sie nie eine Verlängerung, einen Meilenstein oder ein Compliance-Datum. Automatische Benachrichtigungen halten Ihr Team auf dem Laufenden.",
+      "i4title": "Analysen & Einblicke",
+      "i4desc": "Echtzeit-Dashboards für Vertragswert, Durchlaufzeit, Risikoexposition und Teamproduktivität.",
+      "i5title": "Mehrsprachig & RTL",
+      "i5desc": "Vollständige Unterstützung für Arabisch, Französisch, Deutsch und Spanisch mit nativer RTL-Darstellung."
+    },
+    "dd": {
+      "0eyebrow": "KI-Agenten",
+      "0title": "KI, die Ihre Verträge versteht",
+      "0desc": "Spezialisierte KI-Agenten für Entwurf, Überprüfung, Risikoanalyse und Extraktion — betrieben von Modellen, die Sie kontrollieren. Verbinden Sie lokale LLMs oder nutzen Sie eigene API-Schlüssel.",
+      "1eyebrow": "Vertragseditor",
+      "1title": "Vom Entwurf zur Unterschrift in Minuten",
+      "1desc": "Ein umfangreicher Vertragseditor mit Echtzeit-Zusammenarbeit, Klauselvorschlägen, intelligenten Variablen und Genehmigungsworkflows.",
+      "2eyebrow": "Analysen",
+      "2title": "Vollständige Übersicht über Ihr Portfolio",
+      "2desc": "Verfolgen Sie jede Lebenszyklusphase, den Wert, den Risikoscore und bevorstehende Verpflichtungen jedes Vertrags."
+    },
+    "os": {
+      "eyebrow": "Open Source",
+      "heading": "Ihre Verträge. Ihre Infrastruktur.",
+      "subtitle": "Aaked ist vollständig Open Source unter der AGPL-Lizenz. Auf eigenen Servern bereitstellen für vollständige Datensouveränität — keine Anbieterbindung, keine Preise pro Nutzer.",
+      "0title": "Überall selbst hosten",
+      "0desc": "Docker, Kubernetes oder Bare-Metal. Betreiben Sie Aaked, wo Ihr Compliance-Team es braucht. Ein Befehl zum Bereitstellen.",
+      "1title": "Eigene KI mitbringen",
+      "1desc": "Verbinden Sie lokale LLMs, nutzen Sie OpenAI, Anthropic oder beliebige Anbieter. Ihre API-Schlüssel, Ihre Modelle — keine Daten verlassen Ihr Netzwerk.",
+      "2title": "Community-getrieben",
+      "2desc": "Entwickelt von Entwicklern und Rechtsteams weltweit. Jede Funktionsanfrage, Fehlerbehebung und Verbesserung ist transparent."
+    },
+    "security": {
+      "heading": "Sicherheit auf Unternehmensebene",
+      "s0": "SOC 2 Typ II",
+      "s1": "DSGVO-konform",
+      "s2": "AES-256-Verschlüsselung",
+      "s3": "Audit-Protokollierung",
+      "s4": "SSO / SAML"
+    },
+    "integrations": {
+      "eyebrow": "Integrationen",
+      "heading": "Verbindet sich mit den Tools, die Sie bereits nutzen"
+    },
+    "faq": {
+      "heading": "Häufig gestellte Fragen",
+      "q0": "Ist Aaked wirklich kostenlos?",
+      "a0": "Ja. Aaked ist Open Source unter der AGPL-Lizenz. Sie können es kostenlos selbst hosten mit unbegrenzten Nutzern, Verträgen und Funktionen. Wir bieten auch eine kostenlose gehostete Version an.",
+      "q1": "Wie funktioniert das Selbst-Hosten?",
+      "a1": "Bereitstellen mit einem einzigen Docker-Befehl oder unserem Kubernetes Helm-Chart. Wir bieten ausführliche Dokumentation, Migrationsskripte und Community-Support.",
+      "q2": "Kann ich eigene KI-Modelle verwenden?",
+      "a2": "Absolut. Aaked unterstützt lokale LLMs (über Ollama, vLLM usw.), OpenAI, Anthropic, Azure und jede OpenAI-kompatible API. Eigene API-Schlüssel mitbringen.",
+      "q3": "Ist Aaked für den Unternehmenseinsatz geeignet?",
+      "a3": "Ja. Aaked enthält SSO/SAML, rollenbasierte Zugriffskontrolle, Audit-Protokollierung, SOC 2-Bereitschaft und DSGVO-Compliance-Tools.",
+      "q4": "Wie migriere ich von DocuSign oder anderen Tools?",
+      "a4": "Wir bieten Import-Tools für DocuSign, PandaDoc und CSV-basierte Migration. Unser Team kann bei komplexen Migrationen im Rahmen des Early-Access-Zeitraums helfen.",
+      "q5": "Welche Sprachen unterstützt Aaked?",
+      "a5": "Die Oberfläche unterstützt Englisch, Arabisch (mit vollem RTL), Französisch, Deutsch und Spanisch. Sie können Verträge in jeder Sprache verfassen."
+    },
+    "cta": {
+      "heading": "Bereit, die Kontrolle über Ihre Verträge zu übernehmen?",
+      "subtitle": "Erhalten Sie frühen Zugang zur gehosteten Version oder klonen Sie das Repository und stellen Sie es heute auf Ihrer eigenen Infrastruktur bereit."
+    },
+    "footer": {
+      "tagline": "Die Vertragsplattform. Open Source, KI-betrieben und für Teams entwickelt, denen Datensouveränität wichtig ist.",
+      "copyright": "© 2026 Aaked. Open Source unter AGPL-3.0-Lizenz.",
+      "product": "Produkt",
+      "resources": "Ressourcen",
+      "company": "Unternehmen",
+      "lFeatures": "Funktionen",
+      "lIntegrations": "Integrationen",
+      "lChangelog": "Änderungsprotokoll",
+      "lDocs": "Dokumentation",
+      "lApiRef": "API-Referenz",
+      "lCommunity": "Community",
+      "lAbout": "Über uns",
+      "lContact": "Kontakt",
+      "lPrivacy": "Datenschutz",
+      "lTerms": "Nutzungsbedingungen"
+    }
   }
 }

@@ -477,5 +477,109 @@
     "validation": "Veuillez vérifier les erreurs du formulaire",
     "fileTooLarge": "Le fichier est trop volumineux (50 Mo max.)",
     "invalidFileType": "Seuls les fichiers PDF et DOCX sont acceptés"
+  },
+  "landing": {
+    "nav": {
+      "features": "Fonctionnalités",
+      "openSource": "Open Source",
+      "integrations": "Intégrations",
+      "faq": "FAQ",
+      "getEarlyAccess": "Accès anticipé",
+      "viewOnGitHub": "Voir sur GitHub",
+      "starOnGitHub": "Étoile sur GitHub"
+    },
+    "hero": {
+      "eyebrow": "Open Source · Gratuit · Auto-hébergeable",
+      "headline1": "La plateforme",
+      "headline2": "de contrats.",
+      "subtitle": "Rédigez, négociez, signez et gérez vos contrats avec une IA qui s'adapte à vos règles. Auto-hébergez pour une souveraineté totale, ou laissez-nous gérer."
+    },
+    "features": {
+      "eyebrow": "Fonctionnalités",
+      "heading": "Tout ce dont vous avez besoin pour gérer vos contrats",
+      "subtitle": "Du premier brouillon à la signature finale — et chaque obligation qui suit.",
+      "i0title": "Rédaction assistée par IA",
+      "i0desc": "Générez des contrats en quelques secondes. Utilisez des modèles locaux, vos propres clés API, ou notre IA hébergée — vos données, votre choix.",
+      "i1title": "Bibliothèque de modèles",
+      "i1desc": "Modèles prédéfinis pour les NDA, accords SaaS, contrats de travail et plus encore. Personnalisez avec des variables intelligentes.",
+      "i2title": "Signatures électroniques intégrées",
+      "i2desc": "Envoyez pour signature, suivez le statut, collectez les copies signées. Un flux de signature complet sans coûts tiers.",
+      "i3title": "Suivi des obligations",
+      "i3desc": "Ne manquez jamais un renouvellement, un jalon ou une date de conformité. Des alertes automatiques gardent votre équipe en avance.",
+      "i4title": "Analyses et insights",
+      "i4desc": "Tableaux de bord en temps réel pour la valeur des contrats, le délai d'exécution, l'exposition aux risques et la productivité.",
+      "i5title": "Multilingue et RTL",
+      "i5desc": "Support complet de l'arabe, du français, de l'allemand et de l'espagnol avec mise en page RTL native."
+    },
+    "dd": {
+      "0eyebrow": "Agents IA",
+      "0title": "Une IA qui comprend vos contrats",
+      "0desc": "Agents IA spécialisés pour la rédaction, la révision, l'analyse des risques et l'extraction — propulsés par des modèles que vous contrôlez. Connectez des LLM locaux ou utilisez vos propres clés API.",
+      "1eyebrow": "Éditeur de contrats",
+      "1title": "Du brouillon à la signature en quelques minutes",
+      "1desc": "Un éditeur de contrats riche avec collaboration en temps réel, suggestions de clauses, variables intelligentes et flux d'approbation. Envoyez pour signature électronique quand vous êtes prêt.",
+      "2eyebrow": "Analyses",
+      "2title": "Visibilité complète sur votre portefeuille",
+      "2desc": "Suivez l'étape du cycle de vie, la valeur, le score de risque et les obligations à venir de chaque contrat. Des rapports exportables et des tableaux de bord personnalisables."
+    },
+    "os": {
+      "eyebrow": "Open Source",
+      "heading": "Vos contrats. Votre infrastructure.",
+      "subtitle": "Aaked est entièrement open source sous licence AGPL. Déployez sur vos propres serveurs pour une souveraineté totale des données — sans dépendance fournisseur, sans tarification par siège.",
+      "0title": "Auto-hébergement partout",
+      "0desc": "Docker, Kubernetes ou bare metal. Exécutez Aaked où votre équipe de conformité en a besoin. Un seul commande pour déployer.",
+      "1title": "Apportez votre propre IA",
+      "1desc": "Connectez des LLM locaux, utilisez OpenAI, Anthropic ou n'importe quel fournisseur. Vos clés API, vos modèles — aucune donnée ne quitte votre réseau.",
+      "2title": "Piloté par la communauté",
+      "2desc": "Construit par des développeurs et des équipes juridiques du monde entier. Chaque demande de fonctionnalité, correction de bug et amélioration est transparente."
+    },
+    "security": {
+      "heading": "Sécurité de niveau entreprise",
+      "s0": "SOC 2 Type II",
+      "s1": "Conforme RGPD",
+      "s2": "Chiffrement AES-256",
+      "s3": "Journal d'audit",
+      "s4": "SSO / SAML"
+    },
+    "integrations": {
+      "eyebrow": "Intégrations",
+      "heading": "Se connecte aux outils que vous utilisez déjà"
+    },
+    "faq": {
+      "heading": "Questions fréquemment posées",
+      "q0": "Aaked est-il vraiment gratuit ?",
+      "a0": "Oui. Aaked est open source sous licence AGPL. Vous pouvez l'auto-héberger gratuitement avec des utilisateurs, contrats et fonctionnalités illimités. Nous proposons également une version hébergée gratuite.",
+      "q1": "Comment fonctionne l'auto-hébergement ?",
+      "a1": "Déployez avec une seule commande Docker ou utilisez notre Helm chart Kubernetes. Nous fournissons une documentation détaillée, des scripts de migration et un support communautaire.",
+      "q2": "Puis-je utiliser mes propres modèles IA ?",
+      "a2": "Absolument. Aaked supporte les LLM locaux (via Ollama, vLLM, etc.), OpenAI, Anthropic, Azure et toute API compatible OpenAI. Utilisez vos propres clés API.",
+      "q3": "Aaked convient-il aux entreprises ?",
+      "a3": "Oui. Aaked inclut SSO/SAML, contrôle d'accès basé sur les rôles, journal d'audit, conformité SOC 2 et outils RGPD. De nombreuses équipes dans des secteurs réglementés utilisent Aaked en production.",
+      "q4": "Comment migrer depuis DocuSign ou d'autres outils ?",
+      "a4": "Nous fournissons des outils d'import pour DocuSign, PandaDoc et les migrations CSV. Notre équipe peut aider lors de la période d'accès anticipé.",
+      "q5": "Quelles langues Aaked supporte-t-il ?",
+      "a5": "L'interface supporte l'anglais, l'arabe (avec RTL complet), le français, l'allemand et l'espagnol. Vous pouvez rédiger des contrats dans n'importe quelle langue."
+    },
+    "cta": {
+      "heading": "Prêt à prendre le contrôle de vos contrats ?",
+      "subtitle": "Obtenez un accès anticipé à la version hébergée, ou clonez le dépôt et déployez sur votre propre infrastructure aujourd'hui."
+    },
+    "footer": {
+      "tagline": "La plateforme de contrats. Open source, propulsée par l'IA, conçue pour les équipes soucieuses de la souveraineté des données.",
+      "copyright": "© 2026 Aaked. Open source sous licence AGPL-3.0.",
+      "product": "Produit",
+      "resources": "Ressources",
+      "company": "Entreprise",
+      "lFeatures": "Fonctionnalités",
+      "lIntegrations": "Intégrations",
+      "lChangelog": "Journal des modifications",
+      "lDocs": "Documentation",
+      "lApiRef": "Référence API",
+      "lCommunity": "Communauté",
+      "lAbout": "À propos",
+      "lContact": "Contact",
+      "lPrivacy": "Confidentialité",
+      "lTerms": "Conditions"
+    }
   }
 }

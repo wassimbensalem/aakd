@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 
 /* ─── Locale switcher (cookie-based, no auth required) ──────────── */
 const LP_LOCALES = [
@@ -240,6 +241,7 @@ function SectionIcon({
 
 /* ─── Nav ────────────────────────────────────────────────────────── */
 function LPNav() {
+  const t = useTranslations("landing")
   const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
@@ -286,12 +288,12 @@ function LPNav() {
       {/* Nav links */}
       <div style={{ display: "flex", alignItems: "center", gap: 28, marginLeft: 52 }}>
         {[
-          { label: "Features", href: "#features" },
-          { label: "Open Source", href: "#open-source" },
-          { label: "Integrations", href: "#integrations" },
-          { label: "FAQ", href: "#faq" },
+          { label: t("nav.features"), href: "#features" },
+          { label: t("nav.openSource"), href: "#open-source" },
+          { label: t("nav.integrations"), href: "#integrations" },
+          { label: t("nav.faq"), href: "#faq" },
         ].map((item) => (
-          <NavLink key={item.label} href={item.href}>
+          <NavLink key={item.href} href={item.href}>
             {item.label}
           </NavLink>
         ))}
@@ -304,7 +306,7 @@ function LPNav() {
           <GitHubIcon size={14} /> GitHub
         </OutlineBtn>
         <PrimaryBtn href="/register" small>
-          Get Early Access <ArrowRight size={13} />
+          {t("nav.getEarlyAccess")} <ArrowRight size={13} />
         </PrimaryBtn>
       </div>
     </nav>
@@ -422,6 +424,7 @@ function OutlineBtn({
 
 /* ─── Hero ───────────────────────────────────────────────────────── */
 function HeroSection() {
+  const t = useTranslations("landing")
   const ref = useReveal()
   const ref2 = useReveal()
 
@@ -479,7 +482,7 @@ function HeroSection() {
           <span
             style={{ width: 6, height: 6, borderRadius: 3, background: G2, display: "inline-block" }}
           />
-          Open Source · Free · Self-Hostable
+          {t("hero.eyebrow")}
         </div>
 
         {/* Headline */}
@@ -495,9 +498,9 @@ function HeroSection() {
             textWrap: "pretty" as never,
           }}
         >
-          The contract
+          {t("hero.headline1")}
           <br />
-          platform.
+          {t("hero.headline2")}
         </h1>
 
         {/* Subtitle */}
@@ -511,17 +514,16 @@ function HeroSection() {
             fontFamily: "var(--font-manrope)",
           }}
         >
-          Draft, negotiate, sign, and manage contracts with AI that runs on your terms. Self-host for
-          complete data sovereignty, or let us handle it.
+          {t("hero.subtitle")}
         </p>
 
         {/* CTAs */}
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <PrimaryBtn href="/register" large>
-            Get Early Access <ArrowRight size={15} />
+            {t("nav.getEarlyAccess")} <ArrowRight size={15} />
           </PrimaryBtn>
           <OutlineBtn href="https://github.com/aaked-app/aaked" large>
-            <GitHubIcon size={17} /> View on GitHub
+            <GitHubIcon size={17} /> {t("nav.viewOnGitHub")}
           </OutlineBtn>
         </div>
       </div>
@@ -919,41 +921,25 @@ function ProductMockup() {
 }
 
 /* ─── Features Grid ──────────────────────────────────────────────── */
-const FEATURES = [
-  {
-    icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
-    title: "AI-Powered Drafting",
-    desc: "Generate contracts in seconds. Use local models, bring your own API keys, or use our hosted AI — your data, your choice.",
-  },
-  {
-    icon: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8",
-    title: "Template Library",
-    desc: "Pre-built templates for NDAs, SaaS agreements, employment contracts, and more. Customize with smart variables.",
-  },
-  {
-    icon: "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M9 12l2 2 4-4",
-    title: "Built-In E-Signatures",
-    desc: "Send for signing, track status, collect executed copies. A complete signing workflow without third-party costs.",
-  },
-  {
-    icon: "M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z M12 9v4 M12 17h.01",
-    title: "Obligation Tracking",
-    desc: "Never miss a renewal, milestone, or compliance date. Automated alerts keep your team ahead of every deadline.",
-  },
-  {
-    icon: "M18 20V10 M12 20V4 M6 20v-6",
-    title: "Analytics & Insights",
-    desc: "Real-time dashboards for contract value, cycle time, risk exposure, and team productivity.",
-  },
-  {
-    icon: "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
-    title: "Multi-Language & RTL",
-    desc: "Full Arabic, French, German, and Spanish support with native RTL layout. Draft contracts in any language.",
-  },
+const FEATURE_ICONS = [
+  "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
+  "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8",
+  "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M9 12l2 2 4-4",
+  "M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z M12 9v4 M12 17h.01",
+  "M18 20V10 M12 20V4 M6 20v-6",
+  "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
 ]
 
 function FeaturesSection() {
+  const t = useTranslations("landing")
   const ref = useReveal()
+
+  const FEATURES = FEATURE_ICONS.map((icon, i) => ({
+    icon,
+    title: t(`features.i${i}title` as Parameters<typeof t>[0]),
+    desc: t(`features.i${i}desc` as Parameters<typeof t>[0]),
+  }))
+
   return (
     <section id="features" style={{ background: LIGHT_BG, padding: "100px 32px" }}>
       <div style={{ maxWidth: 1120, margin: "0 auto" }}>
@@ -969,7 +955,7 @@ function FeaturesSection() {
               marginBottom: 12,
             }}
           >
-            Features
+            {t("features.eyebrow")}
           </div>
           <h2
             style={{
@@ -981,7 +967,7 @@ function FeaturesSection() {
               lineHeight: 1.15,
             }}
           >
-            Everything you need to manage contracts
+            {t("features.heading")}
           </h2>
           <p
             style={{
@@ -993,7 +979,7 @@ function FeaturesSection() {
               fontFamily: "var(--font-manrope)",
             }}
           >
-            From first draft to final signature — and every obligation that follows.
+            {t("features.subtitle")}
           </p>
         </div>
 
@@ -1071,31 +1057,20 @@ function FeatureCard({ icon, title, desc }: { icon: string; title: string; desc:
 }
 
 /* ─── Deep Dives ─────────────────────────────────────────────────── */
-const DEEP_DIVES = [
-  {
-    eyebrow: "AI Agents",
-    title: "AI that understands your contracts",
-    desc: "Specialized AI agents for drafting, review, risk analysis, and extraction — powered by models you control. Connect local LLMs or bring your own API keys. No data leaves your infrastructure unless you choose.",
-    mockup: "ai" as const,
-    flip: false,
-  },
-  {
-    eyebrow: "Contract Editor",
-    title: "From draft to signed in minutes",
-    desc: "A rich contract editor with real-time collaboration, clause suggestions, smart variables, and approval workflows. Send for e-signature when ready — no switching tools.",
-    mockup: "editor" as const,
-    flip: true,
-  },
-  {
-    eyebrow: "Analytics",
-    title: "Complete visibility across your portfolio",
-    desc: "Track every contract's lifecycle stage, value, risk score, and upcoming obligations. Exportable reports and customizable dashboards give your team the insights they need.",
-    mockup: "analytics" as const,
-    flip: false,
-  },
-]
+const DEEP_DIVE_MOCKUPS: Array<"ai" | "editor" | "analytics"> = ["ai", "editor", "analytics"]
+const DEEP_DIVE_FLIPS = [false, true, false]
 
 function DeepDivesSection() {
+  const t = useTranslations("landing")
+
+  const DEEP_DIVES = DEEP_DIVE_MOCKUPS.map((mockup, i) => ({
+    eyebrow: t(`dd.${i}eyebrow` as Parameters<typeof t>[0]),
+    title: t(`dd.${i}title` as Parameters<typeof t>[0]),
+    desc: t(`dd.${i}desc` as Parameters<typeof t>[0]),
+    mockup,
+    flip: DEEP_DIVE_FLIPS[i],
+  }))
+
   return (
     <section style={{ background: LIGHT_BG }}>
       {DEEP_DIVES.map((dd, i) => (
@@ -1513,8 +1488,22 @@ function DeepDiveMockup({ type }: { type: "ai" | "editor" | "analytics" }) {
 }
 
 /* ─── Open Source ────────────────────────────────────────────────── */
+const OS_CARD_ICONS = [
+  "M22 12H2 M5 12V7a5 5 0 0110 0v5 M19 12v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5",
+  "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
+  "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
+]
+
 function OpenSourceSection() {
+  const t = useTranslations("landing")
   const ref = useReveal()
+
+  const osCards = OS_CARD_ICONS.map((icon, i) => ({
+    icon,
+    title: t(`os.${i}title` as Parameters<typeof t>[0]),
+    desc: t(`os.${i}desc` as Parameters<typeof t>[0]),
+  }))
+
   return (
     <section
       id="open-source"
@@ -1551,7 +1540,7 @@ function OpenSourceSection() {
               marginBottom: 12,
             }}
           >
-            Open Source
+            {t("os.eyebrow")}
           </div>
           <h2
             style={{
@@ -1563,7 +1552,7 @@ function OpenSourceSection() {
               lineHeight: 1.15,
             }}
           >
-            Your contracts. Your infrastructure.
+            {t("os.heading")}
           </h2>
           <p
             style={{
@@ -1575,8 +1564,7 @@ function OpenSourceSection() {
               fontFamily: "var(--font-manrope)",
             }}
           >
-            Aaked is fully open source under the AGPL License. Deploy on your own servers for
-            complete data sovereignty — no vendor lock-in, no per-seat pricing, no compromises.
+            {t("os.subtitle")}
           </p>
         </div>
 
@@ -1587,30 +1575,14 @@ function OpenSourceSection() {
             gap: 16,
           }}
         >
-          {[
-            {
-              icon: "M22 12H2 M5 12V7a5 5 0 0110 0v5 M19 12v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5",
-              title: "Self-Host Anywhere",
-              desc: "Docker, Kubernetes, or bare metal. Run Aaked wherever your compliance team needs it. One command to deploy.",
-            },
-            {
-              icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
-              title: "Bring Your Own AI",
-              desc: "Connect local LLMs, use OpenAI, Anthropic, or any provider. Your API keys, your models — no data leaves your network.",
-            },
-            {
-              icon: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
-              title: "Community Driven",
-              desc: "Built by developers and legal teams worldwide. Every feature request, bug fix, and improvement is transparent.",
-            },
-          ].map((card, i) => (
+          {osCards.map((card, i) => (
             <OSCard key={i} {...card} />
           ))}
         </div>
 
         <div style={{ textAlign: "center", marginTop: 48 }}>
           <OutlineBtn href="https://github.com/aaked-app/aaked" large>
-            <GitHubIcon size={17} /> Star on GitHub
+            <GitHubIcon size={17} /> {t("nav.starOnGitHub")}
           </OutlineBtn>
         </div>
       </div>
@@ -1675,8 +1647,16 @@ function OSCard({ icon, title, desc }: { icon: string; title: string; desc: stri
 
 /* ─── Security ───────────────────────────────────────────────────── */
 function SecuritySection() {
+  const t = useTranslations("landing")
   const ref = useReveal()
   const CHECK = "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M9 12l2 2 4-4"
+  const securityLabels = [
+    t("security.s0"),
+    t("security.s1"),
+    t("security.s2"),
+    t("security.s3"),
+    t("security.s4"),
+  ]
   return (
     <section style={{ background: "#f2efe9", padding: "72px 32px" }}>
       <div ref={ref} style={{ maxWidth: 1120, margin: "0 auto", textAlign: "center" }}>
@@ -1690,28 +1670,26 @@ function SecuritySection() {
             letterSpacing: "-0.015em",
           }}
         >
-          Enterprise-grade security
+          {t("security.heading")}
         </h3>
         <div
           style={{ display: "flex", justifyContent: "center", gap: 40, flexWrap: "wrap" }}
         >
-          {["SOC 2 Type II", "GDPR Compliant", "AES-256 Encryption", "Audit Logging", "SSO / SAML"].map(
-            (label) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <SectionIcon d={CHECK} size={18} color={G} strokeW={2} />
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: LIGHT_TEXT,
-                    fontFamily: "var(--font-sora)",
-                  }}
-                >
-                  {label}
-                </span>
-              </div>
-            )
-          )}
+          {securityLabels.map((label) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <SectionIcon d={CHECK} size={18} color={G} strokeW={2} />
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: LIGHT_TEXT,
+                  fontFamily: "var(--font-sora)",
+                }}
+              >
+                {label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -1735,6 +1713,7 @@ const INTEGRATIONS = [
 ]
 
 function IntegrationsSection() {
+  const t = useTranslations("landing")
   const ref = useReveal()
   const ref2 = useReveal()
   return (
@@ -1752,7 +1731,7 @@ function IntegrationsSection() {
               marginBottom: 12,
             }}
           >
-            Integrations
+            {t("integrations.eyebrow")}
           </div>
           <h2
             style={{
@@ -1764,7 +1743,7 @@ function IntegrationsSection() {
               lineHeight: 1.2,
             }}
           >
-            Connects to the tools you already use
+            {t("integrations.heading")}
           </h2>
         </div>
 
@@ -1832,35 +1811,15 @@ function IntegrationChip({ name, index }: { name: string; index: number }) {
 }
 
 /* ─── FAQ ────────────────────────────────────────────────────────── */
-const FAQ_ITEMS = [
-  {
-    q: "Is Aaked really free?",
-    a: "Yes. Aaked is open source under the AGPL License. You can self-host it at no cost with unlimited users, contracts, and features. We also offer a free hosted version for teams who don't want to manage infrastructure.",
-  },
-  {
-    q: "How does self-hosting work?",
-    a: "Deploy with a single Docker command or use our Kubernetes Helm chart. We provide detailed documentation, migration scripts, and community support. Your data never touches our servers.",
-  },
-  {
-    q: "Can I use my own AI models?",
-    a: "Absolutely. Aaked supports local LLMs (via Ollama, vLLM, etc.), OpenAI, Anthropic, Azure, and any OpenAI-compatible API. Bring your own API keys — we never proxy your AI requests.",
-  },
-  {
-    q: "Is Aaked suitable for enterprise use?",
-    a: "Yes. Aaked includes SSO/SAML, role-based access control, audit logging, SOC 2 readiness, and GDPR compliance tools. Many teams in regulated industries use Aaked in production.",
-  },
-  {
-    q: "How do I migrate from DocuSign or other tools?",
-    a: "We provide import tools for DocuSign, PandaDoc, and CSV-based migration. Our team can assist with complex migrations during the early access period.",
-  },
-  {
-    q: "What languages does Aaked support?",
-    a: "The interface supports English, Arabic (with full RTL), French, German, and Spanish. You can draft contracts in any language, and the AI features work across all supported languages.",
-  },
-]
-
 function FAQSection() {
+  const t = useTranslations("landing")
   const ref = useReveal()
+
+  const FAQ_ITEMS = Array.from({ length: 6 }, (_, i) => ({
+    q: t(`faq.q${i}` as Parameters<typeof t>[0]),
+    a: t(`faq.a${i}` as Parameters<typeof t>[0]),
+  }))
+
   return (
     <section id="faq" style={{ background: "#f2efe9", padding: "80px 32px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
@@ -1874,7 +1833,7 @@ function FAQSection() {
               color: LIGHT_TEXT,
             }}
           >
-            Frequently asked questions
+            {t("faq.heading")}
           </h2>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -1962,6 +1921,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 /* ─── Final CTA ──────────────────────────────────────────────────── */
 function FinalCTA() {
+  const t = useTranslations("landing")
   const ref = useReveal()
   return (
     <section
@@ -2006,7 +1966,7 @@ function FinalCTA() {
             marginBottom: 16,
           }}
         >
-          Ready to take control of your contracts?
+          {t("cta.heading")}
         </h2>
         <p
           style={{
@@ -2017,15 +1977,14 @@ function FinalCTA() {
             fontFamily: "var(--font-manrope)",
           }}
         >
-          Get early access to the hosted version, or clone the repo and deploy on your own
-          infrastructure today.
+          {t("cta.subtitle")}
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <PrimaryBtn href="/register" large>
-            Get Early Access <ArrowRight size={15} />
+            {t("nav.getEarlyAccess")} <ArrowRight size={15} />
           </PrimaryBtn>
           <OutlineBtn href="https://github.com/aaked-app/aaked" large>
-            <GitHubIcon size={17} /> View on GitHub
+            <GitHubIcon size={17} /> {t("nav.viewOnGitHub")}
           </OutlineBtn>
         </div>
       </div>
@@ -2035,6 +1994,7 @@ function FinalCTA() {
 
 /* ─── Footer ─────────────────────────────────────────────────────── */
 function LPFooter() {
+  const t = useTranslations("landing")
   return (
     <footer
       style={{
@@ -2078,14 +2038,35 @@ function LPFooter() {
               fontFamily: "var(--font-manrope)",
             }}
           >
-            The contract platform. Open source, AI-powered, and built for teams that care about
-            data sovereignty.
+            {t("footer.tagline")}
           </p>
         </div>
         {[
-          { title: "Product", links: [{ label: "Features", href: "#features" }, { label: "Integrations", href: "#integrations" }, { label: "Changelog", href: "#" }] },
-          { title: "Resources", links: [{ label: "Documentation", href: "#" }, { label: "API Reference", href: "#" }, { label: "Community", href: "#" }] },
-          { title: "Company", links: [{ label: "About", href: "#" }, { label: "Contact", href: "#" }, { label: "Privacy", href: "#" }, { label: "Terms", href: "#" }] },
+          {
+            title: t("footer.product"),
+            links: [
+              { label: t("footer.lFeatures"), href: "#features" },
+              { label: t("footer.lIntegrations"), href: "#integrations" },
+              { label: t("footer.lChangelog"), href: "#" },
+            ],
+          },
+          {
+            title: t("footer.resources"),
+            links: [
+              { label: t("footer.lDocs"), href: "#" },
+              { label: t("footer.lApiRef"), href: "#" },
+              { label: t("footer.lCommunity"), href: "#" },
+            ],
+          },
+          {
+            title: t("footer.company"),
+            links: [
+              { label: t("footer.lAbout"), href: "#" },
+              { label: t("footer.lContact"), href: "#" },
+              { label: t("footer.lPrivacy"), href: "#" },
+              { label: t("footer.lTerms"), href: "#" },
+            ],
+          },
         ].map((col) => (
           <div key={col.title}>
             <h4
@@ -2125,7 +2106,7 @@ function LPFooter() {
         }}
       >
         <span style={{ fontSize: 12, color: DARK_MUTED, fontFamily: "var(--font-manrope)" }}>
-          © 2026 Aaked. Open source under AGPL-3.0 License.
+          {t("footer.copyright")}
         </span>
         <Link
           href="https://github.com/aaked-app/aaked"

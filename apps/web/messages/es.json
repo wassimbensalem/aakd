@@ -477,5 +477,109 @@
     "validation": "Revise los errores del formulario",
     "fileTooLarge": "El archivo es demasiado grande (máx. 50 MB)",
     "invalidFileType": "Solo se aceptan archivos PDF y DOCX"
+  },
+  "landing": {
+    "nav": {
+      "features": "Funciones",
+      "openSource": "Código abierto",
+      "integrations": "Integraciones",
+      "faq": "FAQ",
+      "getEarlyAccess": "Acceso anticipado",
+      "viewOnGitHub": "Ver en GitHub",
+      "starOnGitHub": "Destacar en GitHub"
+    },
+    "hero": {
+      "eyebrow": "Código abierto · Gratis · Auto-alojable",
+      "headline1": "La plataforma",
+      "headline2": "de contratos.",
+      "subtitle": "Redacte, negocie, firme y gestione contratos con IA que funciona en sus términos. Auto-aloje para soberanía total de datos, o déjenos gestionarlo."
+    },
+    "features": {
+      "eyebrow": "Funciones",
+      "heading": "Todo lo que necesita para gestionar contratos",
+      "subtitle": "Desde el primer borrador hasta la firma final — y cada obligación que sigue.",
+      "i0title": "Redacción con IA",
+      "i0desc": "Genere contratos en segundos. Use modelos locales, sus propias claves API o nuestra IA alojada — sus datos, su elección.",
+      "i1title": "Biblioteca de plantillas",
+      "i1desc": "Plantillas predefinidas para NDA, acuerdos SaaS, contratos de trabajo y más. Personalice con variables inteligentes.",
+      "i2title": "Firmas electrónicas integradas",
+      "i2desc": "Envíe para firmar, rastree el estado, recoja copias ejecutadas. Un flujo de firma completo sin costes de terceros.",
+      "i3title": "Seguimiento de obligaciones",
+      "i3desc": "Nunca pierda una renovación, hito o fecha de cumplimiento. Las alertas automáticas mantienen a su equipo al día.",
+      "i4title": "Análisis e información",
+      "i4desc": "Paneles en tiempo real para el valor de contratos, tiempo de ciclo, exposición al riesgo y productividad del equipo.",
+      "i5title": "Multilingüe y RTL",
+      "i5desc": "Soporte completo para árabe, francés, alemán y español con diseño RTL nativo. Redacte contratos en cualquier idioma."
+    },
+    "dd": {
+      "0eyebrow": "Agentes IA",
+      "0title": "IA que entiende sus contratos",
+      "0desc": "Agentes IA especializados para redacción, revisión, análisis de riesgos y extracción — impulsados por modelos que usted controla. Conecte LLMs locales o use sus propias claves API.",
+      "1eyebrow": "Editor de contratos",
+      "1title": "Del borrador a la firma en minutos",
+      "1desc": "Un potente editor de contratos con colaboración en tiempo real, sugerencias de cláusulas, variables inteligentes y flujos de aprobación.",
+      "2eyebrow": "Análisis",
+      "2title": "Visibilidad completa de su cartera",
+      "2desc": "Rastree la etapa del ciclo de vida, el valor, la puntuación de riesgo y las obligaciones próximas de cada contrato."
+    },
+    "os": {
+      "eyebrow": "Código abierto",
+      "heading": "Sus contratos. Su infraestructura.",
+      "subtitle": "Aaked es completamente de código abierto bajo la Licencia AGPL. Despliegue en sus propios servidores para soberanía total de datos — sin dependencia de proveedor, sin precios por usuario.",
+      "0title": "Auto-aloje en cualquier lugar",
+      "0desc": "Docker, Kubernetes o bare metal. Ejecute Aaked donde su equipo de cumplimiento lo necesite. Un solo comando para desplegar.",
+      "1title": "Use su propia IA",
+      "1desc": "Conecte LLMs locales, use OpenAI, Anthropic o cualquier proveedor. Sus claves API, sus modelos — ningún dato sale de su red.",
+      "2title": "Impulsado por la comunidad",
+      "2desc": "Desarrollado por desarrolladores y equipos legales de todo el mundo. Cada solicitud de función, corrección de error y mejora es transparente."
+    },
+    "security": {
+      "heading": "Seguridad de nivel empresarial",
+      "s0": "SOC 2 Tipo II",
+      "s1": "Cumple con RGPD",
+      "s2": "Cifrado AES-256",
+      "s3": "Registro de auditoría",
+      "s4": "SSO / SAML"
+    },
+    "integrations": {
+      "eyebrow": "Integraciones",
+      "heading": "Se conecta a las herramientas que ya usa"
+    },
+    "faq": {
+      "heading": "Preguntas frecuentes",
+      "q0": "¿Aaked es realmente gratuito?",
+      "a0": "Sí. Aaked es de código abierto bajo la Licencia AGPL. Puede auto-alojarlo sin coste con usuarios, contratos y funciones ilimitadas. También ofrecemos una versión alojada gratuita.",
+      "q1": "¿Cómo funciona el auto-alojamiento?",
+      "a1": "Despliegue con un solo comando Docker o use nuestro Helm chart de Kubernetes. Proporcionamos documentación detallada, scripts de migración y soporte comunitario.",
+      "q2": "¿Puedo usar mis propios modelos de IA?",
+      "a2": "Absolutamente. Aaked soporta LLMs locales (vía Ollama, vLLM, etc.), OpenAI, Anthropic, Azure y cualquier API compatible con OpenAI. Use sus propias claves API.",
+      "q3": "¿Aaked es adecuado para uso empresarial?",
+      "a3": "Sí. Aaked incluye SSO/SAML, control de acceso basado en roles, registro de auditoría, preparación SOC 2 y herramientas de cumplimiento RGPD.",
+      "q4": "¿Cómo migro desde DocuSign u otras herramientas?",
+      "a4": "Proporcionamos herramientas de importación para DocuSign, PandaDoc y migración basada en CSV. Nuestro equipo puede ayudar con migraciones complejas durante el período de acceso anticipado.",
+      "q5": "¿Qué idiomas admite Aaked?",
+      "a5": "La interfaz admite inglés, árabe (con RTL completo), francés, alemán y español. Puede redactar contratos en cualquier idioma."
+    },
+    "cta": {
+      "heading": "¿Listo para tomar el control de sus contratos?",
+      "subtitle": "Obtenga acceso anticipado a la versión alojada, o clone el repositorio y despliegue en su propia infraestructura hoy."
+    },
+    "footer": {
+      "tagline": "La plataforma de contratos. Código abierto, impulsada por IA, y creada para equipos que se preocupan por la soberanía de datos.",
+      "copyright": "© 2026 Aaked. Código abierto bajo Licencia AGPL-3.0.",
+      "product": "Producto",
+      "resources": "Recursos",
+      "company": "Empresa",
+      "lFeatures": "Funciones",
+      "lIntegrations": "Integraciones",
+      "lChangelog": "Registro de cambios",
+      "lDocs": "Documentación",
+      "lApiRef": "Referencia API",
+      "lCommunity": "Comunidad",
+      "lAbout": "Acerca de",
+      "lContact": "Contacto",
+      "lPrivacy": "Privacidad",
+      "lTerms": "Términos"
+    }
   }
 }

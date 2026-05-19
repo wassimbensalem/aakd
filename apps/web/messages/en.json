@@ -477,5 +477,109 @@
     "validation": "Please check the form for errors",
     "fileTooLarge": "File is too large (max 50 MB)",
     "invalidFileType": "Only PDF and DOCX files are accepted"
+  },
+  "landing": {
+    "nav": {
+      "features": "Features",
+      "openSource": "Open Source",
+      "integrations": "Integrations",
+      "faq": "FAQ",
+      "getEarlyAccess": "Get Early Access",
+      "viewOnGitHub": "View on GitHub",
+      "starOnGitHub": "Star on GitHub"
+    },
+    "hero": {
+      "eyebrow": "Open Source · Free · Self-Hostable",
+      "headline1": "The contract",
+      "headline2": "platform.",
+      "subtitle": "Draft, negotiate, sign, and manage contracts with AI that runs on your terms. Self-host for complete data sovereignty, or let us handle it."
+    },
+    "features": {
+      "eyebrow": "Features",
+      "heading": "Everything you need to manage contracts",
+      "subtitle": "From first draft to final signature — and every obligation that follows.",
+      "i0title": "AI-Powered Drafting",
+      "i0desc": "Generate contracts in seconds. Use local models, bring your own API keys, or use our hosted AI — your data, your choice.",
+      "i1title": "Template Library",
+      "i1desc": "Pre-built templates for NDAs, SaaS agreements, employment contracts, and more. Customize with smart variables.",
+      "i2title": "Built-In E-Signatures",
+      "i2desc": "Send for signing, track status, collect executed copies. A complete signing workflow without third-party costs.",
+      "i3title": "Obligation Tracking",
+      "i3desc": "Never miss a renewal, milestone, or compliance date. Automated alerts keep your team ahead of every deadline.",
+      "i4title": "Analytics & Insights",
+      "i4desc": "Real-time dashboards for contract value, cycle time, risk exposure, and team productivity.",
+      "i5title": "Multi-Language & RTL",
+      "i5desc": "Full Arabic, French, German, and Spanish support with native RTL layout. Draft contracts in any language."
+    },
+    "dd": {
+      "0eyebrow": "AI Agents",
+      "0title": "AI that understands your contracts",
+      "0desc": "Specialized AI agents for drafting, review, risk analysis, and extraction — powered by models you control. Connect local LLMs or bring your own API keys. No data leaves your infrastructure unless you choose.",
+      "1eyebrow": "Contract Editor",
+      "1title": "From draft to signed in minutes",
+      "1desc": "A rich contract editor with real-time collaboration, clause suggestions, smart variables, and approval workflows. Send for e-signature when ready — no switching tools.",
+      "2eyebrow": "Analytics",
+      "2title": "Complete visibility across your portfolio",
+      "2desc": "Track every contract's lifecycle stage, value, risk score, and upcoming obligations. Exportable reports and customizable dashboards give your team the insights they need."
+    },
+    "os": {
+      "eyebrow": "Open Source",
+      "heading": "Your contracts. Your infrastructure.",
+      "subtitle": "Aaked is fully open source under the AGPL License. Deploy on your own servers for complete data sovereignty — no vendor lock-in, no per-seat pricing, no compromises.",
+      "0title": "Self-Host Anywhere",
+      "0desc": "Docker, Kubernetes, or bare metal. Run Aaked wherever your compliance team needs it. One command to deploy.",
+      "1title": "Bring Your Own AI",
+      "1desc": "Connect local LLMs, use OpenAI, Anthropic, or any provider. Your API keys, your models — no data leaves your network.",
+      "2title": "Community Driven",
+      "2desc": "Built by developers and legal teams worldwide. Every feature request, bug fix, and improvement is transparent."
+    },
+    "security": {
+      "heading": "Enterprise-grade security",
+      "s0": "SOC 2 Type II",
+      "s1": "GDPR Compliant",
+      "s2": "AES-256 Encryption",
+      "s3": "Audit Logging",
+      "s4": "SSO / SAML"
+    },
+    "integrations": {
+      "eyebrow": "Integrations",
+      "heading": "Connects to the tools you already use"
+    },
+    "faq": {
+      "heading": "Frequently asked questions",
+      "q0": "Is Aaked really free?",
+      "a0": "Yes. Aaked is open source under the AGPL License. You can self-host it at no cost with unlimited users, contracts, and features. We also offer a free hosted version for teams who don't want to manage infrastructure.",
+      "q1": "How does self-hosting work?",
+      "a1": "Deploy with a single Docker command or use our Kubernetes Helm chart. We provide detailed documentation, migration scripts, and community support. Your data never touches our servers.",
+      "q2": "Can I use my own AI models?",
+      "a2": "Absolutely. Aaked supports local LLMs (via Ollama, vLLM, etc.), OpenAI, Anthropic, Azure, and any OpenAI-compatible API. Bring your own API keys — we never proxy your AI requests.",
+      "q3": "Is Aaked suitable for enterprise use?",
+      "a3": "Yes. Aaked includes SSO/SAML, role-based access control, audit logging, SOC 2 readiness, and GDPR compliance tools. Many teams in regulated industries use Aaked in production.",
+      "q4": "How do I migrate from DocuSign or other tools?",
+      "a4": "We provide import tools for DocuSign, PandaDoc, and CSV-based migration. Our team can assist with complex migrations during the early access period.",
+      "q5": "What languages does Aaked support?",
+      "a5": "The interface supports English, Arabic (with full RTL), French, German, and Spanish. You can draft contracts in any language, and the AI features work across all supported languages."
+    },
+    "cta": {
+      "heading": "Ready to take control of your contracts?",
+      "subtitle": "Get early access to the hosted version, or clone the repo and deploy on your own infrastructure today."
+    },
+    "footer": {
+      "tagline": "The contract platform. Open source, AI-powered, and built for teams that care about data sovereignty.",
+      "copyright": "© 2026 Aaked. Open source under AGPL-3.0 License.",
+      "product": "Product",
+      "resources": "Resources",
+      "company": "Company",
+      "lFeatures": "Features",
+      "lIntegrations": "Integrations",
+      "lChangelog": "Changelog",
+      "lDocs": "Documentation",
+      "lApiRef": "API Reference",
+      "lCommunity": "Community",
+      "lAbout": "About",
+      "lContact": "Contact",
+      "lPrivacy": "Privacy",
+      "lTerms": "Terms"
+    }
   }
 }

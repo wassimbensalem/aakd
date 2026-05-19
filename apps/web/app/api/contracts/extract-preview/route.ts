@@ -1,6 +1,8 @@
 import { resolveAuth } from "@/lib/auth/middleware"
+import { resolveAiConfig } from "@/lib/ai/resolve"
 import { logger } from "@/lib/logger"
 import OpenAI from "openai"
+import Anthropic from "@anthropic-ai/sdk"
 import pdfParse from "pdf-parse"
 import mammoth from "mammoth"
 
@@ -53,6 +55,56 @@ interface ExtractionResult {
   partial?: boolean
 }
 
+const SYSTEM_PROMPT =
+  "Extract key contract metadata from the following contract text. Return a JSON object with these exact keys: title (string), contractType (one of: NDA, MSA, SOW, EMPLOYMENT, VENDOR, CUSTOMER, OTHER), counterpartyName (string), startDate (ISO date string or null), endDate (ISO date string or null), value (number or null), currency (one of: USD, EUR, GBP, JPY, OTHER), paymentTerms (string or null), governingLaw (string or null), autoRenewal (boolean), description (1-2 sentence summary). Also include a confidence object with keys matching the above fields and values 0-1. Return only valid JSON, no markdown."
+
+async function runAiExtraction(
+  contractText: string,
+  organizationId: string,
+): Promise<ExtractionResult> {
+  const aiConfig = await resolveAiConfig(organizationId)
+
+  if (!aiConfig.provider || !aiConfig.apiKey) {
+    return { error: "ai_unavailable", partial: true, confidence: {} }
+  }
+
+  if (aiConfig.provider === "anthropic") {
+    const anthropic = new Anthropic({ apiKey: aiConfig.apiKey })
+    const msg = await anthropic.messages.create({
+      model: aiConfig.model ?? "claude-haiku-4-5",
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: `${SYSTEM_PROMPT}\n\n${contractText}`,
+        },
+      ],
+    })
+    const raw = msg.content[0]?.type === "text" ? msg.content[0].text : "{}"
+    // Strip markdown fences if model returned them despite instructions
+    const clean = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim()
+    return JSON.parse(clean) as ExtractionResult
+  }
+
+  if (aiConfig.provider === "openai") {
+    const openai = new OpenAI({ apiKey: aiConfig.apiKey })
+    const response = await openai.chat.completions.create({
+      model: aiConfig.model ?? "gpt-4o-mini",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: contractText },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0,
+    })
+    const raw = response.choices[0]?.message?.content ?? "{}"
+    return JSON.parse(raw) as ExtractionResult
+  }
+
+  // Ollama: not supported for structured extraction preview
+  return { error: "ai_unavailable", partial: true, confidence: {} }
+}
+
 // POST /api/contracts/extract-preview
 // Body: multipart FormData with field "file"
 export async function POST(req: Request): Promise<Response> {
@@ -82,7 +134,6 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "unsupported_file_type" }, { status: 400 })
   }
 
-  // Strip extension for fallback title
   const fileNameWithoutExt = fileField.name.replace(/\.[^.]+$/, "")
 
   let contractText = ""
@@ -91,58 +142,24 @@ export async function POST(req: Request): Promise<Response> {
     contractText = raw.slice(0, MAX_TEXT_CHARS)
   } catch (err) {
     logger.error({ err }, "[extract-preview] text extraction failed")
-    // Degrade gracefully: return partial with just the filename-derived title
-    const partial: ExtractionResult = {
+    return Response.json({
       title: fileNameWithoutExt,
       error: "text_extraction_failed",
       partial: true,
       confidence: {},
-    }
-    return Response.json(partial)
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    const partial: ExtractionResult = {
-      title: fileNameWithoutExt,
-      error: "ai_unavailable",
-      partial: true,
-      confidence: {},
-    }
-    return Response.json(partial)
+    })
   }
 
   try {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Extract key contract metadata from the following contract text. Return a JSON object with these exact keys: title (string), contractType (one of: NDA, MSA, SOW, EMPLOYMENT, VENDOR, CUSTOMER, OTHER), counterpartyName (string), startDate (ISO date string or null), endDate (ISO date string or null), value (number or null), currency (one of: USD, EUR, GBP, JPY, OTHER), paymentTerms (string or null), governingLaw (string or null), autoRenewal (boolean), description (1-2 sentence summary). Also include a confidence object with keys matching the above fields and values 0-1. Return only valid JSON, no markdown.",
-        },
-        {
-          role: "user",
-          content: contractText,
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0,
-    })
-
-    const raw = response.choices[0]?.message?.content ?? "{}"
-    const extracted = JSON.parse(raw) as ExtractionResult
-
+    const extracted = await runAiExtraction(contractText, ctx.organizationId)
     return Response.json(extracted)
   } catch (err) {
     logger.error({ err }, "[extract-preview] AI extraction failed")
-    const partial: ExtractionResult = {
+    return Response.json({
       title: fileNameWithoutExt,
       error: "ai_unavailable",
       partial: true,
       confidence: {},
-    }
-    return Response.json(partial)
+    })
   }
 }

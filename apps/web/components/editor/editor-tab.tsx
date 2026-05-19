@@ -49,9 +49,10 @@ function tocMatchesChecklist(title: string, items: string[]): boolean {
   )
 }
 
-// ─── AI Assist panel ─────────────────────────────────────────────────────────
+// ─── AI Companion panel ───────────────────────────────────────────────────────
 
 interface AiAssistPanelProps {
+  contractId: string
   contractOverview: Record<string, unknown> | null
   overviewLoading: boolean
   tocItems: { num: string; title: string; level: number }[]
@@ -76,6 +77,12 @@ interface AiAssistPanelProps {
   onExportPdf: () => void
   onExtract: () => void
   onSnapshot: () => void
+  // Free-form Q&A
+  askQuestion: string
+  askAnswer: string | null
+  askLoading: boolean
+  onAskChange: (q: string) => void
+  onAsk: () => void
 }
 
 function OverviewRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -125,6 +132,7 @@ const RISK_DOTS: Record<string, string> = {
 }
 
 function AiAssistPanel({
+  contractId: _contractId,
   contractOverview,
   overviewLoading,
   tocItems,
@@ -144,6 +152,11 @@ function AiAssistPanel({
   onExportPdf,
   onExtract,
   onSnapshot,
+  askQuestion,
+  askAnswer,
+  askLoading,
+  onAskChange,
+  onAsk,
 }: AiAssistPanelProps) {
   const contractType = (contractOverview?.contractType as string | null) ?? "OTHER"
   const checklist = COVERAGE_CHECKLISTS[contractType] ?? COVERAGE_CHECKLISTS.OTHER
@@ -283,6 +296,55 @@ function AiAssistPanel({
           </div>
         </div>
       )}
+
+      {/* Section D — Ask about this contract */}
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground mb-2">
+          Ask about this contract
+        </p>
+        <div className="border border-border rounded-md px-3 py-2 bg-muted/10 space-y-2">
+          <textarea
+            value={askQuestion}
+            onChange={(e) => onAskChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                onAsk()
+              }
+            }}
+            placeholder="Ask about this contract… (Cmd+Enter to send)"
+            rows={2}
+            className="w-full text-[12px] resize-none bg-transparent border-none outline-none placeholder:text-muted-foreground/50"
+          />
+          <div className="flex items-center justify-between gap-2">
+            {askAnswer && (
+              <button
+                type="button"
+                onClick={() => onAskChange("")}
+                className="text-[10px] text-muted-foreground hover:text-foreground underline"
+              >
+                Clear
+              </button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto text-[11px]"
+              disabled={askLoading || !askQuestion.trim()}
+              onClick={onAsk}
+            >
+              {askLoading ? "Thinking…" : "Ask →"}
+            </Button>
+          </div>
+          {askAnswer && (
+            <div className="border-t border-border/50 pt-2">
+              <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-wrap">
+                {askAnswer}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Document actions — collapsible */}
       <details className="border-t border-border pt-2 mt-2 group">
@@ -458,7 +520,7 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
   // Track changes state — derive from editor content
   const [editorJson, setEditorJson] = useState<unknown>(null)
 
-  // AI Assist tab state
+  // AI Companion tab state
   const [contractOverview, setContractOverview] = useState<Record<string, unknown> | null>(null)
   const [overviewLoading, setOverviewLoading] = useState(false)
   const [selectedText, setSelectedText] = useState<string | null>(null)
@@ -469,6 +531,10 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
     suggestion?: string
   } | null>(null)
   const [explaining, setExplaining] = useState(false)
+  // Free-form Q&A state
+  const [askQuestion, setAskQuestion] = useState("")
+  const [askAnswer, setAskAnswer] = useState<string | null>(null)
+  const [askLoading, setAskLoading] = useState(false)
 
   const canEdit = role !== "viewer" && !READ_ONLY_STATUSES.has(contractStatus)
   const canExtract = role === "admin" || role === "legal"
@@ -906,6 +972,39 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
     }
   }
 
+  // ─── Free-form Q&A ─────────────────────────────────────────────────────────
+
+  async function handleAsk() {
+    const q = askQuestion.trim()
+    if (!q) return
+    setAskLoading(true)
+    setAskAnswer(null)
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        if (body.error === "No extracted text available for this contract") {
+          setAskAnswer("This contract has no extracted text yet. Run AI extraction first.")
+        } else if (body.error === "No AI provider configured") {
+          setAskAnswer("AI is not configured for your organization. Add an API key in Settings → AI.")
+        } else {
+          setAskAnswer("Could not get an answer. Please try again.")
+        }
+        return
+      }
+      const data = await res.json() as { answer?: string }
+      setAskAnswer(data.answer ?? "No answer returned.")
+    } catch {
+      setAskAnswer("Request failed. Please try again.")
+    } finally {
+      setAskLoading(false)
+    }
+  }
+
   // ─── TOC derivation ────────────────────────────────────────────────────────
 
   const tocItems = useMemo(() => {
@@ -1177,7 +1276,7 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
           </div>
         </div>
 
-        {/* RIGHT: Details / Comments / Changes (300px) */}
+        {/* RIGHT: AI Companion / Comments / Changes / Snapshots (300px) */}
         <aside className="w-[300px] shrink-0 border-l border-border flex flex-col overflow-hidden">
           {/* Tab bar */}
           <div className="flex border-b border-border shrink-0">
@@ -1191,7 +1290,7 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
                   : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
-              AI Assist
+              AI Companion
             </button>
             <button
               type="button"
@@ -1234,9 +1333,10 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
           {/* Tab content */}
           <div className="flex-1 overflow-y-auto p-3">
 
-            {/* ── AI Assist tab ──────────────────────────────── */}
+            {/* ── AI Companion tab ──────────────────────────── */}
             {rightTab === "assist" && (
               <AiAssistPanel
+                contractId={contractId}
                 contractOverview={contractOverview}
                 overviewLoading={overviewLoading}
                 tocItems={tocItems}
@@ -1256,6 +1356,11 @@ export function EditorTab({ contractId, contractStatus, role }: EditorTabProps) 
                 onExportPdf={() => handleExport("pdf")}
                 onExtract={() => setExtractOpen(true)}
                 onSnapshot={() => setSnapshotDialogOpen(true)}
+                askQuestion={askQuestion}
+                askAnswer={askAnswer}
+                askLoading={askLoading}
+                onAskChange={(q) => { setAskQuestion(q); setAskAnswer(null) }}
+                onAsk={() => void handleAsk()}
               />
             )}
 

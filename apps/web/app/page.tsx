@@ -3,6 +3,118 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 
+/* ─── Locale switcher (cookie-based, no auth required) ──────────── */
+const LP_LOCALES = [
+  { code: "en", label: "EN", flag: "🇬🇧" },
+  { code: "fr", label: "FR", flag: "🇫🇷" },
+  { code: "de", label: "DE", flag: "🇩🇪" },
+  { code: "es", label: "ES", flag: "🇪🇸" },
+  { code: "ar", label: "AR", flag: "🇸🇦" },
+]
+
+function LandingLocaleSwitcher() {
+  const [current, setCurrent] = useState("en")
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    const match = document.cookie.match(/(?:^|;\s*)NEXT_LOCALE=([^;]+)/)
+    if (match) setCurrent(match[1])
+  }, [])
+
+  function pick(code: string) {
+    document.cookie = `NEXT_LOCALE=${code};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`
+    setOpen(false)
+    window.location.reload()
+  }
+
+  const active = LP_LOCALES.find((l) => l.code === current) ?? LP_LOCALES[0]
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          height: 32,
+          padding: "0 10px",
+          borderRadius: 6,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(255,255,255,0.05)",
+          color: "#a0aec0",
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: "pointer",
+          letterSpacing: "0.04em",
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.10)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+      >
+        <span style={{ fontSize: 14 }}>{active.flag}</span>
+        {active.label}
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 1, opacity: 0.6 }}>
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          {/* click-away overlay */}
+          <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            right: 0,
+            zIndex: 100,
+            background: "#111820",
+            border: "1px solid rgba(255,255,255,0.10)",
+            borderRadius: 8,
+            padding: "4px",
+            minWidth: 130,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          }}>
+            {LP_LOCALES.map((loc) => (
+              <button
+                key={loc.code}
+                type="button"
+                onClick={() => pick(loc.code)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  padding: "6px 10px",
+                  borderRadius: 5,
+                  border: "none",
+                  background: loc.code === current ? "rgba(32,116,75,0.18)" : "transparent",
+                  color: loc.code === current ? "#4ade80" : "#c0ccd8",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => {
+                  if (loc.code !== current) e.currentTarget.style.background = "rgba(255,255,255,0.06)"
+                }}
+                onMouseLeave={(e) => {
+                  if (loc.code !== current) e.currentTarget.style.background = "transparent"
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{loc.flag}</span>
+                {loc.label} — <span style={{ opacity: 0.6, fontSize: 11 }}>{
+                  { en: "English", fr: "Français", de: "Deutsch", es: "Español", ar: "العربية" }[loc.code]
+                }</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ─── Design tokens ──────────────────────────────────────────────── */
 const G = "#20744B"
 const G2 = "#2D9D5E"
@@ -185,8 +297,9 @@ function LPNav() {
         ))}
       </div>
 
-      {/* CTA buttons */}
+      {/* CTA buttons + locale switcher */}
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+        <LandingLocaleSwitcher />
         <OutlineBtn href="https://github.com/aaked-app/aaked" small>
           <GitHubIcon size={14} /> GitHub
         </OutlineBtn>

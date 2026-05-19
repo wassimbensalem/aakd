@@ -7,6 +7,8 @@ import { NextIntlClientProvider } from "next-intl"
 import { getLocale, getMessages } from "next-intl/server"
 import { Toaster } from "@/components/ui/sonner"
 import { isRtl, type Locale } from "@/lib/i18n/config"
+import { PostHogProvider } from "@/components/providers/posthog-provider"
+import { CookieConsent } from "@/components/cookie-consent"
 import "./globals.css"
 
 const manrope = Manrope({
@@ -52,8 +54,11 @@ export default async function RootLayout({
       <body className="font-sans antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="aakd-theme">
-            {children}
-            <Toaster richColors />
+            <PostHogProvider>
+              {children}
+              <Toaster richColors />
+              <CookieConsent />
+            </PostHogProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

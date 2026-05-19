@@ -8,6 +8,7 @@ import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { SECURE_HEADERS } from "@/lib/api-headers"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { requestLogger } from "@/lib/logger"
+import { captureServerEvent } from "@/lib/posthog-server"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -194,6 +195,11 @@ export async function POST(req: Request) {
 
     await writeActivity(contract.id, ctx.userId, "CREATED")
     log.info({ contractId: contract.id }, "[POST /contracts] created")
+
+    captureServerEvent(ctx.userId, "contract_created", {
+      contractType: parsed.data.contractType,
+      organizationId: ctx.organizationId,
+    })
 
     // Generate renewal alerts if date fields were provided (non-critical side-effect)
     if (endDate || renewalDate || parsed.data.noticePeriodDays != null) {

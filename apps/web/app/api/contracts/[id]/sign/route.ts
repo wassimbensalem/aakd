@@ -5,6 +5,7 @@ import { writeActivity } from "@/lib/db/activity"
 import { storage } from "@/lib/storage"
 import { createTemplate, createSubmission } from "@/lib/docuseal"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { captureServerEvent } from "@/lib/posthog-server"
 
 // ─── POST /api/contracts/[id]/sign ───────────────────────────────────────────
 // Trigger DocuSeal signing flow for a contract that is AWAITING_SIGNATURE.
@@ -129,6 +130,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       "SENT_FOR_SIGNATURE",
       `Sent for signature to ${signerEmail}`,
     )
+
+    captureServerEvent(ctx.userId, "contract_signing_initiated", {
+      contractId: params.id,
+      organizationId: ctx.organizationId,
+    })
 
     return Response.json({ submissionId: submission.id, signingUrl, signingStatus: "sent" }, { status: 200 })
   })

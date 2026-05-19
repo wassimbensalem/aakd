@@ -1,6 +1,7 @@
 import { resolveAuth } from "@/lib/auth/middleware"
 import { resolveAiConfig } from "@/lib/ai/resolve"
 import { logger } from "@/lib/logger"
+import { captureServerEvent } from "@/lib/posthog-server"
 import OpenAI from "openai"
 import Anthropic from "@anthropic-ai/sdk"
 import pdfParse from "pdf-parse"
@@ -152,6 +153,11 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     const extracted = await runAiExtraction(contractText, ctx.organizationId)
+    if (!extracted.error) {
+      captureServerEvent(ctx.userId, "ai_extraction_run", {
+        organizationId: ctx.organizationId,
+      })
+    }
     return Response.json(extracted)
   } catch (err) {
     logger.error({ err }, "[extract-preview] AI extraction failed")

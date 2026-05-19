@@ -1,6 +1,7 @@
 import path from "path"
 import { fileURLToPath } from "url"
 import createNextIntlPlugin from "next-intl/plugin"
+import { withSentryConfig } from "@sentry/nextjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -36,4 +37,16 @@ const nextConfig = {
   },
 }
 
-export default withNextIntl(nextConfig)
+export default withSentryConfig(
+  withNextIntl(nextConfig),
+  {
+    org: "aaked",
+    project: "aaked-web",
+    silent: true,
+    widenClientFileUpload: true,
+    tunnelRoute: "/monitoring",
+    hideSourceMaps: true,
+    disableLogger: true,
+    automaticVercelMonitors: true,
+  },
+)

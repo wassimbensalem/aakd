@@ -26,3 +26,6 @@ yarn.lock
 *.docx
 ~$*
 .vercel/
+
+# QA test state — may contain credentials, never commit
+reports/test-state.json

@@ -17,11 +17,11 @@ export function AakdLogoMark({ size = 26, className }: LogoMarkProps) {
         width: size,
         height: size,
         borderRadius: Math.round(size * 0.23),
-        background: "hsl(var(--primary))",
+        background: "#20744B",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "hsl(var(--primary-foreground))",
+        color: "#ffffff",
         flexShrink: 0,
       }}
     >

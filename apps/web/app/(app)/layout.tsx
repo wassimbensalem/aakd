@@ -139,7 +139,7 @@ function Sidebar({
       <div className="flex items-center gap-2.5 px-3 py-3 border-b border-border">
         <AakdLogoMark size={26} />
         <span className="font-extrabold text-sm flex-1 min-w-0 truncate" style={{ fontFamily: "var(--font-sora), 'Sora', sans-serif", letterSpacing: '-0.02em' }}>
-          Aakd
+          Aaked
         </span>
         <NotificationBell />
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />

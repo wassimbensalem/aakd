@@ -59,7 +59,7 @@ export function AakdLogo({ size = 26, className, wordmarkClassName }: LogoProps)
           fontSize: Math.round(size * 0.54),
         }}
       >
-        Aakd
+        Aaked
       </span>
     </div>
   )

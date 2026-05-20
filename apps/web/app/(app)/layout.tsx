@@ -18,6 +18,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { useSession, useActiveOrganization, signOut } from "@/lib/auth/client"
+import { usePostHog } from "posthog-js/react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CmdK } from "@/components/cmd-k"
 import { NotificationBell } from "@/components/notification-bell"
@@ -233,6 +234,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession()
   const { data: activeOrg, isPending: orgPending } = useActiveOrganization()
   const t = useTranslations("nav")
+  const ph = usePostHog()
 
   const NAV_SECTIONS: NavSection[] = [
     {
@@ -266,6 +268,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       router.replace("/login")
     }
   }, [isPending, session, router])
+
+  // Identify authenticated user in PostHog so events are tied to real people
+  useEffect(() => {
+    if (!session?.user || !ph) return
+    ph.identify(session.user.id, {
+      email: session.user.email,
+      name: session.user.name,
+      organizationId: activeOrg?.id,
+      organizationName: activeOrg?.name,
+    })
+  }, [session?.user?.id, activeOrg?.id, ph])
 
   if (isPending || orgPending) {
     return (

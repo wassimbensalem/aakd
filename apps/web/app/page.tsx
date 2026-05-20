@@ -526,6 +526,9 @@ function HeroSection() {
             <GitHubIcon size={17} /> {t("nav.viewOnGitHub")}
           </OutlineBtn>
         </div>
+        <p style={{ color: "#64748b", fontSize: 13, marginTop: 12, textAlign: "center" }}>
+          ✦ Hosted version live · Self-host in 5 minutes with Docker
+        </p>
       </div>
 
       {/* Product mockup */}
@@ -2073,6 +2076,9 @@ function FinalCTA() {
             <GitHubIcon size={17} /> {t("nav.viewOnGitHub")}
           </OutlineBtn>
         </div>
+        <p style={{ color: "#64748b", fontSize: 13, marginTop: 12, textAlign: "center" }}>
+          ✦ Hosted version live · Self-host in 5 minutes with Docker
+        </p>
       </div>
     </section>
   )

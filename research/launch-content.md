@@ -245,3 +245,135 @@ This is also the right place to share screenshots, demos, or integrations.
 ---
 
 *All Reddit quotes are verbatim from public posts. Sources documented in `research/reddit-community-voice.md`.*
+
+---
+
+## 6. Reddit Posts (post all 3 on launch day)
+
+---
+
+### r/selfhosted
+
+**Title:**
+```
+Aaked – self-hostable contract management with local AI (Docker, AGPL)
+```
+
+**Body:**
+```
+Built this because I couldn't find a self-hostable CLM that wasn't either a spreadsheet or enterprise software.
+
+What it does:
+- Contract repository with full-text + semantic search (pgvector)
+- AI extraction: pulls parties, dates, renewal clauses, obligations from PDF/DOCX — with source citations, never hallucinated
+- Renewal alerts (email, Slack, Teams, webhooks) before deadlines hit
+- Contract Q&A: ask questions in natural language, get answers grounded in the actual text
+- Approval workflows + e-signatures via DocuSeal
+- MCP server: Claude/Cursor can query your contracts directly
+- Obligation tracking with due dates and auto-overdue detection
+- Full multi-tenant — org isolation at the DB layer
+
+Self-hosting:
+```bash
+git clone https://github.com/aaked-app/aakd
+cp .env.example .env
+docker-compose up
+```
+
+Minimum env to run: DATABASE_URL, BETTER_AUTH_SECRET, REDIS_URL, STORAGE_* (any S3-compatible — MinIO works out of the box).
+
+AI is optional — the app runs without it, features degrade gracefully. If you want fully local AI: plug in Ollama for embeddings (1536-dim model like mxbai-embed-large) and extraction.
+
+Stack: Next.js 14, TypeScript, Prisma + PostgreSQL + pgvector, BullMQ + Redis, Better Auth, S3-compatible storage.
+
+License: AGPL-3.0
+GitHub: https://github.com/aaked-app/aakd
+
+Happy to answer questions about the self-hosting setup, the Ollama integration, or the pgvector config.
+```
+
+---
+
+### r/opensource
+
+**Title:**
+```
+Aaked – open-source CLM with AI extraction and an MCP server (AGPL, self-hostable)
+```
+
+**Body:**
+```
+Releasing Aaked as open source today.
+
+It's a contract lifecycle management platform — think: upload PDFs and DOCX files, extract key terms with AI, track renewals, run contract Q&A, manage approvals and e-signatures, all self-hostable.
+
+**Why open source?**
+The existing CLM market is almost entirely closed-source and enterprise-priced ($300–500+/seat/month). There's no self-hostable alternative that covers the full lifecycle. The goal is to be that.
+
+**Stack:**
+- Next.js 14 App Router + TypeScript
+- Prisma + PostgreSQL 16 + pgvector (semantic search)
+- BullMQ + Redis (background jobs — extraction, embedding, alerts)
+- Better Auth (email/password + org plugin)
+- S3-compatible storage (MinIO for self-host, R2/S3 for cloud)
+- DocuSeal for e-signatures (not built from scratch — intentional)
+
+**AI abstraction:**
+There are two provider interfaces — `ExtractionProvider` and `EmbeddingProvider`. Anthropic, OpenAI, and Ollama implementations ship out of the box. Every AI result includes source text, page number, and a confidence score. Nothing auto-populates — results go to a human review queue.
+
+**MCP server:**
+There's an MCP endpoint so Claude/Cursor can query contracts directly. Ask "what does our vendor contract say about SLA penalties?" and get an answer grounded in the actual document.
+
+**License:** AGPL-3.0
+**GitHub:** https://github.com/aaked-app/aakd
+
+Contributions welcome — especially on the Ollama side and self-hosting docs. Issues and PRs open.
+```
+
+---
+
+### r/SaaS
+
+**Title:**
+```
+I built an open-source CLM after watching businesses lose hundreds/month to contract clauses they'd forgotten about
+```
+
+**Body:**
+```
+The market research that pushed me to build this: a r/smallbusiness post about a business owner whose waste management contract started at $160/month and quietly crept to $450 — "the contract was designed so I couldn't notice." 401 upvotes. Not because it was unique, because everyone recognized it.
+
+The existing solutions:
+- Spreadsheet + calendar reminder (breaks when someone leaves)
+- Enterprise CLM ($300–500/seat/month, 6-month onboarding, built for GC offices)
+
+Nothing in between. So I built it.
+
+**Aaked** is an open-source, self-hostable contract management platform. What it does:
+
+- AI extraction: upload a PDF/DOCX, get parties, dates, renewal clauses, obligations extracted automatically — with source citations and confidence scores
+- Renewal alerts before deadlines (email, Slack, Teams)
+- Contract Q&A: "what does our Stripe contract say about price increases?" → answer from the actual text
+- Approval workflows + e-signatures (DocuSeal integration)
+- MCP server: your AI assistant (Claude, Cursor) can read and query contracts directly
+- Full multi-tenant from day one
+
+It's free to self-host. There's also a hosted version at https://web-wassimbensalems-projects.vercel.app if you want to try it without the infra.
+
+GitHub (AGPL): https://github.com/aaked-app/aakd
+
+---
+
+What I intentionally didn't build:
+- Signing from scratch (DocuSeal does this better)
+- A contract editor (v2)
+- Anything that requires a lawyer to operate
+
+The target user is the person who signs contracts and then forgets about them — founders, ops leads, small business owners. Not legal teams.
+
+Happy to talk through any of the technical decisions or the self-hosting setup.
+```
+
+---
+
+**Posting order:** r/selfhosted first (most receptive), then r/opensource, then r/SaaS. Space them ~1 hour apart so you can respond to early comments before the next one goes live.

@@ -2,6 +2,7 @@ import { resolveAuth } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { captureServerEvent } from "@/lib/posthog-server"
 import { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
@@ -27,6 +28,11 @@ export async function GET(req: Request) {
     if (!q) {
       return Response.json({ results: [], total: 0 })
     }
+
+    captureServerEvent(ctx.userId, "search_performed", {
+      query: q.slice(0, 50),
+      organizationId: ctx.organizationId,
+    })
 
     const orgId = ctx.organizationId
 

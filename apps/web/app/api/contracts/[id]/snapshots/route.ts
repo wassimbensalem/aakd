@@ -3,6 +3,7 @@ import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { plateToPlaintext, countWords } from "@/lib/editor/plate-to-plaintext"
+import { captureServerEvent } from "@/lib/posthog-server"
 import { z } from "zod"
 
 // ─── GET /api/contracts/[id]/snapshots ───────────────────────────────────────
@@ -96,6 +97,11 @@ export async function POST(
     })
 
     await writeActivity(params.id, ctx.userId, "SNAPSHOT_CREATED", parsed.data.label)
+
+    captureServerEvent(ctx.userId, "snapshot_created", {
+      contractId: params.id,
+      organizationId: ctx.organizationId,
+    })
 
     return Response.json({ snapshot }, { status: 201 })
   })

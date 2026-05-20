@@ -2,6 +2,7 @@ import { resolveAuth } from "@/lib/auth/middleware"
 import { requestContext } from "@/lib/context"
 import { prisma } from "@/lib/db/client"
 import { documentExportQueue } from "@/lib/jobs/queues"
+import { captureServerEvent } from "@/lib/posthog-server"
 import { z } from "zod"
 
 const ExportSchema = z.object({
@@ -54,6 +55,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         jobId: job.id,
       })
     }
+
+    captureServerEvent(ctx.userId, "contract_exported", {
+      contractId: params.id,
+      format: parsed.data.format,
+      organizationId: ctx.organizationId,
+    })
 
     return Response.json({ jobId: job.id }, { status: 202 })
   })

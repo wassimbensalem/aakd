@@ -3,6 +3,7 @@ import { hasRole, type Role } from "@/lib/auth/roles"
 import { prisma } from "@/lib/db/client"
 import { sendInvitationEmail } from "@/lib/email/invitation"
 import { logger } from "@/lib/logger"
+import { captureServerEvent } from "@/lib/posthog-server"
 import { fireAndLog } from "@/lib/utils/fire-and-log"
 import { randomBytes } from "crypto"
 import { z } from "zod"
@@ -153,6 +154,11 @@ export async function POST(req: Request) {
       logger.error({ err }, "[invite] notification.create:org.invited failed")
     }
   }
+
+  captureServerEvent(ctx.userId, "member_invited", {
+    organizationId: ctx.organizationId,
+    role: parsed.data.role,
+  })
 
   return Response.json({ id: invitation.id, email: invitation.email, role: invitation.role }, { status: 201 })
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client"
 import { writeActivity } from "@/lib/db/activity"
 import { substituteVariables, type TemplateVariable } from "@/lib/editor/template"
 import { countWords, plateToPlaintext } from "@/lib/editor/plate-to-plaintext"
+import { captureServerEvent } from "@/lib/posthog-server"
 import type { Prisma } from "@prisma/client"
 import { z } from "zod"
 
@@ -118,6 +119,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     await writeActivity(contract.id, ctx.userId, "CREATED", `Created from template`)
     await writeActivity(contract.id, ctx.userId, "DOCUMENT_SAVED")
+
+    captureServerEvent(ctx.userId, "template_used", {
+      templateId: params.id,
+      organizationId: ctx.organizationId,
+    })
 
     return Response.json({ contractId: contract.id }, { status: 201 })
   })
